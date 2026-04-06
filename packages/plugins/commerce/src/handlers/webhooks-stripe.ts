@@ -104,6 +104,7 @@ function parseStripeSignatureHeader(raw: string | null): ParsedStripeSignature |
 		const [key, value] = pair;
 		if (!key || !value) continue;
 		if (key === "t") {
+			if (timestamp !== null) return null;
 			if (!STRIPE_SIGNATURE_TIMESTAMP_RE.test(value)) return null;
 			const parsed = Number.parseInt(value, 10);
 			if (Number.isNaN(parsed)) return null;

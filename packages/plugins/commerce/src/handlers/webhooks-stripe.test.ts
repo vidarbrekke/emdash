@@ -102,6 +102,11 @@ describe("stripe webhook signature helpers", () => {
 		expect(parseStripeSignatureHeader(`t=-${timestamp},v1=${rawHash}`)).toBeNull();
 	});
 
+	it("rejects signature headers with multiple timestamps", () => {
+		const rawHash = "abc";
+		expect(parseStripeSignatureHeader(`t=${timestamp},t=${timestamp + 1},v1=${rawHash}`)).toBeNull();
+	});
+
 	it("does not accept non-numeric signature timestamps in validation", async () => {
 		const malformedSig = `t=${timestamp}x,v1=not-verified`;
 		expect(await isWebhookSignatureValid(secret, rawBody, malformedSig, 300)).toBe(false);
