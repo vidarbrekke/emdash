@@ -244,4 +244,42 @@ it("does not dedupe separate finalization attempts with different external event
 	expect(new Set(finalizeEventIds)).toEqual(new Set(["evt_1", "evt_2"]));
 });
 
+it("does not dedupe separate finalization attempts across providers", async () => {
+	const stripeAdapter = {
+		...adapter,
+		providerId: "stripe",
+		buildFinalizeInput: vi.fn(() => ({
+			orderId: "order_1",
+			externalEventId: "evt_1",
+			finalizeToken: "tok_1",
+		})),
+		buildCorrelationId: vi.fn(() => "corr:evt_1"),
+		buildRateLimitSuffix: vi.fn(() => "stripe:ip"),
+	};
+
+	const paymentAdapter = {
+		...adapter,
+		providerId: "payment_foo",
+		buildFinalizeInput: vi.fn(() => ({
+			orderId: "order_1",
+			externalEventId: "evt_1",
+			finalizeToken: "tok_1",
+		})),
+		buildCorrelationId: vi.fn(() => "corr:evt_1"),
+		buildRateLimitSuffix: vi.fn(() => "payment_foo:ip"),
+	};
+
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+	const stripeHandler = createPaymentWebhookRoute(stripeAdapter);
+	const paymentHandler = createPaymentWebhookRoute(paymentAdapter);
+	const stripeCtx = ctx();
+	const paymentCtx = ctx();
+
+	await Promise.all([stripeHandler(stripeCtx), paymentHandler(paymentCtx)]);
+
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(2);
+	expect(stripeAdapter.buildFinalizeInput).toHaveBeenCalledTimes(1);
+	expect(paymentAdapter.buildFinalizeInput).toHaveBeenCalledTimes(1);
+});
+
 });
