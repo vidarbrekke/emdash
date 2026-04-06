@@ -10,7 +10,12 @@ import type {
 	GdprThirdPartyProviderBundle,
 } from "./types.js";
 
-type GdprHandler = (ctx: { request: { method: string } } & Record<string, unknown>) => Promise<unknown>;
+type GdprHandler = (
+	ctx: {
+		request: { method: string; json?: () => Promise<unknown> };
+		params?: Record<string, string>;
+	} & Record<string, unknown>,
+) => Promise<unknown>;
 type ModuleLifecycle = () => Promise<void> | void;
 type ProviderRegistration = GdprPersonalDataProvider | GdprThirdPartyProviderBundle;
 type RegisteredProvider = {
@@ -23,6 +28,7 @@ type RouteInput = {
 	method: "GET" | "POST";
 	handler: GdprHandler;
 	requireAuth: boolean;
+	enabledByDefault?: boolean;
 };
 
 export type CommerceHost = {
@@ -37,6 +43,7 @@ export type CommerceHost = {
 	};
 	routes: {
 		registerAdminRoute: (route: RouteInput) => void;
+		registerRoute?: (route: RouteInput) => void;
 	};
 	hooks: {
 		on: (event: string, handler: (event: unknown) => Promise<void> | void) => void;
@@ -73,6 +80,28 @@ function asRoute(route: RouteInput) {
 	return route;
 }
 
+function nowToken(prefix: string): string {
+	return `${prefix}_${Date.now()}`;
+}
+
+function moduleDisabledPayload(operation: string) {
+	return {
+		ok: false,
+		enabled: false,
+		operation,
+		reason: "GDPR module is currently disabled",
+	};
+}
+
+function guardedHandler(moduleEnabled: () => boolean, handler: GdprHandler): GdprHandler {
+	return async (ctx) => {
+		if (!moduleEnabled()) {
+			return moduleDisabledPayload("guarded-route");
+		}
+		return handler(ctx);
+	};
+}
+
 function buildHealthHandler(manifest: GdprModuleManifest): GdprHandler {
 	return async () => ({
 		ok: true,
@@ -84,15 +113,99 @@ function buildHealthHandler(manifest: GdprModuleManifest): GdprHandler {
 
 function buildReviewSubmitHandler(): GdprHandler {
 	return async (_ctx) => ({
-		requestId: `req_${Date.now()}`,
+		requestId: nowToken("req"),
 		status: "queued",
 	});
 }
 
+function buildRequestListHandler(): GdprHandler {
+	return async () => ({
+		total: 0,
+		requests: [],
+		nextCursor: null,
+	});
+}
+
 function buildRequestRetryHandler(): GdprHandler {
-	return async (_ctx) => ({
-		requestId: "unknown",
+	return async (ctx) => ({
+		requestId: nowToken(`req_${ctx.params?.id ?? "item"}`),
 		retried: true,
+	});
+}
+
+function buildRequestReviewHandler(): GdprHandler {
+	return async (_ctx) => ({
+		updated: true,
+		status: "queued",
+	});
+}
+
+function buildRequestCancelHandler(): GdprHandler {
+	return async (_ctx) => ({
+		cancelled: true,
+	});
+}
+
+function buildRequestDownloadHandler(): GdprHandler {
+	return async (_ctx) => ({
+		downloadUrl: "/gdpr/exports/latest.json",
+		expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+	});
+}
+
+function buildProviderTestHandler(): GdprHandler {
+	return async (ctx) => ({
+		providerId: ctx.params?.id ?? "unknown",
+		pingedAt: new Date().toISOString(),
+		ok: true,
+	});
+}
+
+function buildAuditLookupHandler(): GdprHandler {
+	return async () => ({
+		events: [],
+		total: 0,
+	});
+}
+
+function buildConsentGetHandler(): GdprHandler {
+	return async () => ({
+		hasConsent: false,
+		subjectKind: "user",
+		consents: [],
+	});
+}
+
+function buildConsentSetHandler(): GdprHandler {
+	return async (ctx) => {
+		const body = await (ctx.request.json?.() ?? Promise.resolve({}));
+		return {
+			saved: true,
+			body,
+		};
+	};
+}
+
+function buildPrivacyExportHandler(): GdprHandler {
+	return async () => ({
+		exportId: nowToken("privacy_export"),
+		status: "queued",
+	});
+}
+
+function buildPrivacyEraseHandler(): GdprHandler {
+	return async () => ({
+		jobId: nowToken("privacy_erase"),
+		status: "queued",
+		requestId: nowToken("req"),
+	});
+}
+
+function buildPrivacyRectifyHandler(): GdprHandler {
+	return async () => ({
+		jobId: nowToken("privacy_rectify"),
+		status: "queued",
+		requestId: nowToken("req"),
 	});
 }
 
@@ -105,7 +218,7 @@ function buildProviderDiscoveryHandler(): GdprHandler {
 
 function buildRequestGetHandler(): GdprHandler {
 	return async (_ctx) => ({
-		id: "unknown",
+		id: nowToken("req"),
 		right: "access" satisfies GdprRight,
 		status: "pending",
 	});
@@ -146,13 +259,14 @@ function buildOperationResult(action: GdprOperationAction): GdprOperationResult 
 		action,
 		status: "success",
 		processed: 1,
-		requestIdempotencyKey: `op_${Date.now()}`,
+		requestIdempotencyKey: nowToken("op"),
 		message: "skeleton",
 	};
 }
 
 export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 	const logger = host.logger;
+	const moduleEnabled = () => Boolean(host.config.get("modules.gdpr.enabled", false));
 
 	const providerRegistry = new Map<string, RegisteredProvider>();
 
@@ -203,52 +317,147 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 				type: "boolean",
 				default: false,
 				label: "Enable GDPR module",
+				description: "Enable GDPR workflows and routes.",
 			});
+			if (!moduleEnabled()) {
+				logger.info("[gdpr] module disabled; skipping runtime registration", {
+					moduleId: gdprModuleManifest.id,
+				});
+				return;
+			}
 			host.routes.registerAdminRoute(
 				asRoute({
-					path: "/gdpr/health",
+					path: "/admin/api/gdpr/health",
 					method: "GET",
-					handler: buildHealthHandler(gdprModuleManifest),
+					handler: guardedHandler(moduleEnabled, buildHealthHandler(gdprModuleManifest)),
 					requireAuth: true,
 				}),
 			);
 			host.routes.registerAdminRoute(
 				asRoute({
-					path: "/gdpr/requests",
+					path: "/admin/api/gdpr/requests",
 					method: "POST",
-					handler: buildReviewSubmitHandler(),
+					handler: guardedHandler(moduleEnabled, buildReviewSubmitHandler()),
 					requireAuth: true,
 				}),
 			);
 			host.routes.registerAdminRoute(
 				asRoute({
-					path: "/gdpr/requests/:id",
+					path: "/admin/api/gdpr/requests/:id",
 					method: "GET",
-					handler: buildRequestGetHandler(),
+					handler: guardedHandler(moduleEnabled, buildRequestGetHandler()),
 					requireAuth: true,
 				}),
 			);
 			host.routes.registerAdminRoute(
 				asRoute({
-					path: "/gdpr/requests/:id/retry",
+					path: "/admin/api/gdpr/requests/:id/retry",
 					method: "POST",
-					handler: buildRequestRetryHandler(),
+					handler: guardedHandler(moduleEnabled, buildRequestRetryHandler()),
 					requireAuth: true,
 				}),
 			);
 			host.routes.registerAdminRoute(
 				asRoute({
-					path: "/gdpr/providers/:id/test",
-					method: "POST",
-					handler: buildProviderDiscoveryHandler(),
-					requireAuth: true,
-				}),
-			);
-			host.routes.registerAdminRoute(
-				asRoute({
-					path: "/gdpr/providers",
+					path: "/admin/api/gdpr/requests",
 					method: "GET",
-					handler: buildProviderListHandler(providerRegistry),
+					handler: guardedHandler(moduleEnabled, buildRequestListHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/requests/:id/review",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildRequestReviewHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/requests/:id/cancel",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildRequestCancelHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/requests/:id/download",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildRequestDownloadHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/providers/:id/test",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildProviderTestHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/providers",
+					method: "GET",
+					handler: guardedHandler(moduleEnabled, buildProviderListHandler(providerRegistry)),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/subjects",
+					method: "GET",
+					handler: guardedHandler(moduleEnabled, buildProviderDiscoveryHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/admin/api/gdpr/audit/:id",
+					method: "GET",
+					handler: guardedHandler(moduleEnabled, buildAuditLookupHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerRoute?.(
+				asRoute({
+					path: "/account/privacy/export",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildPrivacyExportHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerRoute?.(
+				asRoute({
+					path: "/account/privacy/erase",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildPrivacyEraseHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerRoute?.(
+				asRoute({
+					path: "/account/privacy/rectify",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildPrivacyRectifyHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerRoute?.(
+				asRoute({
+					path: "/account/privacy/consent",
+					method: "GET",
+					handler: guardedHandler(moduleEnabled, buildConsentGetHandler()),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerRoute?.(
+				asRoute({
+					path: "/account/privacy/consent",
+					method: "POST",
+					handler: guardedHandler(moduleEnabled, buildConsentSetHandler()),
 					requireAuth: true,
 				}),
 			);
@@ -273,6 +482,10 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 			});
 		},
 		init: async () => {
+			if (!moduleEnabled()) {
+				logger.info("[gdpr] init skipped; module disabled", { moduleId: gdprModuleManifest.id });
+				return;
+			}
 			logger.info("[gdpr] init phase", {
 				moduleId: gdprModuleManifest.id,
 			});
@@ -286,6 +499,10 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 			host.admin.registerOrderPanel?.({ id: "gdpr-order-panel", title: "GDPR Requests" });
 		},
 		ready: async () => {
+			if (!moduleEnabled()) {
+				logger.info("[gdpr] ready skipped; module disabled", { moduleId: gdprModuleManifest.id });
+				return;
+			}
 			logger.info("[gdpr] ready phase", { moduleId: gdprModuleManifest.id });
 			moduleDefinition.health = "ready";
 			logger.info("[gdpr] ready payload", {
@@ -305,7 +522,7 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 			canAccessExport: true,
 			canErase: true,
 			canAnonymize: true,
-			canRectify: false,
+			canRectify: true,
 			retentionOverrides: [],
 		}),
 		discoverSubjects: async () => [],
@@ -326,25 +543,35 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 			requestIdempotencyKey: `erase_${subjectId}`,
 			message: "skeleton",
 		}),
+		rectifyData: async ({ subjectId }) => ({
+			providerId: "dashcommerce-core",
+			action: "rectify",
+			status: "skipped",
+			processed: 0,
+			requestIdempotencyKey: nowToken(`rectify_${subjectId}`),
+			message: "not implemented in scaffold",
+		}),
 	};
 
-	registerProvider({
-		provider: commerceProvider,
-		manifest: {
-			providerId: "dashcommerce-core",
-			providerName: "DashingCommerce Core Data Provider",
-			author: "DashingCommerce",
-			version: "0.1.0",
-			summary: "Core commerce-owned data extraction and retention-safe cleanup.",
-			supportedRights: ["access", "erasure", "rectification", "restriction", "objection", "portability"],
-			sideEffects: ["read-core", "write-module"],
-			idempotentByDefault: true,
-			riskLevel: "trusted",
-			legalBasisHints: ["contract", "legal_obligation", "legitimate_interest"],
-			dataSensitivity: "high",
-			contactEmail: "privacy@dashingcommerce.example",
-		},
-	});
+	if (moduleEnabled()) {
+		registerProvider({
+			provider: commerceProvider,
+			manifest: {
+				providerId: "dashcommerce-core",
+				providerName: "DashingCommerce Core Data Provider",
+				author: "DashingCommerce",
+				version: "0.1.0",
+				summary: "Core commerce-owned data extraction and retention-safe cleanup.",
+				supportedRights: ["access", "erasure", "rectification", "restriction", "objection", "portability"],
+				sideEffects: ["read-core", "write-module"],
+				idempotentByDefault: true,
+				riskLevel: "trusted",
+				legalBasisHints: ["contract", "legal_obligation", "legitimate_interest"],
+				dataSensitivity: "high",
+				contactEmail: "privacy@dashingcommerce.example",
+			},
+		});
+	}
 	return moduleDefinition;
 }
 

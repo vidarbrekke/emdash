@@ -32,8 +32,9 @@ export const gdprModuleManifest: GdprModuleManifest = {
 	capabilities: [
 		"gdpr.data-export",
 		"gdpr.erase",
-		"gdpr.anonymize",
+		"gdpr.pseudonymize",
 		"gdpr.rectify",
+		"gdpr.access",
 		"gdpr.retention",
 		"gdpr.admin-ui",
 		"gdpr.jobs",
