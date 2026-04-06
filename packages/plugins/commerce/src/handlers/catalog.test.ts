@@ -1201,6 +1201,70 @@ describe("catalog product handlers", () => {
 		expect("inventoryVersion" in (out.items[0] as object)).toBe(false);
 	});
 
+	it("uses stock snapshot values when listing storefront SKUs", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const inventoryStock = new MemColl<StoredInventoryStock>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "stock-snapshot-product",
+			title: "Stock Snapshot Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SKU1",
+			status: "active",
+			unitPriceMinor: 1200,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await inventoryStock.put(inventoryStockDocId("prod_1", ""), {
+			productId: "prod_1",
+			variantId: "",
+			quantity: 10,
+			version: 3,
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const out = await listStorefrontProductSkusHandler(
+			catalogCtx(
+				{ productId: "prod_1" },
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				inventoryStock,
+			),
+		);
+		expect(out.items).toHaveLength(1);
+		expect(out.items[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
+	});
+
 	it("applies storefront SKU filtering before pagination limits", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();

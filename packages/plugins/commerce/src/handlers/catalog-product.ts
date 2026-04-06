@@ -891,6 +891,7 @@ export async function handleListStorefrontProducts(ctx: RouteContext<ProductList
 export async function handleListStorefrontProductSkus(ctx: RouteContext<ProductSkuListInput>): Promise<StorefrontSkuListResponse> {
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
+	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);
 	const limit = ctx.input.limit ?? 100;
 	const product = await products.get(ctx.input.productId);
 	if (!product) {
@@ -905,9 +906,10 @@ export async function handleListStorefrontProductSkus(ctx: RouteContext<ProductS
 			cursor,
 			limit: Math.max(limit * 2, 1),
 		});
-		for (const row of result.items) {
-			if (row.data.status === "active") {
-				storefrontSkus.push(row.data);
+		const hydratedSkus = await hydrateSkusWithInventoryStock(product, result.items.map((row) => row.data), inventoryStock);
+		for (const sku of hydratedSkus) {
+			if (sku.status === "active") {
+				storefrontSkus.push(sku);
 			}
 			if (storefrontSkus.length >= limit) {
 				break;
