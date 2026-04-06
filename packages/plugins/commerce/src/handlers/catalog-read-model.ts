@@ -183,12 +183,26 @@ export async function loadProductsReadMetadata(
 	return metadataByProduct;
 }
 
+export function isStorefrontProductVisible(product: StoredProduct): boolean {
+	return product.status === "active" && product.visibility === "public";
+}
+
+export function selectStorefrontSkus(skus: StoredProductSku[]): StoredProductSku[] {
+	return skus.filter((sku) => sku.status === "active");
+}
+
 export function summarizeInventory(skus: StoredProductSku[]) {
 	const skuCount = skus.length;
 	const activeSkus = skus.filter((sku) => sku.status === "active");
 	const activeSkuCount = activeSkus.length;
 	const totalInventoryQuantity = skus.reduce((total, sku) => total + sku.inventoryQuantity, 0);
-	return { skuCount, activeSkuCount, totalInventoryQuantity };
+	const storefrontInventoryQuantity = activeSkus.reduce((total, sku) => total + sku.inventoryQuantity, 0);
+	return {
+		skuCount,
+		activeSkuCount,
+		totalInventoryQuantity,
+		storefrontInventoryQuantity,
+	};
 }
 
 export function summarizeSkuPricing(skus: StoredProductSku[]) {

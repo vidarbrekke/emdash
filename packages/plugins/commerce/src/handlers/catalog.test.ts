@@ -972,6 +972,148 @@ describe("catalog product handlers", () => {
 		expect("inventoryVersion" in (detail.skus?.[0] as object)).toBe(false);
 	});
 
+	it("hides inactive SKUs from storefront product detail payloads", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const productSkuOptionValues = new MemColl<StoredProductSkuOptionValue>();
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "active",
+			visibility: "public",
+			slug: "variable-product",
+			title: "Variable Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_active", {
+			id: "sku_active",
+			productId: "prod_var",
+			skuCode: "VAR-A",
+			status: "active",
+			unitPriceMinor: 1200,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_inactive", {
+			id: "sku_inactive",
+			productId: "prod_var",
+			skuCode: "VAR-I",
+			status: "inactive",
+			unitPriceMinor: 1300,
+			inventoryQuantity: 99,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkuOptionValues.put("opt_active", {
+			id: "opt_active",
+			skuId: "sku_active",
+			attributeId: "attr_size",
+			attributeValueId: "size_s",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkuOptionValues.put("opt_inactive", {
+			id: "opt_inactive",
+			skuId: "sku_inactive",
+			attributeId: "attr_size",
+			attributeValueId: "size_m",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const detail = await getStorefrontProductHandler(
+			catalogCtx(
+				{ productId: "prod_var" },
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				productSkuOptionValues,
+			),
+		);
+		expect(detail.skus).toHaveLength(1);
+		expect(detail.skus?.[0]).toMatchObject({ id: "sku_active", status: "active", availability: "in_stock" });
+		expect(detail.variantMatrix).toHaveLength(1);
+		expect(detail.variantMatrix?.[0]).toMatchObject({ skuId: "sku_active", status: "active" });
+		expect("inventoryQuantity" in (detail.variantMatrix?.[0] as object)).toBe(false);
+	});
+
+	it("computes storefront list availability from active SKUs only", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "availability-product",
+			title: "Availability Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_active", {
+			id: "sku_active",
+			productId: "prod_1",
+			skuCode: "ACTIVE",
+			status: "active",
+			unitPriceMinor: 500,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_inactive", {
+			id: "sku_inactive",
+			productId: "prod_1",
+			skuCode: "INACTIVE",
+			status: "inactive",
+			unitPriceMinor: 500,
+			inventoryQuantity: 50,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const out = await listStorefrontProductsHandler(
+			catalogCtx(
+				{
+					type: "simple",
+					limit: 10,
+				},
+				products,
+				skus,
+			),
+		);
+		expect(out.items).toHaveLength(1);
+		expect(out.items[0]).toMatchObject({
+			product: { id: "prod_1" },
+			availability: "out_of_stock",
+		});
+	});
+
 	it("hides storefront product detail for non-public products", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();
@@ -3414,6 +3556,321 @@ describe("catalog bundle handlers", () => {
 		const component = summary.components[0];
 		expect((component as unknown as Record<string, unknown>).componentSkuId).toBeUndefined();
 		expect((component as unknown as Record<string, unknown>).componentProductId).toBeUndefined();
+	});
+
+	it("allows admin bundle compute on hidden products", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const bundleComponents = new MemColl<StoredBundleComponent>();
+
+		await products.put("prod_bundle", {
+			id: "prod_bundle",
+			type: "bundle",
+			status: "active",
+			visibility: "hidden",
+			slug: "admin-bundle",
+			title: "Admin Bundle",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await products.put("prod_component", {
+			id: "prod_component",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "component",
+			title: "Component",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_component", {
+			id: "sku_component",
+			productId: "prod_component",
+			skuCode: "CMP",
+			status: "active",
+			unitPriceMinor: 50,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		await addBundleComponentHandler(
+			catalogCtx(
+				{
+					bundleProductId: "prod_bundle",
+					componentSkuId: "sku_component",
+					quantity: 2,
+					position: 0,
+				},
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				bundleComponents,
+			),
+		);
+
+		const summary = await bundleComputeHandler(
+			catalogCtx(
+				{
+					productId: "prod_bundle",
+				},
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				bundleComponents,
+			),
+		);
+
+		expect(summary.availability).toBe(5);
+		expect(summary.components).toHaveLength(1);
+	});
+
+	it("rejects storefront bundle compute for hidden bundles", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const bundleComponents = new MemColl<StoredBundleComponent>();
+
+		await products.put("prod_bundle", {
+			id: "prod_bundle",
+			type: "bundle",
+			status: "active",
+			visibility: "hidden",
+			slug: "starter-bundle",
+			title: "Starter Bundle",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_bundle", {
+			id: "sku_bundle",
+			productId: "prod_bundle",
+			skuCode: "BUNDLE",
+			status: "active",
+			unitPriceMinor: 0,
+			inventoryQuantity: 1,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		await expect(
+			bundleComputeStorefrontHandler(
+				catalogCtx<BundleComputeInput>(
+					{
+						productId: "prod_bundle",
+					},
+					products,
+					skus,
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					bundleComponents,
+				),
+			),
+		).rejects.toThrow("Product not available");
+	});
+
+	it("rejects storefront bundle compute when component products are not storefront-visible", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const bundleComponents = new MemColl<StoredBundleComponent>();
+
+		await products.put("prod_bundle", {
+			id: "prod_bundle",
+			type: "bundle",
+			status: "active",
+			visibility: "public",
+			slug: "public-bundle",
+			title: "Public Bundle",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await products.put("prod_hidden_component", {
+			id: "prod_hidden_component",
+			type: "simple",
+			status: "active",
+			visibility: "hidden",
+			slug: "hidden-component",
+			title: "Hidden Component",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_hidden", {
+			id: "sku_hidden",
+			productId: "prod_hidden_component",
+			skuCode: "HID",
+			status: "active",
+			unitPriceMinor: 42,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		await addBundleComponentHandler(
+			catalogCtx<BundleComponentAddInput>(
+				{
+					bundleProductId: "prod_bundle",
+					componentSkuId: "sku_hidden",
+					quantity: 1,
+					position: 0,
+				},
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				bundleComponents,
+			),
+		);
+
+		await expect(
+			bundleComputeStorefrontHandler(
+				catalogCtx<BundleComputeInput>(
+					{
+						productId: "prod_bundle",
+					},
+					products,
+					skus,
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					bundleComponents,
+				),
+			),
+		).rejects.toThrow("Product not available");
+	});
+
+	it("rejects storefront bundle compute when component SKUs are inactive", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const bundleComponents = new MemColl<StoredBundleComponent>();
+
+		await products.put("prod_bundle", {
+			id: "prod_bundle",
+			type: "bundle",
+			status: "active",
+			visibility: "public",
+			slug: "active-bundle",
+			title: "Active Bundle",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await products.put("prod_component", {
+			id: "prod_component",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "component",
+			title: "Component",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_component", {
+			id: "sku_component",
+			productId: "prod_component",
+			skuCode: "CMP",
+			status: "inactive",
+			unitPriceMinor: 50,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		await addBundleComponentHandler(
+			catalogCtx<BundleComponentAddInput>(
+				{
+					bundleProductId: "prod_bundle",
+					componentSkuId: "sku_component",
+					quantity: 1,
+					position: 0,
+				},
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				bundleComponents,
+			),
+		);
+
+		await expect(
+			bundleComputeStorefrontHandler(
+				catalogCtx<BundleComputeInput>(
+					{
+						productId: "prod_bundle",
+					},
+					products,
+					skus,
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					new MemColl(),
+					bundleComponents,
+				),
+			),
+		).rejects.toThrow("Product not available");
 	});
 
 	it("supports component reorder and removal with position normalizing", async () => {

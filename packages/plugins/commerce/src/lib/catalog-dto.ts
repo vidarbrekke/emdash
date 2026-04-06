@@ -54,6 +54,8 @@ export interface ProductInventorySummaryDTO {
 	activeSkuCount: number;
 	/** Sum of inventory across all SKUs. */
 	totalInventoryQuantity: number;
+	/** Sum of inventory across storefront-eligible SKUs. */
+	storefrontInventoryQuantity?: number;
 }
 
 export interface ProductPriceRangeDTO {

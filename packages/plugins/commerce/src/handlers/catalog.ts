@@ -31,6 +31,7 @@ import {
 import {
 	handleAddBundleComponent,
 	handleBundleCompute,
+	handleBundleComputeStorefront,
 	handleRemoveBundleComponent,
 	handleReorderBundleComponent,
 } from "./catalog-bundle.js";
@@ -436,7 +437,7 @@ export async function bundleComputeHandler(
 export async function bundleComputeStorefrontHandler(
 	ctx: RouteContext<BundleComputeInput>,
 ): Promise<StorefrontBundleComputeResponse> {
-	const internal = await bundleComputeHandler(ctx);
+	const internal = await handleBundleComputeStorefront(ctx);
 	return toStorefrontBundleComputeResponse(internal);
 }
 

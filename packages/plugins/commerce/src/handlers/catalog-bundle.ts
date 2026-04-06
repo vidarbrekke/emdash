@@ -5,7 +5,7 @@ import { normalizeOrderedChildren, normalizeOrderedPosition, mutateOrderedChildr
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError } from "../route-errors.js";
-import { hydrateSkusWithInventoryStock } from "./catalog-read-model.js";
+import { hydrateSkusWithInventoryStock, isStorefrontProductVisible } from "./catalog-read-model.js";
 import { computeBundleSummary } from "../lib/catalog-bundles.js";
 import type {
 	BundleComponentAddInput,
@@ -212,4 +212,31 @@ export async function handleBundleCompute(
 		product.bundleDiscountValueBps,
 		lines,
 	);
+}
+
+export async function handleBundleComputeStorefront(ctx: RouteContext<BundleComputeInput>): Promise<BundleComputeResponse> {
+	const products = asCollection<StoredProduct>(ctx.storage.products);
+	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
+	const bundleComponents = asCollection<StoredBundleComponent>(ctx.storage.bundleComponents);
+	const product = await products.get(ctx.input.productId);
+	if (!product || !isStorefrontProductVisible(product)) {
+		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
+	}
+
+	const components = await queryBundleComponentsForProduct(bundleComponents, product.id);
+	for (const component of components) {
+		const sku = await productSkus.get(component.componentSkuId);
+		if (!sku) {
+			throwCommerceApiError({ code: "VARIANT_UNAVAILABLE", message: "Bundle component SKU not found" });
+		}
+		if (sku.status !== "active") {
+			throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
+		}
+		const componentProduct = await products.get(sku.productId);
+		if (!componentProduct || !isStorefrontProductVisible(componentProduct)) {
+			throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
+		}
+	}
+
+	return handleBundleCompute(ctx);
 }

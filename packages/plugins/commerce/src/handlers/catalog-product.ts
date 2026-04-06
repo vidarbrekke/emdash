@@ -58,6 +58,7 @@ import {
 } from "./catalog-bundle.js";
 import {
 	queryAllPages,
+	isStorefrontProductVisible,
 	getManyByIds,
 	hydrateSkusWithInventoryStock,
 	loadProductReadMetadata,
@@ -65,6 +66,7 @@ import {
 	queryDigitalEntitlementSummariesBySkuIds,
 	queryProductImagesByRoleForTargets,
 	querySkuOptionValuesBySkuIds,
+	selectStorefrontSkus,
 	summarizeInventory,
 	summarizeSkuPricing,
 	toUniqueStringList,
@@ -194,7 +196,7 @@ function resolveProductAvailability(quantity: number): StorefrontProductAvailabi
 }
 
 function assertStorefrontProductVisible(product: StoredProduct): void {
-	if (product.status !== "active" || product.visibility !== "public") {
+	if (!isStorefrontProductVisible(product)) {
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
 	}
 }
@@ -222,8 +224,7 @@ function toStorefrontSkuSummary(sku: StoredProductSku) {
 }
 
 function toStorefrontVariantMatrixRow(row: VariantMatrixDTO) {
-	const { inventoryQuantity } = row;
-	const sanitized = row as Omit<VariantMatrixDTO, "inventoryQuantity" | "inventoryVersion">;
+	const { inventoryQuantity, inventoryVersion, ...sanitized } = row;
 	return {
 		...sanitized,
 		availability: resolveProductAvailability(inventoryQuantity),
@@ -231,11 +232,13 @@ function toStorefrontVariantMatrixRow(row: VariantMatrixDTO) {
 }
 
 function toStorefrontProductDetail(response: ProductResponse): StorefrontProductDetail {
+	const storefrontSkus = response.skus ? selectStorefrontSkus(response.skus) : undefined;
+	const storefrontVariantMatrix = response.variantMatrix ? response.variantMatrix.filter((row) => row.status === "active") : undefined;
 	return {
 		product: toStorefrontProductRecord(response.product),
-		skus: response.skus?.map(toStorefrontSkuSummary),
+		skus: storefrontSkus?.map(toStorefrontSkuSummary),
 		attributes: response.attributes,
-		variantMatrix: response.variantMatrix?.map(toStorefrontVariantMatrixRow),
+		variantMatrix: storefrontVariantMatrix?.map(toStorefrontVariantMatrixRow),
 		categories: response.categories ?? [],
 		tags: response.tags ?? [],
 		primaryImage: response.primaryImage,
@@ -248,7 +251,9 @@ function toStorefrontProductListResponse(response: ProductListResponse): Storefr
 		items: response.items.map((item) => ({
 			product: toStorefrontProductRecord(item.product),
 			priceRange: item.priceRange,
-			availability: resolveProductAvailability(item.inventorySummary.totalInventoryQuantity),
+			availability: resolveProductAvailability(
+				item.inventorySummary.storefrontInventoryQuantity ?? item.inventorySummary.totalInventoryQuantity,
+			),
 			primaryImage: item.primaryImage,
 			galleryImages: item.galleryImages,
 			lowStockSkuCount: item.lowStockSkuCount,
@@ -864,8 +869,13 @@ export async function handleListProductSkus(ctx: RouteContext<ProductSkuListInpu
 }
 
 export async function handleGetStorefrontProduct(ctx: RouteContext<ProductGetInput>): Promise<StorefrontProductDetail> {
+	const products = asCollection<StoredProduct>(ctx.storage.products);
+	const product = await products.get(ctx.input.productId);
+	if (!product) {
+		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
+	}
+	assertStorefrontProductVisible(product);
 	const internal = await handleGetProduct(ctx);
-	assertStorefrontProductVisible(internal.product);
 	return toStorefrontProductDetail(internal);
 }
 
@@ -887,6 +897,6 @@ export async function handleListStorefrontProductSkus(ctx: RouteContext<ProductS
 	assertStorefrontProductVisible(product);
 	const internal = await handleListProductSkus(ctx);
 	return {
-		items: internal.items.filter((sku) => sku.status === "active").map(toStorefrontSkuSummary),
+		items: selectStorefrontSkus(internal.items).map(toStorefrontSkuSummary),
 	};
 }
