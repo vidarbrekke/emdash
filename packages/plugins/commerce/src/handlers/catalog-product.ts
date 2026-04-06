@@ -890,13 +890,35 @@ export async function handleListStorefrontProducts(ctx: RouteContext<ProductList
 
 export async function handleListStorefrontProductSkus(ctx: RouteContext<ProductSkuListInput>): Promise<StorefrontSkuListResponse> {
 	const products = asCollection<StoredProduct>(ctx.storage.products);
+	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
+	const limit = ctx.input.limit ?? 100;
 	const product = await products.get(ctx.input.productId);
 	if (!product) {
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not found" });
 	}
 	assertStorefrontProductVisible(product);
-	const internal = await handleListProductSkus(ctx);
+	let cursor: string | undefined;
+	const storefrontSkus: StoredProductSku[] = [];
+	while (storefrontSkus.length < limit) {
+		const result = await productSkus.query({
+			where: { productId: ctx.input.productId },
+			cursor,
+			limit: Math.max(limit * 2, 1),
+		});
+		for (const row of result.items) {
+			if (row.data.status === "active") {
+				storefrontSkus.push(row.data);
+			}
+			if (storefrontSkus.length >= limit) {
+				break;
+			}
+		}
+		if (!result.hasMore || !result.cursor) {
+			break;
+		}
+		cursor = result.cursor;
+	}
 	return {
-		items: selectStorefrontSkus(internal.items).map(toStorefrontSkuSummary),
+		items: storefrontSkus.slice(0, limit).map(toStorefrontSkuSummary),
 	};
 }

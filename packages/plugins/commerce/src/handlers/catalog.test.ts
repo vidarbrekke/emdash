@@ -1201,6 +1201,65 @@ describe("catalog product handlers", () => {
 		expect("inventoryVersion" in (out.items[0] as object)).toBe(false);
 	});
 
+	it("applies storefront SKU filtering before pagination limits", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "pagination-product",
+			title: "Pagination Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_inactive", {
+			id: "sku_inactive",
+			productId: "prod_1",
+			skuCode: "INACTIVE",
+			status: "inactive",
+			unitPriceMinor: 100,
+			inventoryQuantity: 5,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_active", {
+			id: "sku_active",
+			productId: "prod_1",
+			skuCode: "ACTIVE",
+			status: "active",
+			unitPriceMinor: 200,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const out = await listStorefrontProductSkusHandler(
+			catalogCtx(
+				{
+					productId: "prod_1",
+					limit: 1,
+				},
+				products,
+				skus,
+			),
+		);
+		expect(out.items).toHaveLength(1);
+		expect(out.items[0]).toMatchObject({ id: "sku_active", status: "active" });
+	});
+
 	it("hides storefront SKU lists for non-public products", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();
