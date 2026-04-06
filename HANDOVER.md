@@ -50,3 +50,11 @@ Gotchas:
 `packages/plugins/commerce/COMMERCE_AI_ROADMAP.md`
 `progress-review.md` and `external_review.md` (third-party context)
 `HANDOVER.md` (this file)
+
+Additional root-level references for the next phase:
+- `dashcommerce-extension-architecture-spec.md`
+- `gdpr-plugin-implementation-spec.md`
+- `emdash-commerce-gdpr-extension-authoritative-guide.md`
+- `eu-selling-marketing-gdpr-guide.md`
+- `announcement_public_beta.md`
+- `announcement_ga.md`
