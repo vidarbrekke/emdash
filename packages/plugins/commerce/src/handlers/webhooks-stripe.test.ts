@@ -195,6 +195,11 @@ describe("stripe webhook signature helpers", () => {
 		expect(clampStripeTolerance("150")).toBe(150);
 	});
 
+	it("rejects non-integral tolerance strings", () => {
+		expect(clampStripeTolerance("150.5")).toBe(STRIPE_WEBHOOK_SIGNATURE.defaultToleranceSeconds);
+		expect(clampStripeTolerance("150s")).toBe(STRIPE_WEBHOOK_SIGNATURE.defaultToleranceSeconds);
+	});
+
 	it("resolves webhook tolerance from KV settings", async () => {
 		const ctx = {
 			kv: {
@@ -212,6 +217,18 @@ describe("stripe webhook signature helpers", () => {
 			kv: {
 				get: vi.fn(async (key: string) => {
 					return key === "settings:stripeWebhookToleranceSeconds" ? "not-a-number" : null;
+				}),
+			},
+		} as never;
+
+		await expect(resolveWebhookSignatureToleranceSeconds(ctx)).resolves.toBe(300);
+	});
+
+	it("falls back to default tolerance for malformed decimal tolerance settings", async () => {
+		const ctx = {
+			kv: {
+				get: vi.fn(async (key: string) => {
+					return key === "settings:stripeWebhookToleranceSeconds" ? "15.5" : null;
 				}),
 			},
 		} as never;

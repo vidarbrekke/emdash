@@ -47,8 +47,9 @@ function normalizeHeaderKeyValue(raw: string): [string, string] | null {
 }
 
 function clampStripeTolerance(raw: unknown): number {
-	const parsed = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
-	if (!Number.isFinite(parsed) || Number.isNaN(parsed)) return STRIPE_SIGNATURE_TOLERANCE_SECONDS;
+	const parsed =
+		typeof raw === "number" ? raw : typeof raw === "string" && /^\d+$/.test(raw.trim()) ? Number.parseInt(raw, 10) : Number.NaN;
+	if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return STRIPE_SIGNATURE_TOLERANCE_SECONDS;
 	if (parsed < STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS) return STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS;
 	if (parsed > STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS) return STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS;
 	return parsed;
