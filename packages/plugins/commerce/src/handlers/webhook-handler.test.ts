@@ -110,6 +110,58 @@ describe("payment webhook seam", () => {
 		).rejects.toMatchObject({ code: "payload_too_large" });
 	});
 
+it("still runs verifyRequest when content-length is malformed but payload is bounded", async () => {
+	const body = JSON.stringify({
+		orderId: "order_1",
+		externalEventId: "evt_1",
+		finalizeToken: "tok",
+	});
+	let observedBody = "";
+	const localAdapter = {
+		...adapter,
+		verifyRequest: vi.fn(async (hookCtx: any) => {
+			observedBody = await hookCtx.request.clone().text();
+		}),
+	};
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+
+	const out = await createPaymentWebhookRoute(localAdapter)({
+		...(ctx() as ReturnType<typeof ctx>),
+		request: new Request("https://example.test/webhooks/stripe", {
+			method: "POST",
+			body,
+			headers: { "content-length": "not-a-number" },
+		}),
+	} as never);
+
+	expect(observedBody).toBe(body);
+	expect(localAdapter.verifyRequest).toHaveBeenCalledTimes(1);
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(1);
+	expect(out).toEqual({ ok: true, replay: false, orderId: "order_1" });
+});
+
+it("does not run verifyRequest when malformed content-length payload is oversized", async () => {
+	const bigBody = "x".repeat(65_537);
+	const localAdapter = {
+		...adapter,
+		verifyRequest: vi.fn(async () => undefined),
+	};
+
+	await expect(
+		createPaymentWebhookRoute(localAdapter)({
+			...(ctx() as ReturnType<typeof ctx>),
+			request: new Request("https://example.test/webhooks/stripe", {
+				method: "POST",
+				body: bigBody,
+				headers: { "content-length": "not-a-number" },
+			}),
+		} as never),
+	).rejects.toMatchObject({ code: "payload_too_large" });
+
+	expect(localAdapter.verifyRequest).toHaveBeenCalledTimes(0);
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+});
+
 	it("rejects oversized webhook payload when content-length is missing or malformed", async () => {
 		const bigBody = "x".repeat(65_537);
 		await expect(
@@ -146,6 +198,25 @@ describe("payment webhook seam", () => {
 		expect(consumeKvRateLimit).toHaveBeenCalledTimes(2);
 		expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(1);
 	});
+
+it("propagates malformed rate-limit suffix values to rate limiter input", async () => {
+	const malformedSuffix = "stripe\n:ip\0";
+	const localAdapter = {
+		...adapter,
+		buildRateLimitSuffix: vi.fn(() => malformedSuffix),
+	};
+
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+	await createPaymentWebhookRoute(localAdapter)(ctx());
+
+	expect(localAdapter.buildRateLimitSuffix).toHaveBeenCalledTimes(2);
+	expect(consumeKvRateLimit).toHaveBeenCalledTimes(1);
+	expect(consumeKvRateLimit).toHaveBeenCalledWith(
+		expect.objectContaining({
+			keySuffix: expect.stringContaining(`webhook:${malformedSuffix}:`),
+		}),
+	);
+});
 
 it("dedupes concurrent duplicate webhook deliveries", async () => {
 	let resolveFinalize!: () => void;
