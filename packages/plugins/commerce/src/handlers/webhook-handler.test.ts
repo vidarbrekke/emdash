@@ -217,4 +217,31 @@ it("does not dedupe separate finalization attempts with different order IDs", as
 	expect(new Set(finalizeInputOrderIds)).toEqual(new Set(["order_1", "order_2"]));
 });
 
+it("does not dedupe separate finalization attempts with different external event IDs", async () => {
+	const localAdapter = {
+		...adapter,
+		buildFinalizeInput: vi.fn()
+			.mockImplementationOnce(() => ({
+				orderId: "order_1",
+				externalEventId: "evt_1",
+				finalizeToken: "tok_1",
+			}))
+			.mockImplementationOnce(() => ({
+				orderId: "order_1",
+				externalEventId: "evt_2",
+				finalizeToken: "tok_1",
+			})),
+		buildCorrelationId: vi.fn(() => "corr:evt"),
+	};
+
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+	const handler = createPaymentWebhookRoute(localAdapter);
+
+	await Promise.all([handler(ctx()), handler(ctx())]);
+
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(2);
+	const finalizeEventIds = finalizePaymentFromWebhook.mock.calls.map(([_, input]) => input.externalEventId);
+	expect(new Set(finalizeEventIds)).toEqual(new Set(["evt_1", "evt_2"]));
+});
+
 });
