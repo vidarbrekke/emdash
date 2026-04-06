@@ -1,4 +1,4 @@
-# EmDash Commerce Plugin Review Update (Deep Dive)
+# DashingCommerce Plugin Review Update (Deep Dive)
 
 ## Scope
 

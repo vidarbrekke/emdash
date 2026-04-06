@@ -8,7 +8,7 @@
 
 ## Scope and review goal
 
-- Path reviewed: Option A finalize hardening for EmDash Commerce webhooks.
+- Path reviewed: Option A finalize hardening for DashingCommerce webhooks.
 - Primary objective: validate whether the implementation is correct enough for production rollout and identify the smallest safe improvements.
 - Owner roles:
   - **RE** = Commerce plugin runtime engineer

@@ -1,4 +1,4 @@
-# EmDash Commerce Plugin Review
+# DashingCommerce Plugin Review
 
 Date: 2026-04-06  
 Scope reviewed: `packages/plugins/commerce` from `COMMERCE_REVIEW_HANDOFF_PLAN_5F.zip`

@@ -6,7 +6,7 @@ EmDash can power **two different payment stories**. They solve different jobs. Y
 
 ## At a glance
 
-| | **EmDash Commerce** *(cart / checkout plugin)* | **x402** *(`@emdash-cms/x402`)* |
+| | **DashingCommerce** *(cart / checkout plugin)* | **x402** *(`@emdash-cms/x402`)* |
 |---|-----------------------------------------------|----------------------------------|
 | **What it’s for** | Selling **products or services** with a **cart**, **checkout**, **orders**, and (when configured) **cards** via payment providers | **HTTP-native, pay-per-request** access — often for **content**, **APIs**, or **agent** traffic using **402 Payment Required** |
 | **Typical buyer** | Humans shopping on your storefront | Automated clients (AI agents, bots) or any client that speaks x402; can be combined with “humans free, bots pay” |

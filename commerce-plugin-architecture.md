@@ -1,4 +1,4 @@
-# EmDash Commerce Plugin — Architecture Plan
+# DashingCommerce Plugin — Architecture Plan
 
 > This document supersedes the high-level-plan.md sketch and serves as the
 > authoritative blueprint before any code is written. It defines principles,
