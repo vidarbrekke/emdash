@@ -1,81 +1,52 @@
 # HANDOVER
 
 ## 1) Project purpose and current problem
-This repository is an EmDash monorepo with ongoing work on the commerce plugin in `packages/plugins/commerce`. The immediate objective is to move the plugin toward deployable storefront correctness and clean runtime boundaries without broad behavior changes.  
-The current work scope is twofold: complete internal refactor cleanup (module boundaries, helper reuse, typing hardening) and close remaining public-surface correctness gaps in storefront product exposure (especially bundle compute and SKU visibility).
+This repository is an EmDash monorepo with active work focused on `packages/plugins/commerce`. The app’s current task is to make storefront-facing commerce operations trustworthy under load by reducing boundary leaks, tightening backend invariants, and preserving runtime behavior contracts for checkout/finalize and catalog reads.
 
-The current branch in scope is `main` and has been updated through commit `cc7c72d` (`chore: tighten EmDash core and adapter type safety`).
+The immediate problem is not new feature growth: it is completing the remaining correctness pass so frontend and admin work can proceed without hidden backend churn. The active branch is `main` (`commit 9796a59` is the latest handoff commit and has been pushed to `origin/main`).
 
 ## 2) Completed work and outcomes
-Commerce refactors already in place are materially structural, not cosmetic. Catalog route logic is split across focused handlers and helper modules (`catalog-product.ts`, `catalog-read-model.ts`, `catalog-conflict.ts`, `catalog-association.ts`, `catalog-asset.ts`, `catalog-bundle.ts`, `catalog-digital.ts`), and shared logic for pagination, conflict handling, and ordered child mutation is now centralized.  
-The ordered-child normalization/mutation pathway has been consolidated and covered by tests in the existing commerce test suite (`ordered-rows.ts`, `ordered-rows.test.ts`).  
-Type safety work was also completed across core runtime paths and Cloudflare adapters (`packages/core`, `packages/cloudflare`) including removal of several unsafe casts, safer SQL construction via `sql.ref`/parameterized expressions, and clearer plugin/route typing.
+Storefront product-read correctness is now enforced in the current plugin state: storefront routes have explicit POST-only semantics where intended, bundle compute applies storefront visibility and status checks, storefront SKUs/variant rows are limited to storefront-eligible rows, and stock-derived availability is computed from storefront-eligible SKU data.
+
+Type and integration hardening is in place for the catalog surface and route boundary wiring in the commerce plugin, with unit coverage for changed storefront behavior and existing finalize/checkout replay semantics preserved.
+
+Operational release-gate state is documented in `COMMERCE_DOCS_INDEX.md` and `CI_REGRESSION_CHECKLIST.md`: plugin lint/typecheck/tests are green, and `HANDOVER.md` and strategy docs are aligned for handoff.
 
 ## 3) Failures, open issues, and lessons learned
-Primary remaining issues from the earlier review have now been closed:
-- `bundle/compute` public storefront endpoints reject non-POST methods and enforce storefront visibility before pricing.
-- Storefront product detail exposes only storefront-eligible SKUs/variant rows.
-- Storefront availability and storefront SKU listings use storefront-eligible SKUs and stock snapshots.
-- Storefront read routes now enforce POST-method policy at the public handler boundary.
+P0 gap from external review: a single-cart single-open-checkout invariant is still missing, so one cart can currently enter multiple concurrent `payment_pending` orders across retry paths or different idempotency keys. This is the highest-priority fix before shifting to frontend-first work.
 
-Latest verification pass status (plugin scope):
-- `packages/plugins/commerce` typecheck: pass
-- `packages/plugins/commerce` tests: pass
+P1 gaps: duplicated rule logic exists for bundle discount validation (schema + handler logic), and `asCollection`/storage-typing helpers are still repeated across checkout/cart/extension seam files; these increase drift risk and reduce DRY compliance. Structural risk is also concentrated in large files with mixed responsibility (`src/handlers/catalog-product.ts`, `src/handlers/catalog-read-model.ts`, `src/orchestration/finalize-payment.ts`, `src/index.ts` route registration). P2 items exist, but should follow after P0/P1 are closed.
 
-Latest verification pass status (release-gates captured in docs):
-- `pnpm --silent lint:quick`: pass
-- `pnpm --filter ./packages/plugins/commerce typecheck`: pass
-- `pnpm --filter ./packages/plugins/commerce test`: pass
-- `pnpm --filter ./packages/core typecheck`: failing (baseline/core-only typing debt, unchanged by this plugin-focused pass)
+Validation status remains: `pnpm --silent lint:quick` pass, `pnpm --filter ./packages/plugins/commerce typecheck` pass, `pnpm --filter ./packages/plugins/commerce test` pass. `pnpm --filter ./packages/core typecheck` still fails on baseline core typing debt outside this scoped pass; it is not newly introduced by this plugin handoff.
 
-Known remaining work:
-- Plugin docs and repo-hygiene pass (`HANDOVER`/`progress-review` cross-docs, obsolete review artifacts, and any stale operational notes).
-
-Operational lessons to keep:
-- Keep storefront visibility checks early in the flow (before deep admin-style hydration) to reduce incorrect read paths and complexity.
-- Treat transform layers as business-boundary boundaries: internal loaders and DTO shaping should stay separable from request-method policy.
-- Continue to avoid speculative refactors; fix only defects with a validated behavior path and test signal.
-- Current remaining work is mostly documentation hygiene and ongoing verification for deployment-readiness.
+Key lessons to keep: enforce policy early in the request path, keep DTO shaping separate from command/method policy, apply targeted fixes with direct tests, and avoid architecture expansion (provider routing/MCP command surface) while correctness and invariants are still open.
 
 ## 4) Files changed, key insights, and gotchas
-Focus for continuation (ordered by risk/impact):
-- `packages/plugins/commerce/src/handlers/catalog.ts`
-- `packages/plugins/commerce/src/handlers/catalog-product.ts`
-- `packages/plugins/commerce/src/handlers/catalog-read-model.ts`
-- `packages/plugins/commerce/src/handlers/catalog-asset.ts`
-- `packages/plugins/commerce/src/handlers/catalog-association.ts`
-- `packages/plugins/commerce/src/handlers/catalog-bundle.ts`
-- `packages/plugins/commerce/src/handlers/catalog-digital.ts`
-- `packages/plugins/commerce/src/handlers/catalog-conflict.ts`
-- `packages/plugins/commerce/src/handlers/checkout.ts`, `checkout-state.ts`, `checkout-get-order.ts`
-- `packages/plugins/commerce/src/lib/ordered-rows.ts`
-- `packages/plugins/commerce/src/lib/merge-line-items.ts`
-- `packages/plugins/commerce/src/lib/order-inventory-lines.ts`
-- `packages/plugins/commerce/src/lib/catalog-order-snapshots.ts`
-- `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.ts`
-- `packages/plugins/commerce/src/orchestration/finalize-payment.ts`
-- `packages/core/src/database/repositories/content.ts`
-- `packages/cloudflare/src/db/*`
-- `packages/auth/src/adapters/kysely.ts`
+The docs and plugin surface currently in scope for continuation are:
+- `packages/plugins/commerce/src/handlers/checkout.ts` (cart checkout invariant work and tests)
+- `packages/plugins/commerce/src/handlers/catalog-product.ts` (split command/query and move mappers out)
+- `packages/plugins/commerce/src/handlers/catalog-read-model.ts` (query/read-model responsibilities)
+- `packages/plugins/commerce/src/handlers/catalog.ts` (route wrapper semantics)
+- `packages/plugins/commerce/src/orchestration/finalize-payment.ts` / `finalize-payment-inventory.ts` (phase split only after checkout invariant is stabilized)
+- `packages/plugins/commerce/src/schemas.ts` (shared validation source)
+- `packages/plugins/commerce/src/storage.ts`, `src/types.ts`
 
-Recent open-source-facing gotchas from review:
-- Do not rely on internal/admin loaders for storefront routes unless visibility and method policy are enforced in the storefront wrapper.
-- Do not return/store storefront-facing availability from non-eligible inventory aggregates.
-- Keep `bundle/compute` in line with storefront policy to prevent hidden-draft access paths.
+Gotchas:
+- Do not widen behavior in payment/finalize/idempotency/claim logic without regression tests.
+- Do not expose storefront availability from non-storefront-eligible aggregate paths.
+- Do not merge core typing debt in this plugin scope.
 
 ## 5) Key files and directories
-Primary code paths for the next developer:
-- `packages/plugins/commerce/src/handlers/`
-- `packages/plugins/commerce/src/lib/`
-- `packages/plugins/commerce/src/orchestration/`
-- `packages/plugins/commerce/src/kernel/`
-- `packages/plugins/commerce/src/storage.ts`
-- `packages/core/src/` and `packages/cloudflare/src/` for the shared runtime hardening layer
-- `packages/plugins/commerce/` documentation and policy files:
-  - `COMMERCE_DOCS_INDEX.md`
-  - `COMMERCE_EXTENSION_SURFACE.md`
-  - `FINALIZATION_REVIEW_AUDIT.md`
-- `progress-review.md` (latest external feedback)
-- `external_review.md` (third-party review context)
-- `HANDOVER.md` (this file)
-
+`packages/plugins/commerce/src/handlers/`
+`packages/plugins/commerce/src/lib/`
+`packages/plugins/commerce/src/orchestration/`
+`packages/plugins/commerce/src/kernel/`
+`packages/plugins/commerce/src/storage.ts`
+`packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
+`packages/plugins/commerce/CI_REGRESSION_CHECKLIST.md`
+`packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
+`packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
+`packages/plugins/commerce/AI-EXTENSIBILITY.md`
+`packages/plugins/commerce/COMMERCE_AI_ROADMAP.md`
+`progress-review.md` and `external_review.md` (third-party context)
+`HANDOVER.md` (this file)
