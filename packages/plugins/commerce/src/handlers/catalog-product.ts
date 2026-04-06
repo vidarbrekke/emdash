@@ -34,10 +34,9 @@ import type {
 	StoredProductSku,
 	StoredProductSkuOptionValue,
 	StoredProductTag,
-	StoredProductTagLink,
 	StoredProductTagLink as StoredProductTagLinkType,
 } from "../types.js";
-import { computeBundleSummary, type BundleComputeSummary } from "../lib/catalog-bundles.js";
+import { computeBundleSummary } from "../lib/catalog-bundles.js";
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
@@ -74,7 +73,6 @@ import {
 import type { VariantMatrixDTO } from "../lib/catalog-dto.js";
 import type { Collection } from "./catalog-conflict.js";
 import {
-	assertNoConflict,
 	asCollection,
 	asOptionalCollection,
 	getNowIso,
@@ -224,7 +222,7 @@ function toStorefrontSkuSummary(sku: StoredProductSku) {
 }
 
 function toStorefrontVariantMatrixRow(row: VariantMatrixDTO) {
-	const { inventoryQuantity, inventoryVersion, ...sanitized } = row;
+	const { inventoryQuantity, ...sanitized } = row;
 	return {
 		...sanitized,
 		availability: resolveProductAvailability(inventoryQuantity),

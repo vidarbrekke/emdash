@@ -13,7 +13,14 @@
  * ```
  */
 
-import type { PluginDescriptor, PluginRoute, RouteContext } from "emdash";
+import type {
+	PluginContext,
+	PluginDefinition,
+	PluginDescriptor,
+	PluginRoute,
+	ResolvedPlugin,
+	RouteContext,
+} from "emdash";
 import { definePlugin } from "emdash";
 
 import {
@@ -28,24 +35,24 @@ import {
 	removeBundleComponentHandler,
 	reorderBundleComponentHandler,
 	bundleComputeStorefrontHandler,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 import {
 	createCategoryHandler,
 	listCategoriesHandler,
 	createProductCategoryLinkHandler,
 	removeProductCategoryLinkHandler,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 import {
 	createDigitalAssetHandler,
 	createDigitalEntitlementHandler,
 	removeDigitalEntitlementHandler,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 import {
 	reorderCatalogAssetHandler,
 	linkCatalogAssetHandler,
 	registerProductAssetHandler,
 	unlinkCatalogAssetHandler,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 import {
 	createProductHandler,
 	updateProductHandler,
@@ -56,8 +63,13 @@ import {
 	setSkuStatusHandler,
 	listStorefrontProductsHandler,
 	listStorefrontProductSkusHandler,
-} from "./handlers/catalog.ts";
-import { createTagHandler, listTagsHandler, createProductTagLinkHandler, removeProductTagLinkHandler } from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
+import {
+	createTagHandler,
+	listTagsHandler,
+	createProductTagLinkHandler,
+	removeProductTagLinkHandler,
+} from "./handlers/catalog.js";
 import { checkoutGetOrderHandler } from "./handlers/checkout-get-order.js";
 import { checkoutHandler } from "./handlers/checkout.js";
 import { handleIdempotencyCleanup } from "./handlers/cron.js";
@@ -99,7 +111,7 @@ import {
 	stripeWebhookInputSchema,
 } from "./schemas.js";
 import { createRecommendationsRoute } from "./services/commerce-extension-seams.js";
-import { COMMERCE_STORAGE_CONFIG } from "./storage.js";
+import { COMMERCE_STORAGE_CONFIG, type CommerceStorage } from "./storage.js";
 
 /**
  * The EmDash `definePlugin` route handler type requires handlers typed against
@@ -108,7 +120,7 @@ import { COMMERCE_STORAGE_CONFIG } from "./storage.js";
  * spread into handler files.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyHandler = (ctx: RouteContext<any>) => Promise<unknown>;
+type AnyHandler = (ctx: RouteContext<unknown>) => Promise<unknown>;
 
 function asRouteHandler(fn: AnyHandler): never {
 	return fn as never;
@@ -118,18 +130,18 @@ function asRouteHandler(fn: AnyHandler): never {
  * Route helper constructors to keep public/private registration explicit and avoid
  * accidental exposure of mutation endpoints.
  */
-function adminRoute<T>(input: PluginRoute<T>["input"], handler: AnyHandler): PluginRoute<T> {
+function adminRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
 	return {
 		input,
-		handler: asRouteHandler(handler),
+		handler: asRouteHandler(handler as AnyHandler),
 	};
 }
 
-function publicRoute<T>(input: PluginRoute<T>["input"], handler: AnyHandler): PluginRoute<T> {
+function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
 	return {
 		public: true,
 		input,
-		handler: asRouteHandler(handler),
+		handler: asRouteHandler(handler as AnyHandler),
 	};
 }
 
@@ -165,12 +177,12 @@ export interface CommercePluginOptions {
 	};
 }
 
-export function createPlugin(options: CommercePluginOptions = {}) {
+export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugin<CommerceStorage> {
 	const recommendationsRouteHandler = createRecommendationsRoute({
 		resolver: options.extensions?.recommendationResolver,
 		providerId: options.extensions?.recommendationProviderId,
 	});
-	return definePlugin({
+	const pluginDefinition: PluginDefinition<CommerceStorage> = {
 		id: "emdash-commerce",
 		version: "0.1.0",
 		capabilities: ["network:fetch"],
@@ -207,15 +219,15 @@ export function createPlugin(options: CommercePluginOptions = {}) {
 
 		hooks: {
 			"plugin:activate": {
-				handler: async (_event, ctx) => {
+				handler: async (_event: unknown, ctx: PluginContext) => {
 					if (ctx.cron) {
 						await ctx.cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
 					}
 				},
 			},
 			cron: {
-				handler: async (event, ctx) => {
-					if (event.name === "idempotency-cleanup") {
+				handler: async (event: unknown, ctx: PluginContext) => {
+					if ((event as { name?: string }).name === "idempotency-cleanup") {
 						await handleIdempotencyCleanup(ctx);
 					}
 				},
@@ -223,7 +235,7 @@ export function createPlugin(options: CommercePluginOptions = {}) {
 		},
 
 		routes: {
-			// Storefront-safe read and action routes (public API surface).
+			// Storefront-safe read and action routes (public API surface, POST-only by contract).
 			"cart/upsert": publicRoute(cartUpsertInputSchema, cartUpsertHandler),
 			"cart/get": publicRoute(cartGetInputSchema, cartGetHandler),
 			"bundle/compute": publicRoute(bundleComputeInputSchema, bundleComputeStorefrontHandler),
@@ -273,7 +285,8 @@ export function createPlugin(options: CommercePluginOptions = {}) {
 			"catalog/sku/update": adminRoute(productSkuUpdateInputSchema, updateProductSkuHandler),
 			"catalog/sku/state": adminRoute(productSkuStateInputSchema, setSkuStatusHandler),
 		},
-	});
+	};
+	return definePlugin(pluginDefinition);
 }
 
 export default createPlugin;
@@ -326,32 +339,32 @@ export type {
 	StorefrontProductDetail,
 	StorefrontProductListResponse,
 	StorefrontSkuListResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 export type {
 	CategoryResponse,
 	CategoryListResponse,
 	ProductCategoryLinkResponse,
 	ProductCategoryLinkUnlinkResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 export type {
 	TagResponse,
 	TagListResponse,
 	ProductTagLinkResponse,
 	ProductTagLinkUnlinkResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 export type {
 	ProductAssetResponse,
 	ProductAssetLinkResponse,
 	ProductAssetUnlinkResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 export type {
 	BundleComponentResponse,
 	BundleComponentUnlinkResponse,
 	BundleComputeResponse,
 	StorefrontBundleComputeResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";
 export type {
 	DigitalAssetResponse,
 	DigitalEntitlementResponse,
 	DigitalEntitlementUnlinkResponse,
-} from "./handlers/catalog.ts";
+} from "./handlers/catalog.js";

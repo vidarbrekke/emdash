@@ -15,7 +15,6 @@ import type {
 	DigitalEntitlementResponse,
 	DigitalEntitlementUnlinkResponse,
 } from "./catalog.js";
-import type { Collection } from "./catalog-conflict.js";
 import { asCollection, getNowIso, putWithConflictHandling } from "./catalog-conflict.js";
 
 export async function handleCreateDigitalAsset(ctx: RouteContext<DigitalAssetCreateInput>): Promise<DigitalAssetResponse> {

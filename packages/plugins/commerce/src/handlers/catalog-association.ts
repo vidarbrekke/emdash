@@ -32,7 +32,6 @@ import type {
 	ProductTagLinkResponse,
 	ProductTagLinkUnlinkResponse,
 } from "./catalog.js";
-import type { Collection } from "./catalog-conflict.js";
 import { asCollection, getNowIso, putWithConflictHandling } from "./catalog-conflict.js";
 
 export async function handleCreateCategory(ctx: RouteContext<CategoryCreateInput>): Promise<CategoryResponse> {

@@ -12,10 +12,7 @@ import type {
 	CatalogListingDTO,
 	ProductCategoryDTO,
 	ProductDetailDTO,
-	ProductDigitalEntitlementSummary,
-	ProductInventorySummaryDTO,
 	ProductPrimaryImageDTO,
-	ProductPriceRangeDTO,
 	ProductTagDTO,
 	VariantMatrixDTO,
 } from "../lib/catalog-dto.js";
@@ -40,6 +37,7 @@ import {
 	handleCreateDigitalEntitlement,
 	handleRemoveDigitalEntitlement,
 } from "./catalog-digital.js";
+import { requirePost } from "../lib/require-post.js";
 import {
 	handleCreateProduct,
 	handleGetProduct,
@@ -99,7 +97,6 @@ import type {
 	StoredProductAsset,
 	StoredProductAssetLink,
 	StoredProductAttribute,
-	StoredProductAttributeValue,
 	StoredCategory,
 	StoredProductCategoryLink,
 	StoredDigitalAsset,
@@ -107,8 +104,6 @@ import type {
 	StoredProductTag,
 	StoredProductTagLink,
 	StoredBundleComponent,
-	StoredInventoryStock,
-	StoredProductSkuOptionValue,
 	StoredProductSku,
 } from "../types.js";
 function toStorefrontBundleComputeResponse(response: BundleComputeSummary): StorefrontBundleComputeResponse {
@@ -373,18 +368,21 @@ export async function listProductSkusHandler(
 export async function getStorefrontProductHandler(
 	ctx: RouteContext<ProductGetInput>,
 ): Promise<StorefrontProductDetail> {
+	requirePost(ctx);
 	return handleGetStorefrontProduct(ctx);
 }
 
 export async function listStorefrontProductsHandler(
 	ctx: RouteContext<ProductListInput>,
 ): Promise<StorefrontProductListResponse> {
+	requirePost(ctx);
 	return handleListStorefrontProducts(ctx);
 }
 
 export async function listStorefrontProductSkusHandler(
 	ctx: RouteContext<ProductSkuListInput>,
 ): Promise<StorefrontSkuListResponse> {
+	requirePost(ctx);
 	return handleListStorefrontProductSkus(ctx);
 }
 
@@ -437,6 +435,7 @@ export async function bundleComputeHandler(
 export async function bundleComputeStorefrontHandler(
 	ctx: RouteContext<BundleComputeInput>,
 ): Promise<StorefrontBundleComputeResponse> {
+	requirePost(ctx);
 	const internal = await handleBundleComputeStorefront(ctx);
 	return toStorefrontBundleComputeResponse(internal);
 }

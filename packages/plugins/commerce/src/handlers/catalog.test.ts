@@ -166,9 +166,32 @@ class MemColl<T extends object> {
 			await this.put(item.id, structuredClone(item.data));
 		}
 	}
+
+	async exists(id: string): Promise<boolean> {
+		return this.rows.has(id);
+	}
+
+	async count(where?: Record<string, unknown>): Promise<number> {
+		if (!where || Object.keys(where).length === 0) {
+			return this.rows.size;
+		}
+		const filtered = [...this.rows.entries()].filter(([, row]) =>
+			Object.entries(where).every(([field, expected]) => {
+				const rowValue = row[field as keyof typeof row];
+				if (expected && typeof expected === "object" && !Array.isArray(expected)) {
+					const maybeInFilter = expected as { in?: unknown[] };
+					if (Array.isArray(maybeInFilter.in)) {
+						return maybeInFilter.in.includes(rowValue);
+					}
+				}
+				return rowValue === expected;
+			}),
+		);
+		return filtered.length;
+	}
 }
 
-class ConstraintConflictMemColl<T extends Record<string, unknown>> extends MemColl<T> {
+class ConstraintConflictMemColl<T extends object> extends MemColl<T> {
 	constructor(
 		private readonly conflicts: (existing: T, next: T) => boolean,
 		rows: Map<string, T> = new Map<string, T>(),
@@ -186,7 +209,7 @@ class ConstraintConflictMemColl<T extends Record<string, unknown>> extends MemCo
 		return true;
 	}
 
-	async query(
+	override async query(
 		_options?: {
 			[key: string]: unknown;
 		},
@@ -198,7 +221,7 @@ class ConstraintConflictMemColl<T extends Record<string, unknown>> extends MemCo
 class QueryCountingMemColl<T extends object> extends MemColl<T> {
 	queryCount = 0;
 
-	async query(options?: {
+	override async query(options?: {
 		where?: Record<string, unknown>;
 		limit?: number;
 	}): Promise<{ items: Array<{ id: string; data: T }>; hasMore: boolean }> {
@@ -247,6 +270,33 @@ function catalogCtx<TInput>(
 		},
 		requestMeta: { ip: "127.0.0.1" },
 		kv: {},
+	} as unknown as RouteContext<TInput>;
+}
+
+function catalogCtxWithMethod<TInput>(ctx: RouteContext<TInput>, method: "GET" | "POST" | "HEAD" | "PUT" | "PATCH" | "DELETE"): RouteContext<TInput> {
+	return {
+		...ctx,
+		request: new Request("https://example.test/catalog", { method }),
+	} as unknown as RouteContext<TInput>;
+}
+
+function catalogCtxWithInventoryStock<TInput>(
+	input: TInput,
+	products: MemColl<StoredProduct>,
+	productSkus: MemColl<StoredProductSku>,
+	inventoryStock: MemColl<StoredInventoryStock>,
+): RouteContext<TInput> {
+	const ctx = catalogCtx(
+		input,
+		products,
+		productSkus,
+	);
+	return {
+		...ctx,
+		storage: {
+			...ctx.storage,
+			inventoryStock,
+		},
 	} as unknown as RouteContext<TInput>;
 }
 
@@ -932,6 +982,63 @@ describe("catalog product handlers", () => {
 		expect("longDescription" in out.items[0]!.product).toBe(false);
 	});
 
+	it("requires POST for storefront list APIs", async () => {
+		const products = new MemColl<StoredProduct>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "post-only-list",
+			title: "POST Only",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await expect(
+			listStorefrontProductsHandler(
+				catalogCtxWithMethod(
+					catalogCtx(
+						{
+							type: "simple",
+							limit: 10,
+						},
+						products,
+					),
+					"GET",
+				),
+			),
+		).rejects.toThrow("Only POST is allowed");
+		await expect(
+			listStorefrontProductSkusHandler(
+				catalogCtxWithMethod(
+					catalogCtx({ productId: "prod_1", limit: 10 }, products, new MemColl()),
+					"GET",
+				),
+			),
+		).rejects.toThrow("Only POST is allowed");
+		await expect(
+			getStorefrontProductHandler(
+				catalogCtxWithMethod(catalogCtx({ productId: "prod_1" }, products, new MemColl()), "GET"),
+			),
+		).rejects.toThrow("Only POST is allowed");
+	});
+
+	it("requires POST for storefront bundle compute", async () => {
+		const products = new MemColl<StoredProduct>();
+		const bundleInput = { productId: "bundle_hidden" };
+
+		await expect(
+			bundleComputeStorefrontHandler(
+				catalogCtxWithMethod(catalogCtx(bundleInput, products), "GET"),
+			),
+		).rejects.toThrow("Only POST is allowed");
+	});
+
 	it("returns storefront product detail without raw inventory fields", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();
@@ -968,8 +1075,8 @@ describe("catalog product handlers", () => {
 		expect(detail.product).toMatchObject({ id: "prod_1", title: "Safe Product" });
 		expect("longDescription" in detail.product).toBe(false);
 		expect(detail.skus?.[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
-		expect("inventoryQuantity" in (detail.skus?.[0] as object)).toBe(false);
-		expect("inventoryVersion" in (detail.skus?.[0] as object)).toBe(false);
+		expect("inventoryQuantity" in (detail.skus![0] as object)).toBe(false);
+		expect("inventoryVersion" in (detail.skus![0] as object)).toBe(false);
 	});
 
 	it("hides inactive SKUs from storefront product detail payloads", async () => {
@@ -1042,6 +1149,7 @@ describe("catalog product handlers", () => {
 				new MemColl(),
 				new MemColl(),
 				new MemColl(),
+				new MemColl(),
 				productSkuOptionValues,
 			),
 		);
@@ -1049,7 +1157,7 @@ describe("catalog product handlers", () => {
 		expect(detail.skus?.[0]).toMatchObject({ id: "sku_active", status: "active", availability: "in_stock" });
 		expect(detail.variantMatrix).toHaveLength(1);
 		expect(detail.variantMatrix?.[0]).toMatchObject({ skuId: "sku_active", status: "active" });
-		expect("inventoryQuantity" in (detail.variantMatrix?.[0] as object)).toBe(false);
+		expect("inventoryQuantity" in (detail.variantMatrix![0] as object)).toBe(false);
 	});
 
 	it("computes storefront list availability from active SKUs only", async () => {
@@ -1194,7 +1302,9 @@ describe("catalog product handlers", () => {
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		});
 
-		const out = await listStorefrontProductSkusHandler(catalogCtx({ productId: "prod_1" }, products, skus));
+		const out = await listStorefrontProductSkusHandler(
+			catalogCtx({ productId: "prod_1", limit: 10 }, products, skus),
+		);
 		expect(out.items).toHaveLength(1);
 		expect(out.items[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
 		expect("inventoryQuantity" in (out.items[0] as object)).toBe(false);
@@ -1241,28 +1351,130 @@ describe("catalog product handlers", () => {
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		});
 
-		const out = await listStorefrontProductSkusHandler(
-			catalogCtx(
-				{ productId: "prod_1" },
-				products,
-				skus,
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				new MemColl(),
-				inventoryStock,
-			),
+		const listCtx = catalogCtxWithInventoryStock(
+			{ productId: "prod_1", limit: 10 },
+			products,
+			skus,
+			inventoryStock,
 		);
+		expect(
+			await (listCtx.storage as { inventoryStock: MemColl<StoredInventoryStock> }).inventoryStock.get(inventoryStockDocId("prod_1", "")),
+		).toMatchObject({
+			productId: "prod_1",
+			variantId: "",
+			quantity: 10,
+			version: 3,
+		});
+		const out = await listStorefrontProductSkusHandler(listCtx);
 		expect(out.items).toHaveLength(1);
 		expect(out.items[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
+	});
+
+	it("preserves storefront SKU order after filtering when listing", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const inventoryStock = new MemColl<StoredInventoryStock>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "ordered-product",
+			title: "Ordered Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_inactive", {
+			id: "sku_inactive",
+			productId: "prod_1",
+			skuCode: "INACTIVE",
+			status: "inactive",
+			unitPriceMinor: 100,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_active_first", {
+			id: "sku_active_first",
+			productId: "prod_1",
+			skuCode: "ACTIVE_ONE",
+			status: "active",
+			unitPriceMinor: 200,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_active_second", {
+			id: "sku_active_second",
+			productId: "prod_1",
+			skuCode: "ACTIVE_TWO",
+			status: "active",
+			unitPriceMinor: 250,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_inactive_late", {
+			id: "sku_inactive_late",
+			productId: "prod_1",
+			skuCode: "INACTIVE_TWO",
+			status: "inactive",
+			unitPriceMinor: 150,
+			inventoryQuantity: 0,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await inventoryStock.put(inventoryStockDocId("prod_1", "sku_active_first"), {
+			productId: "prod_1",
+			variantId: "sku_active_first",
+			quantity: 0,
+			version: 4,
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await inventoryStock.put(inventoryStockDocId("prod_1", "sku_active_second"), {
+			productId: "prod_1",
+			variantId: "sku_active_second",
+			quantity: 7,
+			version: 6,
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const listCtx = catalogCtxWithInventoryStock(
+			{ productId: "prod_1", limit: 2 },
+			products,
+			skus,
+			inventoryStock,
+		);
+		const listStorage = listCtx.storage as { inventoryStock: MemColl<StoredInventoryStock> };
+		expect(await listStorage.inventoryStock.get(inventoryStockDocId("prod_1", "sku_active_first"))).toMatchObject({
+			quantity: 0,
+			variantId: "sku_active_first",
+		});
+		expect(await listStorage.inventoryStock.get(inventoryStockDocId("prod_1", "sku_active_second"))).toMatchObject({
+			quantity: 7,
+			variantId: "sku_active_second",
+		});
+		const out = await listStorefrontProductSkusHandler(listCtx);
+		expect(out.items).toHaveLength(2);
+		expect(out.items[0]).toMatchObject({ id: "sku_active_first", availability: "out_of_stock" });
+		expect(out.items[1]).toMatchObject({ id: "sku_active_second", availability: "in_stock" });
 	});
 
 	it("applies storefront SKU filtering before pagination limits", async () => {
@@ -1356,7 +1568,11 @@ describe("catalog product handlers", () => {
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		});
 
-		await expect(listStorefrontProductSkusHandler(catalogCtx({ productId: "prod_hidden" }, products, skus))).rejects.toThrow("Product not available");
+		await expect(
+			listStorefrontProductSkusHandler(
+				catalogCtx({ productId: "prod_hidden", limit: 10 }, products, skus),
+			),
+		).rejects.toThrow("Product not available");
 	});
 
 	it("reads simple product SKU inventory from inventoryStock in product detail", async () => {
@@ -2530,8 +2746,8 @@ describe("catalog SKU handlers", () => {
 					requiresShipping: true,
 					isDigital: false,
 					optionValues: [
-						{ attributeId: colorAttribute.id, attributeValueId: colorValues[0].id },
-						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[0].id },
+						{ attributeId: colorAttribute.id, attributeValueId: colorValues[0]!.id },
+						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[0]!.id },
 					],
 				},
 				products,
@@ -2556,8 +2772,8 @@ describe("catalog SKU handlers", () => {
 					requiresShipping: true,
 					isDigital: false,
 					optionValues: [
-						{ attributeId: colorAttribute.id, attributeValueId: colorValues[1].id },
-						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[1].id },
+						{ attributeId: colorAttribute.id, attributeValueId: colorValues[1]!.id },
+						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[1]!.id },
 					],
 				},
 				products,
@@ -2588,8 +2804,8 @@ describe("catalog SKU handlers", () => {
 					requiresShipping: true,
 					isDigital: false,
 					optionValues: [
-						{ attributeId: colorAttribute.id, attributeValueId: colorValues[0].id },
-						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[1].id },
+						{ attributeId: colorAttribute.id, attributeValueId: colorValues[0]!.id },
+						{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[1]!.id },
 					],
 				},
 				products,
@@ -3587,7 +3803,7 @@ describe("catalog bundle handlers", () => {
 	it("sanitizes storefront bundle compute response", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();
-		const inventoryStock = new MemColl<InventoryStockRecord>();
+		const inventoryStock = new MemColl<StoredInventoryStock>();
 		const bundleComponents = new MemColl<StoredBundleComponent>();
 
 		await products.put("prod_bundle", {
@@ -3648,15 +3864,24 @@ describe("catalog bundle handlers", () => {
 				new MemColl(),
 				new MemColl(),
 				new MemColl(),
-				inventoryStock,
+				new MemColl(),
 				bundleComponents,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				inventoryStock,
 			),
 		);
 
 		await inventoryStock.put("stock_component", {
-			skuId: "sku_component",
+			productId: "prod_bundle",
+			variantId: "sku_component",
 			quantity: 10,
 			version: 1,
+			updatedAt: "2026-01-01T00:00:00.000Z",
 		});
 
 		const summary = await bundleComputeStorefrontHandler(
@@ -3668,10 +3893,17 @@ describe("catalog bundle handlers", () => {
 				skus,
 				new MemColl(),
 				new MemColl(),
-				inventoryStock,
+				new MemColl(),
 				new MemColl(),
 				new MemColl(),
 				bundleComponents,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				inventoryStock,
 			),
 		);
 

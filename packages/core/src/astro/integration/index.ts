@@ -64,6 +64,22 @@ export function emdash(config: EmDashConfig = {}): AstroIntegration {
 		storage: config.storage ?? DEFAULT_STORAGE,
 	};
 
+	if (resolvedConfig.passkeyPublicOrigin) {
+		const raw = resolvedConfig.passkeyPublicOrigin;
+		try {
+			const parsed = new URL(raw);
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+				throw new Error(`passkeyPublicOrigin must be http or https (got ${parsed.protocol})`);
+			}
+			resolvedConfig.passkeyPublicOrigin = parsed.origin;
+		} catch (e) {
+			if (e instanceof TypeError) {
+				throw new Error(`Invalid passkeyPublicOrigin: "${raw}"`, { cause: e });
+			}
+			throw e;
+		}
+	}
+
 	// Validate marketplace URL
 	if (resolvedConfig.marketplace) {
 		const url = resolvedConfig.marketplace;
@@ -136,6 +152,7 @@ export function emdash(config: EmDashConfig = {}): AstroIntegration {
 		storage: resolvedConfig.storage,
 		auth: resolvedConfig.auth,
 		marketplace: resolvedConfig.marketplace,
+		passkeyPublicOrigin: resolvedConfig.passkeyPublicOrigin,
 	};
 
 	// Determine auth mode for route injection
