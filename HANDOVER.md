@@ -22,6 +22,12 @@ Latest verification pass status (plugin scope):
 - `packages/plugins/commerce` typecheck: pass
 - `packages/plugins/commerce` tests: pass
 
+Latest verification pass status (release-gates captured in docs):
+- `pnpm --silent lint:quick`: pass
+- `pnpm --filter ./packages/plugins/commerce typecheck`: pass
+- `pnpm --filter ./packages/plugins/commerce test`: pass
+- `pnpm --filter ./packages/core typecheck`: failing (baseline/core-only typing debt, unchanged by this plugin-focused pass)
+
 Known remaining work:
 - Plugin docs and repo-hygiene pass (`HANDOVER`/`progress-review` cross-docs, obsolete review artifacts, and any stale operational notes).
 

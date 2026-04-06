@@ -22,6 +22,15 @@ Use this as a ticket-ready acceptance gate for follow-on work.
 - Do not include second-provider routing until a second provider is active.
 - Do not include MCP command surfaces unless commerce MCP command package is actively scoped.
 
+### Current branch evidence (this pass)
+
+- [x] Plugin scope guardrail checks executed:
+  - `pnpm --filter ./packages/plugins/commerce typecheck`
+  - `pnpm --filter ./packages/plugins/commerce test`
+  - `pnpm --silent lint:quick`
+- [ ] `pnpm --filter ./packages/core typecheck`
+  - Known pre-existing core typing debt remains active and is not part of this scoped plugin hygiene pass.
+
 ## 0) Strategy A (contract hardening, no topology change) — ticket checklist
 
 ### Scope lock (hard stop)

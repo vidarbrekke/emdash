@@ -6,11 +6,18 @@ For a quick reviewer entrypoint: `@THIRD_PARTY_REVIEW_PACKAGE.md` → `external_
 
 ### Pre-merge release gates (review-response work)
 
-- `pnpm --silent lint:quick`
-- `pnpm typecheck`
-- `pnpm --filter @emdash-cms/plugin-commerce test` (or `pnpm test` from `packages/plugins/commerce`)
+- `pnpm --silent lint:quick` (repo-level quick lint)
+- `pnpm --filter ./packages/plugins/commerce typecheck` (required plugin scope)
+- `pnpm --filter ./packages/plugins/commerce test` (required plugin scope)
+- `pnpm --filter ./packages/core typecheck` (optional full-core guardrail; known baseline typing debt is tracked in core)
 - `HANDOVER.md` + external feedback checklist updated for each completed item
 - Capture commit hash + summary before handoff
+
+- Latest automated proof for this pass:
+  - `pnpm --silent lint:quick` ✅
+  - `pnpm --filter ./packages/plugins/commerce typecheck` ✅
+  - `pnpm --filter ./packages/plugins/commerce test` ✅
+  - `pnpm --filter ./packages/core typecheck` ❌ (pre-existing non-commerce core typing debt)
 
 - [Paid order but stock is wrong (technical)](./PAID_BUT_WRONG_STOCK_RUNBOOK.md)
 - [Paid order but stock is wrong (support playbook)](./PAID_BUT_WRONG_STOCK_RUNBOOK_SUPPORT.md)
