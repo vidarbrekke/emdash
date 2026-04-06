@@ -3,7 +3,7 @@
 ## 1) Project purpose and current problem
 This repository is an EmDash monorepo with active work focused on `packages/plugins/commerce`. The app’s current task is to make storefront-facing commerce operations trustworthy under load by reducing boundary leaks, tightening backend invariants, and preserving runtime behavior contracts for checkout/finalize and catalog reads.
 
-The immediate problem is not new feature growth: it is completing the remaining correctness pass so frontend and admin work can proceed without hidden backend churn. The active branch is `main` (`commit 9796a59` is the latest handoff commit and has been pushed to `origin/main`).
+The immediate problem is not new feature growth: it is completing the remaining correctness pass so frontend and admin work can proceed without hidden backend churn. The active branch is `main`.
 
 ## 2) Completed work and outcomes
 Storefront product-read correctness is now enforced in the current plugin state: storefront routes have explicit POST-only semantics where intended, bundle compute applies storefront visibility and status checks, storefront SKUs/variant rows are limited to storefront-eligible rows, and stock-derived availability is computed from storefront-eligible SKU data.
