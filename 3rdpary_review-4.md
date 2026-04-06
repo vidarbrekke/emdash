@@ -7,7 +7,7 @@
 
 ## Executive summary
 
-This review package covers the Option A hardening pass for the EmDash Commerce plugin, focused on webhook-driven payment finalize integrity.  
+This review package covers the Option A hardening pass for the DashingCommerce plugin, focused on webhook-driven payment finalize integrity.  
 The current implementation improves reliability of the `stripe` webhook finalize path by making side effects deterministic, adding signature validation, and making inventory mutation behavior safer under duplicate/malformed flows.
 
 The guiding constraint is still your original brief:
