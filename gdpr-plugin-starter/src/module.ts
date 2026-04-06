@@ -6,10 +6,17 @@ import type {
 	GdprPersonalData,
 	GdprPersonalDataProvider,
 	GdprRight,
+	GdprProviderManifest,
+	GdprThirdPartyProviderBundle,
 } from "./types.js";
 
 type GdprHandler = (ctx: { request: { method: string } } & Record<string, unknown>) => Promise<unknown>;
 type ModuleLifecycle = () => Promise<void> | void;
+type ProviderRegistration = GdprPersonalDataProvider | GdprThirdPartyProviderBundle;
+type RegisteredProvider = {
+	provider: GdprPersonalDataProvider;
+	manifest?: GdprProviderManifest;
+};
 
 type RouteInput = {
 	path: string;
@@ -104,6 +111,16 @@ function buildRequestGetHandler(): GdprHandler {
 	});
 }
 
+function buildProviderListHandler(providerRegistry: Map<string, RegisteredProvider>): GdprHandler {
+	return async () => ({
+		providers: Array.from(providerRegistry.values()).map(({ provider, manifest }) => ({
+			providerId: provider.id,
+			name: provider.name,
+			manifest: manifest ?? null,
+		})),
+	});
+}
+
 function buildExportPayload(subject: GdprDataSubject): GdprPersonalData {
 	return {
 		providerId: "dashcommerce-core",
@@ -137,15 +154,38 @@ function buildOperationResult(action: GdprOperationAction): GdprOperationResult 
 export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 	const logger = host.logger;
 
-	const providerRegistry = new Map<string, GdprPersonalDataProvider>();
+	const providerRegistry = new Map<string, RegisteredProvider>();
 
-	function registerProvider(provider: GdprPersonalDataProvider): void {
-		if (providerRegistry.has(provider.id)) {
-			logger.warn(`[gdpr] duplicate provider ignored`, { providerId: provider.id });
+	function normalizeProviderRegistration(input: ProviderRegistration): RegisteredProvider {
+		if ("provider" in input) {
+			return input;
+		}
+		return { provider: input };
+	}
+
+	function registerProvider(registration: ProviderRegistration): void {
+		const normalized = normalizeProviderRegistration(registration);
+		const { provider, manifest } = normalized;
+
+		if (manifest && manifest.providerId !== provider.id) {
+			logger.warn("[gdpr] provider manifest id mismatch", { providerId: provider.id, manifestId: manifest.providerId });
 			return;
 		}
-		providerRegistry.set(provider.id, provider);
+
+		if (providerRegistry.has(provider.id)) {
+			logger.warn("[gdpr] duplicate provider ignored", { providerId: provider.id });
+			return;
+		}
+		providerRegistry.set(provider.id, normalized);
 		host.gdpr?.registerProvider?.(provider);
+
+		if (manifest) {
+			logger.info("[gdpr] registered provider manifest", {
+				providerId: provider.id,
+				author: manifest.author,
+				riskLevel: manifest.riskLevel,
+			});
+		}
 	}
 
 	host.gdpr?.registerProvider &&
@@ -201,6 +241,14 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 					path: "/gdpr/providers/:id/test",
 					method: "POST",
 					handler: buildProviderDiscoveryHandler(),
+					requireAuth: true,
+				}),
+			);
+			host.routes.registerAdminRoute(
+				asRoute({
+					path: "/gdpr/providers",
+					method: "GET",
+					handler: buildProviderListHandler(providerRegistry),
 					requireAuth: true,
 				}),
 			);
@@ -280,7 +328,23 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 		}),
 	};
 
-	registerProvider(commerceProvider);
+	registerProvider({
+		provider: commerceProvider,
+		manifest: {
+			providerId: "dashcommerce-core",
+			providerName: "DashingCommerce Core Data Provider",
+			author: "DashingCommerce",
+			version: "0.1.0",
+			summary: "Core commerce-owned data extraction and retention-safe cleanup.",
+			supportedRights: ["access", "erasure", "rectification", "restriction", "objection", "portability"],
+			sideEffects: ["read-core", "write-module"],
+			idempotentByDefault: true,
+			riskLevel: "trusted",
+			legalBasisHints: ["contract", "legal_obligation", "legitimate_interest"],
+			dataSensitivity: "high",
+			contactEmail: "privacy@dashingcommerce.example",
+		},
+	});
 	return moduleDefinition;
 }
 

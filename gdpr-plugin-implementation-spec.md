@@ -16,6 +16,7 @@ Non-negotiables:
 - namespaced storage and config (`dc_gdpr_*`, `modules.gdpr.*`, `/admin/api/gdpr/...`)
 - deterministic behavior for submissions and destructive actions
 - failure and provider errors are isolated and auditable
+- any optional privilege/promotional capability must follow `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` if implemented
 
 Out of scope for v1:
 
@@ -23,6 +24,8 @@ Out of scope for v1:
 - advanced policy engine for every possible legal geography
 - replacing checkout/order/payment internals
 - custom framework for non-GDPR modules
+- country-by-country legal interpretation engine
+- generic notification orchestration platform
 
 ## 2) Architecture alignment (required)
 
@@ -35,6 +38,7 @@ The module must satisfy these explicit constraints from the extension spec:
 - module owns its own data model (`dc_gdpr_*`), not core commerce tables
 - no direct mutation of unrelated host collections
 - host must continue to boot and function if module is disabled or absent
+- optional module enablement must not alter core transaction semantics when disabled
 
 ## 3) Suggested package and module identity
 
@@ -44,6 +48,10 @@ Recommended:
 - module id: `dashcommerce.gdpr`
 - display name: `DashingCommerce GDPR Module`
 - capabilities include: `gdpr.data-export`, `gdpr.erase`, `gdpr.pseudonymize`, `gdpr.retention`, `gdpr.jobs`, `gdpr.admin-ui`
+
+Authoritative requirement:
+
+- this module should be delivered as a separate installable repository/package in v1.
 
 Compatibility fields are mandatory:
 
@@ -106,6 +114,22 @@ Use host APIs for:
 
 No direct DB mutation outside module-owned tables.
 
+### 5.4 Consent/compliance baseline (v1 minimum, from authoritative guide)
+
+For v1, include at least:
+
+- explicit subject identity that can represent multiple subject types (example set:
+  `customer`, `guest`, `subscriber`, `account_user`)
+- consent service operations:
+  - `hasConsent`
+  - `grantConsent`
+  - `revokeConsent`
+  - `listConsents`
+- explicit module flags or host-config switches for:
+  - module enabled
+  - marketing enforcement
+  - analytics/tracking enforcement
+
 ## 6) Proposed module internal contracts
 
 ### 6.1 Subject identity
@@ -117,7 +141,7 @@ Canonical subject identity should come from existing commerce account/user primi
 ```ts
 export type GdprDataSubject = {
   subjectId: string;
-  subjectKind: "customer" | "user" | "contact";
+  subjectKind: "customer" | "user" | "contact" | "guest" | "subscriber" | "account_user";
   anchor?: {
     orderId?: string;
     cartId?: string;
@@ -167,11 +191,54 @@ export interface GdprPersonalDataProvider {
   eraseData(subject: GdprDataSubject, opts: { dryRun?: boolean; legalHoldOk?: boolean }): Promise<GdprOperationResult>;
   rectifyData?(subject: GdprDataSubject, patch: Record<string, unknown>): Promise<GdprOperationResult>;
 }
+
+export type GdprProviderSideEffect =
+  | "read-core"
+  | "write-module"
+  | "write-core"
+  | "external-io"
+  | "analytics"
+  | "notification";
+
+export type GdprProviderRiskLevel = "trusted" | "monitored" | "restricted";
+
+export type GdprProviderManifest = {
+  providerId: string;
+  providerName: string;
+  author: string;
+  version: string;
+  summary: string;
+  supportedRights: GdprRight[];
+  sideEffects: GdprProviderSideEffect[];
+  idempotentByDefault: boolean;
+  riskLevel: GdprProviderRiskLevel;
+  legalBasisHints?: string[];
+  dataSensitivity?: "none" | "low" | "medium" | "high";
+  contactEmail?: string;
+};
+
+export interface GdprThirdPartyProviderBundle {
+  provider: GdprPersonalDataProvider;
+  manifest: GdprProviderManifest;
+}
 ```
 
 Note: keep provider contracts additive and boring. One contract now, evolve only when a real need appears.
 
-### 6.3 Host-facing module API (v1)
+### 6.3 Third-party contribution contract (v1)
+
+Third-party providers should be registered with both implementation and manifest:
+
+- implementation: `GdprPersonalDataProvider`
+- metadata: `GdprProviderManifest`
+
+Acceptance checks:
+
+- manifest `providerId` must match implementation `id`
+- `riskLevel: "restricted"` requires explicit admin allowlist and reason
+- modules should treat `idempotentByDefault === false` as requiring explicit retry policy controls
+
+### 6.4 Host-facing module API (v1)
 
 If needed by host extensions, provide a typed entry point for providers:
 
@@ -235,6 +302,7 @@ Append-only event log table:
 
 ### Optional retention/control table(s)
 
+- `dc_gdpr_consents` for explicit subject-purpose consent state and consent history
 - `dc_gdpr_legal_holds` keyed by subject and reason
 - `dc_gdpr_subject_index` for fast anchor lookups if your app does not already provide one
 
@@ -307,9 +375,18 @@ Use admin-only endpoints under one namespace:
 - `POST /admin/api/gdpr/requests/:id/retry`
 - `POST /admin/api/gdpr/requests/:id/cancel`
 - `POST /admin/api/gdpr/requests/:id/download`
+- `GET /admin/api/gdpr/providers`
 - `GET /admin/api/gdpr/audit/:id`
 - `POST /admin/api/gdpr/providers/:id/test`
 - `GET /admin/api/gdpr/health`
+
+Customer/self-service endpoints are part of v1 success criteria:
+
+- `POST /account/privacy/export`
+- `POST /account/privacy/erase`
+- `POST /account/privacy/rectify`
+- `GET /account/privacy/consent`
+- `POST /account/privacy/consent`
 
 Route rules:
 
@@ -424,6 +501,7 @@ Bundle these with the handoff:
 - route and hook matrix from `COMMERCE_DOCS_INDEX.md`
 - current plugin compatibility and baseline gates
 - any relevant open questions + decisions
+- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md`
 
 ## 19) Open decisions before implementation
 
@@ -440,6 +518,11 @@ Bundle these with the handoff:
 - do not touch core behaviors unless compatibility demands it
 - prefer explicit, boring code over clever abstractions
 - every behavior change requires a test and a regression assertion
+- any external provider-facing behavior must be explicit, auditable, and intention-revealed:
+  - manifest + implementation id parity,
+  - data-effect statement,
+  - idempotence policy
+- promotional visibility/creator privilege decisions must be gated by `GOODNESS_AND_ACCESSIBILITY_CHARTER.md`
 
 ## 21) Handoff-ready acceptance checklist
 - module registers with host and passes compatibility validation
@@ -449,6 +532,8 @@ Bundle these with the handoff:
 - one partial/failing provider results in explicit partial/fail state
 - no hidden coupling to private commerce internals
 - core `cart/checkout/webhook` behaviors remain unchanged when module is disabled
+- marketing send/tracking enforcement hooks are demonstrated when subject has no consent
+- if optional privilege or creator visibility features are part of the deployment, the charter compliance checklist in `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` is complete
 
 ## 22) Starter module scaffold for immediate handoff
 
@@ -463,3 +548,28 @@ Use this as a concrete starter copy:
 
 The scaffold includes a minimal public-API-only `registerModule(host)` bootstrap, manifest
 contracts, and extension registration skeletons for routes, hooks, jobs, and migrations.
+
+## 23) Commercial viability and optionality guardrails (non-negotiable for v1)
+
+This module is part of a commerce-first platform and must not alter core transaction outcomes.
+
+### Core remains sacred
+
+- Checkout, order, payment, tax, shipping, and finalize flows remain unchanged by module defaults.
+- GDPR features are additive and do not create implicit behavior changes in storefront pricing, checkout sequence, order state, or fulfillment.
+- Module disablement must produce no degradation in core commerce behavior.
+
+### Optional capabilities are separate
+
+- Marketing consent enforcement, tracking blockers, promotional privilege features, and creator visibility controls are optional and explicit by configuration.
+- Any optional privilege or promotion extension should be sold and documented as a separable package with clear activation requirements.
+- Optional modules must declare:
+  - explicit scope,
+  - evidence/audit outputs,
+  - and appeal/rollback path for every restriction-like action.
+
+### Handoff expectation for external contributors
+
+- Keep this specification as commerce-safe default behavior and avoid adding business model commitments into core request handling.
+- Tie privilege/promotion behavior to the rule set in `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` and this addendum's optionality policy before implementation.
+- Prefer deterministic checks, explicit config toggles, and reversible states over implicit policy scoring.

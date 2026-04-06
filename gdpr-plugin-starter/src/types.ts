@@ -1,4 +1,4 @@
-export type GdprDataSubjectKind = "customer" | "user" | "contact" | string;
+export type GdprDataSubjectKind = "customer" | "user" | "contact" | "guest" | "subscriber" | "account_user" | string;
 
 export type GdprRight =
 	| "access"
@@ -27,6 +27,25 @@ export type GdprProviderStatus =
 	| "failed";
 
 export type GdprOperationAction = "export" | "erase" | "anonymize" | "rectify";
+
+export type GdprProviderSideEffect = "read-core" | "write-module" | "write-core" | "external-io" | "analytics" | "notification";
+
+export type GdprProviderRiskLevel = "trusted" | "monitored" | "restricted";
+
+export type GdprProviderManifest = {
+	providerId: string;
+	providerName: string;
+	author: string;
+	version: string;
+	summary: string;
+	supportedRights: GdprRight[];
+	sideEffects: GdprProviderSideEffect[];
+	idempotentByDefault: boolean;
+	riskLevel: GdprProviderRiskLevel;
+	legalBasisHints?: string[];
+	dataSensitivity?: "none" | "low" | "medium" | "high";
+	contactEmail?: string;
+};
 
 export type GdprLegalHold = {
 	reasonCode: string;
@@ -93,4 +112,9 @@ export interface GdprPersonalDataProvider {
 		opts: { dryRun?: boolean; legalHoldOk?: boolean },
 	): Promise<GdprOperationResult>;
 	rectifyData?(subject: GdprDataSubject, patch: Record<string, unknown>): Promise<GdprOperationResult>;
+}
+
+export interface GdprThirdPartyProviderBundle {
+	provider: GdprPersonalDataProvider;
+	manifest: GdprProviderManifest;
 }
