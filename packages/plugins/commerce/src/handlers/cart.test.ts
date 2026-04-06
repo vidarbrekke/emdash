@@ -49,6 +49,25 @@ class MemColl<T extends object> {
 	async put(id: string, data: T): Promise<void> {
 		this.rows.set(id, structuredClone(data));
 	}
+
+	async delete(id: string): Promise<boolean> {
+		return this.rows.delete(id);
+	}
+
+	async query(
+		options: { where?: Record<string, unknown>; limit?: number } = {},
+	): Promise<{ items: Array<{ id: string; data: T }>; hasMore: boolean }> {
+		const where = options.where ?? {};
+		const limit = options.limit;
+		let items = Array.from(this.rows.entries(), ([id, data]) => ({ id, data }));
+		for (const [field, value] of Object.entries(where)) {
+			items = items.filter((item) => (item.data as Record<string, unknown>)[field] === value);
+		}
+		if (typeof limit === "number") {
+			items = items.slice(0, limit);
+		}
+		return { items, hasMore: false };
+	}
 }
 
 function decodeStockDocId(id: string): { productId: string; variantId: string } | null {

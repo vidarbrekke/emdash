@@ -67,6 +67,14 @@ describe("stripe webhook signature helpers", () => {
 		});
 	});
 
+	it("preserves signature values containing '=' characters", () => {
+		const parsed = parseStripeSignatureHeader(`t=${timestamp},v1=abc=def,v1=second`);
+		expect(parsed).toEqual({
+			timestamp,
+			signatures: ["abc=def", "second"],
+		});
+	});
+
 	it("validates a matching v1 signature", async () => {
 		const hash = await hashWithSecret(secret, timestamp, rawBody);
 		const sig = `t=${timestamp},v1=${hash}`;
@@ -85,6 +93,18 @@ describe("stripe webhook signature helpers", () => {
 		const hash = await hashWithSecret(secret, timestamp, rawBody);
 		const sig = `v1=${hash}`;
 		expect(await isWebhookSignatureValid(secret, rawBody, sig, 300)).toBe(false);
+	});
+
+	it("rejects non-integer timestamp formats", () => {
+		const rawHash = "abc";
+		expect(parseStripeSignatureHeader(`t=${timestamp}.5,v1=${rawHash}`)).toBeNull();
+		expect(parseStripeSignatureHeader(`t=${timestamp}x,v1=${rawHash}`)).toBeNull();
+		expect(parseStripeSignatureHeader(`t=-${timestamp},v1=${rawHash}`)).toBeNull();
+	});
+
+	it("does not accept non-numeric signature timestamps in validation", async () => {
+		const malformedSig = `t=${timestamp}x,v1=not-verified`;
+		expect(await isWebhookSignatureValid(secret, rawBody, malformedSig, 300)).toBe(false);
 	});
 
 	it("rejects stale signatures", async () => {
@@ -120,6 +140,24 @@ describe("stripe webhook signature helpers", () => {
 			id: "evt_missing",
 			type: "payment_intent.succeeded",
 			data: { object: { id: "pi_1", metadata: {} } },
+		});
+
+		expect(metadata).toBeNull();
+	});
+
+	it("rejects event payload metadata values that are blank after trimming", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			id: "evt_blank",
+			data: { object: { id: "pi_1", metadata: { emdashOrderId: "   ", emdashFinalizeToken: "\t" } } },
+		});
+
+		expect(metadata).toBeNull();
+	});
+
+	it("rejects event payload metadata values with incorrect types", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			id: "evt_types",
+			data: { object: { id: "pi_1", metadata: { emdashOrderId: 123, emdashFinalizeToken: true } } },
 		});
 
 		expect(metadata).toBeNull();

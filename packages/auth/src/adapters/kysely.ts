@@ -94,7 +94,7 @@ interface AllowedDomainTable {
 
 export function createKyselyAdapter<T extends AuthTables>(db: Kysely<T>): AuthAdapter {
 	// `Kysely` is structurally compatible at runtime with the subset this adapter reads/writes.
-	const kdb = db as Kysely<AuthTables>;
+	const kdb = db as unknown as Kysely<AuthTables>;
 
 	return {
 		// ========================================================================

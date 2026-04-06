@@ -17,6 +17,7 @@ const STRIPE_SIGNATURE_HEADER = "Stripe-Signature";
 const STRIPE_SIGNATURE_TOLERANCE_SECONDS = STRIPE_WEBHOOK_SIGNATURE.defaultToleranceSeconds;
 const STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS = STRIPE_WEBHOOK_SIGNATURE.minToleranceSeconds;
 const STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS = STRIPE_WEBHOOK_SIGNATURE.maxToleranceSeconds;
+const STRIPE_SIGNATURE_TIMESTAMP_RE = /^\d+$/;
 const STRIPE_PROVIDER_ID = "stripe";
 const STRIPE_METADATA_ORDER_ID_KEYS = ["orderId", "emdashOrderId", "emdash_order_id"] as const;
 const STRIPE_METADATA_FINALIZE_TOKEN_KEYS = [
@@ -37,7 +38,10 @@ type StripeMetadataInput = {
 };
 
 function normalizeHeaderKeyValue(raw: string): [string, string] | null {
-	const [key, value] = raw.split("=").map((entry) => entry.trim());
+	const equalsIndex = raw.indexOf("=");
+	if (equalsIndex < 0) return null;
+	const key = raw.slice(0, equalsIndex).trim();
+	const value = raw.slice(equalsIndex + 1).trim();
 	if (!key || !value) return null;
 	return [key, value];
 }
@@ -53,7 +57,9 @@ function clampStripeTolerance(raw: unknown): number {
 function selectFromMetadata(input: Record<string, unknown> | undefined, keys: readonly string[]): string | undefined {
 	for (const key of keys) {
 		const value = input?.[key];
-		if (typeof value === "string" && value.length > 0) return value;
+		if (typeof value !== "string") continue;
+		const normalized = value.trim();
+		if (normalized.length > 0) return normalized;
 	}
 	return undefined;
 }
@@ -98,6 +104,7 @@ function parseStripeSignatureHeader(raw: string | null): ParsedStripeSignature |
 		const [key, value] = pair;
 		if (!key || !value) continue;
 		if (key === "t") {
+			if (!STRIPE_SIGNATURE_TIMESTAMP_RE.test(value)) return null;
 			const parsed = Number.parseInt(value, 10);
 			if (Number.isNaN(parsed)) return null;
 			timestamp = parsed;

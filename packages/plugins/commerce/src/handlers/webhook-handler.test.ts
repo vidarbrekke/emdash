@@ -149,4 +149,44 @@ it("dedupes concurrent duplicate webhook deliveries", async () => {
 	expect(firstResult).toEqual({ ok: true, replay: false, orderId: "order_1" });
 	expect(secondResult).toEqual({ ok: true, replay: false, orderId: "order_1" });
 });
+
+it("retries dedupe entry after a failed in-flight webhook finalization", async () => {
+	finalizePaymentFromWebhook.mockRejectedValueOnce(new Error("temporary transport failure"));
+	await expect(Promise.all([createPaymentWebhookRoute(adapter)(ctx()), createPaymentWebhookRoute(adapter)(ctx())]))
+		.rejects.toThrow("temporary transport failure");
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(1);
+
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+	const success = await createPaymentWebhookRoute(adapter)(ctx());
+	expect(success).toEqual({ ok: true, replay: false, orderId: "order_1" });
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(2);
+});
+
+it("does not dedupe separate finalization attempts with different tokens", async () => {
+	const localAdapter = {
+		...adapter,
+		buildFinalizeInput: vi.fn()
+			.mockImplementationOnce(() => ({
+				orderId: "order_1",
+				externalEventId: "evt_1",
+				finalizeToken: "tok_first",
+			}))
+			.mockImplementationOnce(() => ({
+				orderId: "order_1",
+				externalEventId: "evt_1",
+				finalizeToken: "tok_second",
+			})),
+		buildCorrelationId: vi.fn(() => "corr:evt_1"),
+	};
+
+	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+	const handler = createPaymentWebhookRoute(localAdapter);
+
+	await Promise.all([handler(ctx()), handler(ctx())]);
+
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(2);
+	expect(localAdapter.buildFinalizeInput).toHaveBeenCalledTimes(2);
+	const finalizeInputTokens = finalizePaymentFromWebhook.mock.calls.map(([_, input]) => input.finalizeToken);
+	expect(new Set(finalizeInputTokens)).toEqual(new Set(["tok_first", "tok_second"]));
+});
 });

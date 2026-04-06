@@ -1651,6 +1651,66 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(logs.some((entry) => entry.message === "commerce.finalize.noop")).toBe(true);
 	});
 
+	it("concurrent same-event finalize without atomic receipt claims converges to single terminal state", async () => {
+		const orderId = "order_concurrent_no_atomic_claims";
+		const extId = "evt_concurrent_no_atomic_claims";
+		const stockDocId = inventoryStockDocId("p1", "");
+		const state = {
+			orders: new Map([
+				[
+					orderId,
+					baseOrder({
+						lineItems: [{ productId: "p1", quantity: 2, inventoryVersion: 3, unitPriceMinor: 500 }],
+					}),
+				],
+			]),
+			webhookReceipts: new Map<string, StoredWebhookReceipt>(),
+			paymentAttempts: new Map<string, StoredPaymentAttempt>([
+				[
+					"pa_concurrent_no_atomic_claims",
+					{ orderId, providerId: "stripe", status: "pending", createdAt: now, updatedAt: now },
+				],
+			]),
+			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
+			inventoryStock: new Map<string, StoredInventoryStock>([
+				[stockDocId, { productId: "p1", variantId: "", version: 3, quantity: 10, updatedAt: now }],
+			]),
+		};
+
+		const ports = portsFromState(state);
+		const input = {
+			orderId,
+			providerId: "stripe",
+			externalEventId: extId,
+			correlationId: "cid",
+			finalizeToken: FINALIZE_RAW,
+			nowIso: now,
+		};
+
+		const [first, second] = await Promise.all([
+			finalizePaymentFromWebhook(ports, input),
+			finalizePaymentFromWebhook(ports, input),
+		]);
+		expect([first, second]).toContainEqual({ kind: "completed", orderId });
+
+		const stock = await ports.inventoryStock.get(stockDocId);
+		expect(stock?.version).toBe(4);
+		expect(stock?.quantity).toBe(8);
+
+		const ledger = await ports.inventoryLedger.query({ limit: 10 });
+		expect(ledger.items).toHaveLength(1);
+
+		const status = await queryFinalizationStatus(ports, orderId, "stripe", extId);
+		expect(status).toMatchObject({
+			receiptStatus: "processed",
+			isInventoryApplied: true,
+			isOrderPaid: true,
+			isPaymentAttemptSucceeded: true,
+			isReceiptProcessed: true,
+			resumeState: "replay_processed",
+		});
+	});
+
 	it("claim-aware same-event concurrency: only one worker applies side effects", async () => {
 		const orderId = "order_claim_once";
 		const extId = "evt_claim_once";
