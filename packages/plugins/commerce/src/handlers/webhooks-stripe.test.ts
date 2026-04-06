@@ -135,6 +135,18 @@ describe("stripe webhook signature helpers", () => {
 		});
 	});
 
+	it("normalizes whitespace around Stripe event id", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			...(JSON.parse(rawStripeEventBody) as Record<string, unknown>),
+			id: "  evt_live_whitespace  ",
+		});
+		expect(metadata).toEqual({
+			externalEventId: "evt_live_whitespace",
+			orderId: "order_1",
+			finalizeToken: "token_12345678901234",
+		});
+	});
+
 	it("rejects event payload without required metadata", () => {
 		const metadata = extractStripeFinalizeMetadata({
 			id: "evt_missing",
@@ -158,6 +170,15 @@ describe("stripe webhook signature helpers", () => {
 		const metadata = extractStripeFinalizeMetadata({
 			id: "evt_types",
 			data: { object: { id: "pi_1", metadata: { emdashOrderId: 123, emdashFinalizeToken: true } } },
+		});
+
+		expect(metadata).toBeNull();
+	});
+
+	it("rejects empty event ids", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			id: "   ",
+			data: { object: { id: "pi_1", metadata: { emdashOrderId: "order_1", emdashFinalizeToken: "token_12345678901234" } } },
 		});
 
 		expect(metadata).toBeNull();

@@ -67,7 +67,7 @@ function selectFromMetadata(input: Record<string, unknown> | undefined, keys: re
 function extractStripeFinalizeMetadata(event: unknown): StripeMetadataInput | null {
 	if (!event || typeof event !== "object") return null;
 	const payload = event as StripeWebhookEventInput;
-	if (!("id" in payload) || typeof payload.id !== "string") return null;
+	if (!("id" in payload) || typeof payload.id !== "string" || payload.id.trim().length === 0) return null;
 	if (
 		!payload.data ||
 		typeof payload.data !== "object" ||
@@ -88,7 +88,7 @@ function extractStripeFinalizeMetadata(event: unknown): StripeMetadataInput | nu
 	return {
 		orderId,
 		finalizeToken,
-		externalEventId: payload.id,
+		externalEventId: payload.id.trim(),
 	};
 }
 
