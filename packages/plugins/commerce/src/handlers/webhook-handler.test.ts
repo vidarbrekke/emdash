@@ -132,6 +132,21 @@ describe("payment webhook seam", () => {
 		expect(consumeKvRateLimit).toHaveBeenCalledTimes(1);
 	});
 
+	it("allows a retry after a failed rate-limited in-flight finalization", async () => {
+		consumeKvRateLimit.mockResolvedValueOnce(false);
+		await expect(createPaymentWebhookRoute(adapter)(ctx())).rejects.toMatchObject({ code: "rate_limited" });
+		expect(consumeKvRateLimit).toHaveBeenCalledTimes(1);
+		expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+
+		consumeKvRateLimit.mockResolvedValueOnce(true);
+		finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
+		const success = await createPaymentWebhookRoute(adapter)(ctx());
+
+		expect(success).toEqual({ ok: true, replay: false, orderId: "order_1" });
+		expect(consumeKvRateLimit).toHaveBeenCalledTimes(2);
+		expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(1);
+	});
+
 it("dedupes concurrent duplicate webhook deliveries", async () => {
 	let resolveFinalize!: () => void;
 	const finalizePromise = new Promise<{ kind: "completed"; orderId: string }>((resolve) => {
