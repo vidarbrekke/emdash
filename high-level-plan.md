@@ -76,7 +76,7 @@ Prefixing by `settings:` and `state:` helps avoid collisions and keeps maintenan
 
 ## 5) Public API routes (trusted plugin routes)
 
-Implement REST-style plugin routes under `/_emdash/api/plugins/emdash-commerce/...`:
+Implement REST-style plugin routes under `/_emdash/api/plugins/dashing-commerce/...`:
 
 ### Cart
 

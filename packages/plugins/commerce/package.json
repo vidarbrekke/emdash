@@ -1,7 +1,7 @@
 {
-	"name": "@emdash-cms/plugin-commerce",
+	"name": "@emdash-cms/plugin-dashing-commerce",
 	"version": "0.1.0",
-	"description": "EmDash commerce — checkout + idempotent webhook finalize (kernel-first)",
+	"description": "DashingCommerce — checkout + idempotent webhook finalize (kernel-first)",
 	"type": "module",
 	"main": "src/index.ts",
 	"exports": {

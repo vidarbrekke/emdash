@@ -58,14 +58,14 @@ expensive to migrate. For everything else, build the minimum that is correct.
 
 ```
 EmDash CMS Core
-└── @emdash-cms/plugin-commerce           ← Native plugin (React admin, Astro, PT blocks)
+└── @emdash-cms/plugin-dashing-commerce           ← Native plugin (React admin, Astro, PT blocks)
     │
     ├── Provider extension points (Standard plugins — marketplace-publishable)
-    │   ├── @emdash-cms/plugin-commerce-stripe     Payment provider
-    │   ├── @emdash-cms/plugin-commerce-paypal     Payment provider
-    │   ├── @emdash-cms/plugin-shipping-flat       Shipping provider
-    │   ├── @emdash-cms/plugin-tax-simple          Tax provider
-    │   └── @emdash-cms/plugin-commerce-mcp        MCP server for AI agents
+    │   ├── @emdash-cms/plugin-dashing-commerce-stripe     Payment provider
+    │   ├── @emdash-cms/plugin-dashing-commerce-paypal     Payment provider
+    │   ├── @emdash-cms/plugin-dashing-commerce-shipping-flat Shipping provider
+    │   ├── @emdash-cms/plugin-dashing-commerce-tax-simple    Tax provider
+    │   └── @emdash-cms/plugin-dashing-commerce-mcp        MCP server for AI agents
     │
     └── Storefront extensions (Standard plugins — marketplace-publishable)
         ├── @emdash-cms/plugin-reviews             Product reviews
@@ -104,7 +104,7 @@ brittle. Our model uses the **provider registry pattern**.
 ### How it works
 
 1. The commerce plugin defines typed **provider interfaces** as exported TypeScript
-   types in a companion SDK package (`@emdash-cms/plugin-commerce-sdk`).
+   types in a companion SDK package (`@emdash-cms/plugin-dashing-commerce-sdk`).
 
 2. Extension plugins import the SDK, implement the interface, and call our
    `providers/register` route on `plugin:activate`. The registration record is
@@ -116,7 +116,7 @@ brittle. Our model uses the **provider registry pattern**.
 
 4. On `plugin:deactivate`, extension plugins call `providers/unregister`.
 
-### Contracts (in `@emdash-cms/plugin-commerce-sdk`)
+### Contracts (in `@emdash-cms/plugin-dashing-commerce-sdk`)
 
 ```
 PaymentProviderContract
@@ -668,7 +668,7 @@ export const KV_KEYS = {
 
 ## 9. Route Contract Catalog
 
-All routes live at `/_emdash/api/plugins/emdash-commerce/<route-name>`.
+All routes live at `/_emdash/api/plugins/dashing-commerce/<route-name>`.
 
 ### Public routes (no auth required)
 
@@ -794,7 +794,7 @@ the system design.
    draft for merchant review and confirmation. Implemented via `ctx.http.fetch`
    to an LLM API — provider configurable in settings.
 
-### MCP server package: `@emdash-cms/plugin-commerce-mcp`
+### MCP server package: `@emdash-cms/plugin-dashing-commerce-mcp`
 
 A standard plugin that registers as a MCP server exposing commerce operations
 as tools. Merchant installs it alongside the commerce plugin.
@@ -966,7 +966,7 @@ regressions from fixing them.
 
 ### Phase 4 — Authorize.net (validate provider abstraction)
 
-Add `@emdash-cms/plugin-commerce-authorize-net` as a second in-process provider
+Add `@emdash-cms/plugin-dashing-commerce-authorize-net` as a second in-process provider
 adapter. The goal is not feature breadth — it is to prove that the
 `PaymentProviderContract` is truly gateway-agnostic.
 
@@ -1004,7 +1004,7 @@ After correctness is proven and admin is stable:
 
 ### Phase 7 — AI/MCP surfaces
 
-`@emdash-cms/plugin-commerce-mcp` standard plugin. `ai/draft-product` route.
+`@emdash-cms/plugin-dashing-commerce-mcp` standard plugin. `ai/draft-product` route.
 All MCP tools from Section 11. Merchant can use an AI agent for product import,
 order management, inventory management, and reporting.
 
@@ -1047,7 +1047,7 @@ packages/plugins/commerce/
 
 ```json
 {
-  "name": "@emdash-cms/plugin-commerce",
+  "name": "@emdash-cms/plugin-dashing-commerce",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -1084,11 +1084,11 @@ export function commercePlugin(
   options: CommercePluginOptions = {},
 ): PluginDescriptor<CommercePluginOptions> {
   return {
-    id: "emdash-commerce",
+    id: "dashing-commerce",
     version: "0.1.0",
-    entrypoint: "@emdash-cms/plugin-commerce/sandbox",
-    adminEntry: "@emdash-cms/plugin-commerce/admin",
-    componentsEntry: "@emdash-cms/plugin-commerce/astro",
+    entrypoint: "@emdash-cms/plugin-dashing-commerce/sandbox",
+    adminEntry: "@emdash-cms/plugin-dashing-commerce/admin",
+    componentsEntry: "@emdash-cms/plugin-dashing-commerce/astro",
     options,
     capabilities: [
       "network:fetch",   // payment gateway, shipping, tax, fulfillment APIs
@@ -1144,8 +1144,8 @@ export interface ProviderRegistration {
   providerId: string;                    // e.g., "stripe-v1"
   providerType: ProviderType;
   displayName: string;                   // e.g., "Stripe"
-  pluginId: string;                      // e.g., "emdash-commerce-stripe"
-  routeBase: string;                     // e.g., "/_emdash/api/plugins/emdash-commerce-stripe"
+  pluginId: string;                      // e.g., "dashing-commerce-stripe"
+  routeBase: string;                     // e.g., "/_emdash/api/plugins/dashing-commerce-stripe"
   active: boolean;
   config: Record<string, unknown>;       // Provider-specific (non-secret) config
   registeredAt: string;
@@ -1805,7 +1805,7 @@ Return **429** with `retryAfter` seconds when exceeded. Log with `correlationId`
 
 ### 20.9 API versioning
 
-- Plugin routes remain under `/_emdash/api/plugins/emdash-commerce/...`. When
+- Plugin routes remain under `/_emdash/api/plugins/dashing-commerce/...`. When
   breaking request/response shapes are needed, introduce **`v2/` route prefix** or
   new route names; keep v1 stable for storefronts pinned to older Astro builds.
 

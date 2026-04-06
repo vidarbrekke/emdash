@@ -1,5 +1,5 @@
 /**
- * EmDash commerce plugin — kernel-first checkout + webhook finalize (Stripe wiring follows).
+ * DashingCommerce plugin — kernel-first checkout + webhook finalize (Stripe wiring follows).
  *
  * Persistence: checkout writes the order and payment attempt as separate `put` calls;
  * cron cleanup uses `deleteMany` on idempotency keys. Finalize uses interleaved
@@ -8,7 +8,7 @@
  * @example
  * ```ts
  * // live.config.ts
- * import { createPlugin } from "@emdash-cms/plugin-commerce";
+ * import { createPlugin } from "@emdash-cms/plugin-dashing-commerce";
  * export default defineConfig({ plugins: [createPlugin()] });
  * ```
  */
@@ -154,9 +154,9 @@ const STRIPE_ALLOWED_HOSTS = ["*.stripe.com"] as const;
  */
 export function commercePlugin(): PluginDescriptor {
 	return {
-		id: "emdash-commerce",
+		id: "dashing-commerce",
 		version: "0.1.0",
-		entrypoint: "@emdash-cms/plugin-commerce",
+		entrypoint: "@emdash-cms/plugin-dashing-commerce",
 		capabilities: ["network:fetch"],
 		allowedHosts: [...STRIPE_ALLOWED_HOSTS],
 		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginDescriptor["storage"],
@@ -183,7 +183,7 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 		providerId: options.extensions?.recommendationProviderId,
 	});
 	const pluginDefinition: PluginDefinition<CommerceStorage> = {
-		id: "emdash-commerce",
+		id: "dashing-commerce",
 		version: "0.1.0",
 		capabilities: ["network:fetch"],
 		allowedHosts: [...STRIPE_ALLOWED_HOSTS],

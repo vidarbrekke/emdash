@@ -45,7 +45,7 @@ For a quick reviewer entrypoint: `@THIRD_PARTY_REVIEW_PACKAGE.md` → `external_
 - Constraint: no broader provider runtime refactor yet.
 - Activation guardrail: defer provider- and MCP-command architecture work until either:
   - a second payment provider is actively onboarded, or
-  - an `@emdash-cms/plugin-commerce-mcp` command surface is shipped.
+  - an `@emdash-cms/plugin-dashing-commerce-mcp` command surface is shipped.
 - Relevant files:
   - `src/services/commerce-provider-contracts.ts`
   - `src/services/commerce-provider-contracts.test.ts`
@@ -74,8 +74,8 @@ Use this when opening follow-up work:
    - `HANDOVER.md`
    - `FINALIZATION_REVIEW_AUDIT.md`
 4) Run proof commands:
-   - `pnpm --filter @emdash-cms/plugin-commerce test services/commerce-provider-contracts.test.ts`
-   - `pnpm --filter @emdash-cms/plugin-commerce test`
+   - `pnpm --filter @emdash-cms/plugin-dashing-commerce test services/commerce-provider-contracts.test.ts`
+   - `pnpm --filter @emdash-cms/plugin-dashing-commerce test`
 5) Proof artifacts for strict lease rollout:
   - `COMMERCE_USE_LEASED_FINALIZE` is retained for replay parity and evidence reruns when needed; strict claim-lease checks are otherwise canonical.
   - Runbooks and proof outputs are now captured directly in this repo’s regression log trail.
@@ -112,6 +112,6 @@ reliability-support-catalog extension backlog.
 - `queryFinalizationState` (via `src/services/commerce-extension-seams.ts`) for runbook and MCP reads — applies per-IP rate limit, ~10s KV cache, and in-isolate in-flight coalescing (see `COMMERCE_LIMITS` / `finalization-diagnostics-readthrough.ts`).
 - `queryFinalizationStatus` (via `src/orchestration/finalize-payment.ts`) returns the same shape but **without** those guards; prefer `queryFinalizationState` for HTTP/MCP polling unless you are in a controlled test or internal path.
 
-All routes mount under `/_emdash/api/plugins/emdash-commerce/<route>`.
+All routes mount under `/_emdash/api/plugins/dashing-commerce/<route>`.
 
 Implementation note: `src/index.ts` is the active source of truth for what the plugin exposes over HTTP today.

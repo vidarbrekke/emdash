@@ -73,7 +73,7 @@ for credits/adjustments and define an explicit recovery tool path with audit con
 
 ## MCP
 
-- **EmDash MCP** today targets **content** tooling. A dedicated **`@emdash-cms/plugin-commerce-mcp`** package is **planned** (`COMMERCE_EXTENSION_SURFACE.md`) for scoped tools: product read/write, order lookup for customer service (prefer **short-lived tokens** over wide-open order id guessing), refunds, etc.
+- **EmDash MCP** today targets **content** tooling. A dedicated **`@emdash-cms/plugin-dashing-commerce-mcp`** package is **planned** (`COMMERCE_EXTENSION_SURFACE.md`) for scoped tools: product read/write, order lookup for customer service (prefer **short-lived tokens** over wide-open order id guessing), refunds, etc.
 - MCP tools must respect the same invariants as HTTP routes: **no bypass** of finalize/idempotency rules for payments.
 - MCP tools should be read/write-safe by design: reads use `queryFinalizationStatus`/order APIs, writes use service seams that enforce kernel checks.
 

@@ -25,8 +25,8 @@ It is written as a practical handoff for the current developer. The goal is not 
 - Possession is enforced for cart reads/mutations (`ownerToken` + hash) and order readback (`finalizeToken` + hash).
 - Legacy compatibility paths are removed from active runtime flows; token hashes are required in stored domain types.
 - Package checks are currently green:
-  - `pnpm --filter @emdash-cms/plugin-commerce test`
-  - `pnpm --filter @emdash-cms/plugin-commerce typecheck`
+  - `pnpm --filter @emdash-cms/plugin-dashing-commerce test`
+  - `pnpm --filter @emdash-cms/plugin-dashing-commerce typecheck`
   - `pnpm test` for the workspace
 
 ### What remains intentionally deferred

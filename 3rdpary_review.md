@@ -50,7 +50,7 @@ A local **WooCommerce PHP tree** was used only as a **reference** for cart/check
 
 ### 3.1 Core deliverable
 
-A **first-party commerce plugin** (`@emdash-cms/plugin-commerce` or equivalent) that provides:
+A **first-party commerce plugin** (`@emdash-cms/plugin-dashing-commerce` or equivalent) that provides:
 
 - **Product catalog** — including **simple**, **variable** (many variants), **bundle**, **digital**, and **gift card** shapes via a **discriminated `type` + `typeData`** model (not class inheritance).
 - **Cart** — server-side cart, totals, discounts (staged), line items.

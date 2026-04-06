@@ -65,8 +65,8 @@ Use this as a ticket-ready acceptance gate for follow-on work.
 
 - [ ] **T4 — Regression proof**
   - [ ] Execute targeted and package-level test passes documented below:
-    - [ ] `pnpm --filter @emdash-cms/plugin-commerce test services/commerce-provider-contracts.test.ts`
-    - [ ] `pnpm --filter @emdash-cms/plugin-commerce test`
+  - [ ] `pnpm --filter @emdash-cms/plugin-dashing-commerce test services/commerce-provider-contracts.test.ts`
+  - [ ] `pnpm --filter @emdash-cms/plugin-dashing-commerce test`
   - [ ] Ensure existing baseline suite count is unchanged and no unrelated tests are required to pass newly.
 
 ### Definition of done
@@ -80,7 +80,7 @@ Use this as a ticket-ready acceptance gate for follow-on work.
 - [ ] Changes are additive and isolated to contract layering.
 - [ ] Ticket is blocked for broader architecture changes unless one of the hard gates below is true:
   - a second payment provider is live, or
-  - `@emdash-cms/plugin-commerce-mcp` command surface is actively in scope.
+  - `@emdash-cms/plugin-dashing-commerce-mcp` command surface is actively in scope.
 
 ## 1) Finalization diagnostics (queryFinalizationState)
 
@@ -154,7 +154,7 @@ narrow, high-signal, and ordered by failure risk.
 - [ ] Re-affirm the "narrow kernel first" guardrail in `HANDOVER.md` and
   `COMMERCE_DOCS_INDEX.md` before any new provider runtime expansion.
 - [ ] Keep Scope lock active: no provider routing/MCP command surface expansion until a second
-  provider or active `@emdash-cms/plugin-commerce-mcp` scope request.
+  provider or active `@emdash-cms/plugin-dashing-commerce-mcp` scope request.
 - [ ] Keep ticket order:
   1. 5A
   2. 5B
@@ -184,10 +184,10 @@ narrow, high-signal, and ordered by failure risk.
 - [x] Prepare a staged rollout switch plan (`COMMERCE_USE_LEASED_FINALIZE`) so strict lease enforcement can
   be toggled predictably in staged environments.
 - [x] Run and archive both rollout-mode command families before enabling strict mode broadly:
-  - [x] Legacy behavior check (flag off): `pnpm --filter @emdash-cms/plugin-commerce test`.
-  - [x] Strict lease check mode: `COMMERCE_USE_LEASED_FINALIZE=1 pnpm --filter @emdash-cms/plugin-commerce test`.
+  - [x] Legacy behavior check (flag off): `pnpm --filter @emdash-cms/plugin-dashing-commerce test`.
+  - [x] Strict lease check mode: `COMMERCE_USE_LEASED_FINALIZE=1 pnpm --filter @emdash-cms/plugin-dashing-commerce test`.
   - [x] Focused smoke on strict finalize regression:
-    `COMMERCE_USE_LEASED_FINALIZE=1 pnpm --filter @emdash-cms/plugin-commerce test src/orchestration/finalize-payment.test.ts`.
+    `COMMERCE_USE_LEASED_FINALIZE=1 pnpm --filter @emdash-cms/plugin-dashing-commerce test src/orchestration/finalize-payment.test.ts`.
   - [x] Proof artifacts are archived in CI artifacts tied to each executed command and test matrix.
 - [x] Record proof artifacts for:
   - command outputs for both modes,
