@@ -539,12 +539,12 @@ Bundle these with the handoff:
 
 Use this as a concrete starter copy:
 
-- `gdpr-plugin-starter/manifest.ts`
-- `gdpr-plugin-starter/src/types.ts`
-- `gdpr-plugin-starter/src/module.ts`
-- `gdpr-plugin-starter/src/index.ts`
-- `gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
-- `gdpr-plugin-starter/README.md`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/manifest.ts`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/index.ts`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/README.md`
 
 The scaffold includes a minimal public-API-only `registerModule(host)` bootstrap, manifest
 contracts, and extension registration skeletons for routes, hooks, jobs, and migrations.

@@ -1,7 +1,7 @@
 # HANDOVER
 
 ## 1) Project purpose and current problem
-This repository is an EmDash monorepo with active work focused on `packages/plugins/commerce` and a first-party GDPR extension handoff.
+This repository is an EmDash monorepo with active work focused on `packages/plugins/commerce` and a first-party GDPR extension handoff. Additional extension/module projects are now maintained in `../Dashing commerce PLANS/emdash-extensions`.
 
 Current branch priority is:
 
@@ -27,16 +27,16 @@ The active branch is `main`.
 
 ### Runtime + handoff alignment (this iteration)
 - new handoff spec created: `gdpr-plugin-implementation-spec.md`,
-- new starter scaffold created at `gdpr-plugin-starter/`,
+- new starter scaffold created at `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`,
 - scaffold files added:
-  - `gdpr-plugin-starter/manifest.ts`
-  - `gdpr-plugin-starter/src/types.ts`
-  - `gdpr-plugin-starter/src/module.ts`
-  - `gdpr-plugin-starter/src/index.ts`
-  - `gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
-  - `gdpr-plugin-starter/README.md`
-  - `gdpr-plugin-starter/package.template.json`
-- provider contribution types and registry hooks were added to `gdpr-plugin-starter/src/types.ts` and `gdpr-plugin-starter/src/module.ts`:
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/manifest.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/index.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/README.md`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/package.template.json`
+- provider contribution types and registry hooks were added to `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts` and `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`:
   - `GdprProviderManifest`, `GdprThirdPartyProviderBundle`, and validated registration checks
   - `/admin/api/gdpr/providers` route to inspect registered providers
 - `HANDOVER.md` updated to include GDPR handoff state and integration checkpoints.
@@ -52,15 +52,15 @@ The active branch is `main`.
 
 ## GDPR reference module handoff (new in this pass)
 - New spec for external developer handoff: `gdpr-plugin-implementation-spec.md`
-- New scaffold package path: `gdpr-plugin-starter/`
+- New scaffold package path: `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`
 - Added starter artifacts:
-  - `gdpr-plugin-starter/manifest.ts`
-  - `gdpr-plugin-starter/src/types.ts`
-  - `gdpr-plugin-starter/src/module.ts`
-  - `gdpr-plugin-starter/src/index.ts`
-  - `gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
-  - `gdpr-plugin-starter/README.md`
-  - `gdpr-plugin-starter/package.template.json`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/manifest.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/index.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/README.md`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/package.template.json`
 - New scaffold is explicitly aligned to `dashcommerce-extension-architecture-spec.md` (public seam-first extension model, namespaced module assets, optional installability).
 - `gdpr-plugin-implementation-spec.md` now references the starter and includes a concrete bootstrap checklist.
 
@@ -112,7 +112,7 @@ The docs and plugin surface currently in scope for continuation are:
 - `packages/plugins/commerce/src/schemas.ts` (shared validation source)
 - `packages/plugins/commerce/src/storage.ts`, `src/types.ts`
 - `gdpr-plugin-implementation-spec.md` (handoff spec)
-- `gdpr-plugin-starter/*` (new starter module scaffold)
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/*` (new starter module scaffold)
 
 Gotchas:
 - Do not widen behavior in payment/finalize/idempotency/claim logic without regression tests.
@@ -147,10 +147,10 @@ Additional root-level references for the next phase:
 
 ### Green (aligned now)
 - public extension strategy defined in architecture spec and referenced in GDPR spec,
-- `gdpr-plugin-starter` scaffold is present and namespaced (`dc_gdpr_*`, `modules.gdpr.*` guidance reflected),
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter` scaffold is present and namespaced (`dc_gdpr_*`, `modules.gdpr.*` guidance reflected),
 - `HANDOVER.md` now includes the GDPR handoff scope and known risks,
 - `gdpr-plugin-implementation-spec.md` now includes a baseline consent + enforcement checklist derived from the authoritative guide.
-- `gdpr-plugin-starter` now includes an explicit third-party contribution contract in both types and module bootstrap (`GdprProviderManifest`, provider registry, providers endpoint).
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter` now includes an explicit third-party contribution contract in both types and module bootstrap (`GdprProviderManifest`, provider registry, providers endpoint).
 - `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` now frames optional privilege fairness, anti-bias constraints, moderation evidence, and reviewability.
 - `COMMERCIAL_VIABILITY_ADDENDUM.md` now formalizes core-vs-optional strategy, launch guardrails, and monetization posture for external handoff.
 
