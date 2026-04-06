@@ -17,7 +17,7 @@ REVIEW_FILES=(
   "HANDOVER.md"
   "commerce-plugin-architecture.md"
   "3rd-party-checklist.md"
-  "emdash-commerce-third-party-review-memo.md"
+  "dashing-commerce-third-party-review-memo.md"
   "emdash_commerce_review_update_ordered_children.md"
 )
 

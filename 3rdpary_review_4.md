@@ -51,7 +51,7 @@ You can evaluate alignment quickly by reading in this order:
 
 1. `HANDOVER.md` (current operating plan and open questions).
 2. `commerce-plugin-architecture.md` (authoritative architecture contract).
-3. `emdash-commerce-deep-evaluation.md` and `emdash-commerce-final-review-plan.md` (risk framing and recommended sequencing).
+3. `dashing-commerce-deep-evaluation.md` and `dashing-commerce-final-review-plan.md` (risk framing and recommended sequencing).
 4. `3rdpary_review_2.md` and `3rdpary_review.md` (historical review context).
 5. `AGENTS.md` and `skills/creating-plugins/SKILL.md` (implementation guardrails and plugin standards).
 
@@ -197,7 +197,7 @@ This bundle is designed to let an external reviewer validate:
 
 This package contains:
 
-- Architecture and directive documents: `HANDOVER.md`, `commerce-plugin-architecture.md`, `emdash-commerce-deep-evaluation.md`, `emdash-commerce-final-review-plan.md`, `high-level-plan.md`, `commerce-vs-x402-merchants.md`, `3rdpary_review.md`, `3rdpary_review_2.md`.
+- Architecture and directive documents: `HANDOVER.md`, `commerce-plugin-architecture.md`, `dashing-commerce-deep-evaluation.md`, `dashing-commerce-final-review-plan.md`, `high-level-plan.md`, `commerce-vs-x402-merchants.md`, `3rdpary_review.md`, `3rdpary_review_2.md`.
 - Coding guardrails and plugin conventions: `AGENTS.md`, `skills/creating-plugins/SKILL.md`.
 - Commerce plugin metadata and kernel code: `packages/plugins/commerce/package.json`, `packages/plugins/commerce/tsconfig.json`, `packages/plugins/commerce/vitest.config.ts`, `packages/plugins/commerce/src/kernel/errors.ts`, `packages/plugins/commerce/src/kernel/finalize-decision.ts`, `packages/plugins/commerce/src/kernel/finalize-decision.test.ts`, `packages/plugins/commerce/src/kernel/limits.ts`, `packages/plugins/commerce/src/kernel/rate-limit-window.ts`, `packages/plugins/commerce/src/kernel/rate-limit-window.test.ts`, `packages/plugins/commerce/src/kernel/idempotency-key.ts`, `packages/plugins/commerce/src/kernel/idempotency-key.test.ts`, `packages/plugins/commerce/src/kernel/provider-policy.ts`.
 - Plugin reference implementation for pattern comparison: `packages/plugins/forms/src/index.ts`, `packages/plugins/forms/src/storage.ts`, `packages/plugins/forms/src/schemas.ts`, `packages/plugins/forms/src/handlers/submit.ts`, `packages/plugins/forms/src/types.ts`.

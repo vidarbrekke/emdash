@@ -1,4 +1,4 @@
-# EmDash Commerce — Deep Project Evaluation and Feature-Fit Review
+# DashingCommerce — Deep Project Evaluation and Feature-Fit Review
 
 ## Scope reviewed
 
@@ -6,7 +6,7 @@ I reviewed the current project bundle, including:
 
 - `3rdpary_review_2.md`
 - `commerce-plugin-architecture.md`
-- `emdash-commerce-final-review-plan.md`
+- `dashing-commerce-final-review-plan.md`
 - `commerce-vs-x402-merchants.md`
 - `high-level-plan.md`
 - `skills/creating-plugins/SKILL.md`
@@ -37,7 +37,7 @@ Design decisions locked since the original review:
 > **Note:** The material that follows reflects the historical deep review snapshot.
 > The latest project posture is captured in:
 > - `Current status update (2026-04-03)` above
-> - `emdash-commerce-final-review-plan.md`
+> - `dashing-commerce-final-review-plan.md`
 > - `@THIRD_PARTY_REVIEW_PACKAGE.md`
 > - `external_review.md`.
 

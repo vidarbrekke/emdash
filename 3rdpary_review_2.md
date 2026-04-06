@@ -60,7 +60,7 @@ This supersedes an earlier draft that leaned on **HTTP-only** internal delegatio
 
 ### 3.3 Phasing (high level)
 
-Reflects an internal “shrink v1, prove correctness first” pass (**`emdash-commerce-final-review-plan.md`**) merged into **`commerce-plugin-architecture.md` §13**:
+Reflects an internal “shrink v1, prove correctness first” pass (**`dashing-commerce-final-review-plan.md`**) merged into **`commerce-plugin-architecture.md` §13**:
 
 1. **Phase 0** — Types, storage schema, state machines, error catalog, **no** business I/O.
 2. **Phase 1** — **Kernel only** (pure domain + finalization idempotency); **no** React/Astro.
@@ -109,7 +109,7 @@ Extract and read in this order:
 |---|------|------|
 | 1 | `3rdpary_review_2.md` | This briefing + questions. |
 | 2 | `commerce-plugin-architecture.md` | **Authoritative** full architecture (§1–21). |
-| 3 | `emdash-commerce-final-review-plan.md` | External “tighten foundation” review that influenced §13–§19. |
+| 3 | `dashing-commerce-final-review-plan.md` | External “tighten foundation” review that influenced §13–§19. |
 | 4 | `commerce-vs-x402-merchants.md` | One-page **commerce vs x402** for product positioning. |
 | 5 | `high-level-plan.md` | Original short sketch; superseded where it conflicts with (2). |
 | 6 | `3rdpary_review.md` | **Round 1** review packet (historical context). |

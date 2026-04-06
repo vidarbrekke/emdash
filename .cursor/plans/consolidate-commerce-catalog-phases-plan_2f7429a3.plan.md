@@ -1,6 +1,6 @@
 ---
 name: consolidate-commerce-catalog-phases-plan
-overview: Implement the remaining EmDash commerce catalog v1 phases from `emdash-commerce-product-catalog-v1-spec-updated.md` using small, additive changes and no runtime money-path modifications. Keep kernel closed for checkout/webhook/finalize behavior and add catalog capabilities in phase order.
+overview: Implement the remaining EmDash commerce catalog v1 phases from `dashing-commerce-product-catalog-v1-spec-updated.md` using small, additive changes and no runtime money-path modifications. Keep kernel closed for checkout/webhook/finalize behavior and add catalog capabilities in phase order.
 todos:
   - id: phase-1-foundation-hardening
     content: "Implement catalog foundation completion: product/SKU update + lifecycle routes, validations, and tests."
@@ -31,14 +31,14 @@ isProject: false
 ## Scope and constraints
 - Target module: `packages/plugins/commerce`.
 - Preserve Stage-1 scope lock: no payment provider routing changes, no MCP write surfaces, no changes to checkout webhook finalize semantics.
-- Follow the phased order in `emdash-commerce-product-catalog-v1-spec-updated.md`:
-  - [Phase 1 Foundation](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-1--foundation-schema-and-invariants)
-  - [Phase 2 Media/assets](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-2--mediaassets-abstraction)
-  - [Phase 3 Variable product model](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-3--variable-product-model)
-  - [Phase 4 Digital entitlement model](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-4--digital-entitlement-model)
-  - [Phase 5 Bundle model](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-5--bundle-model)
-  - [Phase 6 Catalog organization/retrieval](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-6--catalog-organization-and-retrieval)
-  - [Phase 7 Order snapshot integration](./emdash-commerce-product-catalog-v1-spec-updated.md#phase-7--order-snapshot-integration)
+- Follow the phased order in `dashing-commerce-product-catalog-v1-spec-updated.md`:
+  - [Phase 1 Foundation](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-1--foundation-schema-and-invariants)
+  - [Phase 2 Media/assets](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-2--mediaassets-abstraction)
+  - [Phase 3 Variable product model](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-3--variable-product-model)
+  - [Phase 4 Digital entitlement model](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-4--digital-entitlement-model)
+  - [Phase 5 Bundle model](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-5--bundle-model)
+  - [Phase 6 Catalog organization/retrieval](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-6--catalog-organization-and-retrieval)
+  - [Phase 7 Order snapshot integration](./dashing-commerce-product-catalog-v1-spec-updated.md#phase-7--order-snapshot-integration)
 - Keep edits additive and type-safe; route-level contract remains in [`packages/plugins/commerce/src/index.ts`](/Users/vidarbrekke/Dev/emDash/packages/plugins/commerce/src/index.ts).
 - Preserve strict handler layering: catalog and checkout handlers must not invoke each other directly.
 - Add explicit immutable field rules and response-shape contracts before entity expansion work.

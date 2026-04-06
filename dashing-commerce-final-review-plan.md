@@ -1,8 +1,8 @@
-# EmDash Commerce Plugin — Final Review Direction and Implementation Plan
+# DashingCommerce Plugin — Final Review Direction and Implementation Plan
 
 ## Purpose
 
-This document is the final direction for the EmDash commerce project after reviewing:
+This document is the final direction for the DashingCommerce project after reviewing:
 
 - `3rdpary_review.md`
 - `commerce-plugin-architecture.md`
