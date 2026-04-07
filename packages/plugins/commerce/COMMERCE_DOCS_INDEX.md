@@ -86,6 +86,20 @@ Use this when opening follow-up work:
   - `COMMERCE_USE_LEASED_FINALIZE` is retained for replay parity and evidence reruns when needed; strict claim-lease checks are otherwise canonical.
   - Runbooks and proof outputs are now captured directly in this repo’s regression log trail.
 
+## UI smoke readiness before admin/consumer manual tests
+
+- `ADMIN_CONSUMER_UI_SMOKE_READINESS.md` is the prerequisite gate for initial UI validation.
+- Required pre-check commands:
+  - `pnpm readiness:commerce-backend:strict`
+  - `pnpm --silent lint:quick`
+  - `pnpm --filter ./packages/plugins/commerce typecheck`
+  - `pnpm --filter ./packages/plugins/commerce test`
+- Scope order:
+  1) admin catalog read route wiring + tests,
+  2) checkout action contract + idempotency coverage,
+  3) product detail lookup and variant lifecycle coverage,
+  4) constrained manual UI smoke passes.
+
 ## External review continuation roadmap
 
 After the latest third-party memo, continue systematically with

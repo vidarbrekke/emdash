@@ -106,3 +106,5 @@ Extension workspace:
   - `pnpm --filter ./packages/plugins/commerce typecheck`
   - `pnpm --filter ./packages/plugins/commerce test`
 - Produce a production host-integration proof package for GDPR (`dashcommerce.gdpr`) and wire it into install/boot flow with the same seam-only registration model.
+- Run the preliminary UI gate before doing rudimentary admin and consumer manual testing:
+  - `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
