@@ -6,7 +6,7 @@
 		"@astrojs/node": "catalog:",
 		"@astrojs/react": "catalog:",
 		"@emdash-cms/auth": "workspace:*",
-		"@emdash-cms/plugin-color": "workspace:*",
+		"@emdash-cms/plugin-color": "link:../../../../Dashing commerce PLANS/emdash-extensions/color",
 		"astro": "catalog:",
 		"better-sqlite3": "^11.10.0",
 		"emdash": "workspace:*",
