@@ -1,7 +1,7 @@
 # DashingCommerce Plugin — Architecture Plan
 
-> This document supersedes the high-level-plan.md sketch and serves as the
-> authoritative blueprint before any code is written. It defines principles,
+> This document serves as the authoritative blueprint before any code is written.
+> It defines principles,
 > extension model, data model, route contracts, AI strategy, phased plan, and
 > the complete specification for Step 1.
 

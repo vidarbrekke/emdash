@@ -24,9 +24,8 @@ Key completed outcomes:
   - `check` (`typecheck && lint`)
   - `lint` (`oxlint --type-aware`)
 - Added and expanded test coverage for catalog, checkout lock behavior, and webhook metadata contracts.
-- Regenerated and shared current external review archive:
-  - `commerce-plugin-external-review.zip`
-  - `dashing-commerce-external-review-code-contracts.zip`
+- Regenerated and shared current external review archive via
+  `scripts/build-commerce-external-review-zip.sh` on demand.
 
 ## 3) Failures, open issues, and lessons learned
 Known open risks:
@@ -78,8 +77,8 @@ Key operational gotcha:
   - `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
   - `COMMERCE_DOCS_INDEX.md`
   - `COMMERCE_EXTENSION_SURFACE.md`
-  - `commerce-backend-readiness-punch-list.md`
-  - `external_review.md`
+- `commerce-plugin-architecture.md`
+- `dashcommerce-extension-architecture-spec.md`
 - Core code:
   - `packages/plugins/commerce/src`
   - `packages/plugins/commerce/storage.ts`

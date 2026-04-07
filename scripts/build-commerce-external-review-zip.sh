@@ -11,14 +11,10 @@ rsync -a --exclude 'node_modules' --exclude '.vite' \
   packages/plugins/commerce/ .review-staging/packages/plugins/commerce/
 
 REVIEW_FILES=(
-  "@THIRD_PARTY_REVIEW_PACKAGE.md"
-  "external_review.md"
-  "SHARE_WITH_REVIEWER.md"
   "HANDOVER.md"
   "commerce-plugin-architecture.md"
-  "3rd-party-checklist.md"
-  "dashing-commerce-third-party-review-memo.md"
-  "dashing_commerce_review_update_ordered_children.md"
+  "dashcommerce-extension-architecture-spec.md"
+  "packages/plugins/commerce/COMMERCE_DOCS_INDEX.md"
 )
 
 for file in "${REVIEW_FILES[@]}"; do

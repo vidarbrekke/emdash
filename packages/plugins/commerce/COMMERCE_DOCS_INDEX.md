@@ -2,7 +2,7 @@
 
 ## Operations and support
 
-For a quick reviewer entrypoint: `@THIRD_PARTY_REVIEW_PACKAGE.md` → `external_review.md` → `SHARE_WITH_REVIEWER.md`.
+For current execution context, use `HANDOVER.md` plus `README.md`/`AGENTS.md` as the active entrypoint.
 
 ### Pre-merge release gates (review-response work)
 
@@ -34,8 +34,6 @@ For a quick reviewer entrypoint: `@THIRD_PARTY_REVIEW_PACKAGE.md` → `external_
 - `../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
 - `../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
 - `../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
-- `../announcement_public_beta.md` — public beta release language and audience framing
-- `../announcement_ga.md` — GA announcement language and launch criteria
 
 ### Strategy A (Contract Drift Hardening) status
 

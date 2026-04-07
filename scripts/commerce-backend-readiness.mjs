@@ -148,7 +148,7 @@ if (existsSync(workflowPath)) {
 const docsToReference = [
 	join(root, "HANDOVER.md"),
 	join(root, "gdpr-plugin-implementation-spec.md"),
-	join(root, "commerce-backend-readiness-punch-list.md"),
+	join(root, "commerce-plugin-architecture.md"),
 ];
 
 if (hasExternalWorkspace) {
