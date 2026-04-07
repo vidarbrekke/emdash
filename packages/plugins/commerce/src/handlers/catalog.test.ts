@@ -798,7 +798,7 @@ describe("catalog product handlers", () => {
 		expect(out.product.currentSlug).toBe("new-slug");
 		const historyItems = (await productSlugHistory.query({ where: { productId: "prod_1" } })).items;
 		expect(historyItems).toHaveLength(1);
-		expect(historyItems[0].data).toMatchObject({
+		expect(historyItems[0]?.data).toMatchObject({
 			productId: "prod_1",
 			slug: "old-slug",
 			replacedBy: "new-slug",
@@ -1214,6 +1214,55 @@ describe("catalog product handlers", () => {
 		).rejects.toThrow("Only POST is allowed");
 	});
 
+	it("requires POST for storefront product lookup and SKU write operations", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "slug-route",
+			title: "Slug Route",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SKU-1",
+			status: "active",
+			unitPriceMinor: 100,
+			inventoryQuantity: 20,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const readCtxBySlug = catalogCtx({ slug: "slug-route" }, products, skus);
+		await expect(
+			getStorefrontProductBySlugHandler(catalogCtxWithMethod(readCtxBySlug, "GET")),
+		).rejects.toThrow("Only POST is allowed");
+		await expect(
+			listStorefrontProductSkusHandler(catalogCtxWithMethod(catalogCtx({ productId: "prod_1", limit: 10 }, products, skus), "GET")),
+		).rejects.toThrow("Only POST is allowed");
+		await expect(
+			createProductHandler(catalogCtxWithMethod(catalogCtx({ type: "simple", status: "draft", slug: "write-probe", title: "Write Probe" }, products, skus), "GET")),
+		).rejects.toThrow("Only POST is allowed");
+		await expect(
+			setSkuStatusHandler(
+				catalogCtxWithMethod(catalogCtx({ skuId: "sku_1", status: "inactive" }, products, skus), "GET"),
+			),
+		).rejects.toThrow("Only POST is allowed");
+	});
+
 	it("requires POST for storefront bundle compute", async () => {
 		const products = new MemColl<StoredProduct>();
 		const bundleInput = { productId: "bundle_hidden" };
@@ -1263,6 +1312,59 @@ describe("catalog product handlers", () => {
 		expect(detail.skus?.[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
 		expect("inventoryQuantity" in (detail.skus![0] as object)).toBe(false);
 		expect("inventoryVersion" in (detail.skus![0] as object)).toBe(false);
+	});
+
+	it("keeps admin product detail/sku payloads internal while storefront hides inventory internals", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "safe-product",
+			title: "Safe Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SKU1",
+			status: "active",
+			unitPriceMinor: 500,
+			inventoryQuantity: 100,
+			inventoryVersion: 4,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const adminDetail = await getProductHandler(catalogCtx({ productId: "prod_1" }, products, skus));
+		const storefrontDetail = await getStorefrontProductHandler(catalogCtx({ productId: "prod_1" }, products, skus));
+		expect(adminDetail.skus?.[0]).toMatchObject({
+			id: "sku_1",
+			inventoryQuantity: 100,
+			inventoryVersion: 4,
+		});
+		expect("inventoryQuantity" in (storefrontDetail.skus![0] as object)).toBe(false);
+		expect("inventoryVersion" in (storefrontDetail.skus![0] as object)).toBe(false);
+
+		const adminSkuList = await listProductSkusHandler(catalogCtx({ productId: "prod_1", limit: 10 }, products, skus));
+		const storefrontSkuList = await listStorefrontProductSkusHandler(catalogCtx({ productId: "prod_1", limit: 10 }, products, skus));
+		expect(adminSkuList.items[0]).toMatchObject({
+			id: "sku_1",
+			inventoryQuantity: 100,
+			inventoryVersion: 4,
+		});
+		expect("inventoryQuantity" in (storefrontSkuList.items[0] as object)).toBe(false);
+		expect("inventoryVersion" in (storefrontSkuList.items[0] as object)).toBe(false);
 	});
 
 	it("resolves storefront products via slug with canonical hint", async () => {

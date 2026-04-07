@@ -1,110 +1,105 @@
 # HANDOVER
 
 ## 1) Project purpose and current problem
-EmDash is maintained as a closed-kernel commerce platform with a separate extension path for optional modules. The active focus is to keep the money path stable (`checkout`, `webhook`/`finalize`, inventory/claim invariants) while building a clean external handoff flow for non-core modules.
+EmDash now positions commerce as a closed-kernel core with a separate extension space for optional modules.  
 
-The specific problem at this stage is alignment: the repository split and extension movement to `../Dashing commerce PLANS/emdash-extensions` must stay synchronized with runtime contracts, dependency declarations, and onboarding docs so new work can be built and tested without hidden drift.
+Current priority is to harden the admin and storefront paths while preserving money-path correctness (`checkout`, `webhook`, and `finalize` behavior). The immediate problem is proving product editing and catalog UX on top of recently added backend safeguards without reintroducing regression risk.
 
 ## 2) Completed work and outcomes
-The following work is complete and in the current branch:
+Key completed outcomes:
 
-- Commerce kernel behavior remains the primary correctness boundary. Existing scope-lock rules from the extension surface are preserved: checkout/payment state creation and payment transitions remain controlled by the kernel path, and finalize logic is treated as closed-kernel for now.
-- Non-core plugin modules were moved to `../Dashing commerce PLANS/emdash-extensions` and documented as separate projects.
-- The extension dependency model was corrected to explicit `link:` paths in consumers that reference moved modules (demos, templates, fixture projects).
-- `preview-releases.yml` was corrected so removed package paths are no longer part of preview publish.
-- A runnable readiness gate was added:
+- Added and stabilized backend readiness tooling:
   - `scripts/commerce-backend-readiness.mjs`
-  - `pnpm readiness:commerce-backend`
-  - `pnpm readiness:commerce-backend:strict`
-  - CI job `commerce-readiness` added to `.github/workflows/ci.yml`.
-- GDPR reference work is now scaffold-complete and split-aware:
-  - `gdpr-plugin-implementation-spec.md` (authoritative handoff spec)
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/` scaffold with `manifest.ts`, `types.ts`, `module.ts`, migration (`0001_create_gdpr_tables.ts`), and package template.
-  - Third-party provider extension contract types added (`GdprProviderManifest`, `GdprProviderSideEffect`, `GdprProviderRiskLevel`, `GdprThirdPartyProviderBundle`) and provider listing/admin route exposure in scaffold.
-- Governance and strategy references are present in current documentation set (`GOODNESS_AND_ACCESSIBILITY_CHARTER.md`, `COMMERCIAL_VIABILITY_ADDENDUM.md`, `COMMERCE_DOCS_INDEX.md`, `CI_REGRESSION_CHECKLIST.md`, `COMMERCE_EXTENSION_SURFACE.md`, `FINALIZATION_REVIEW_AUDIT.md`).
+  - `pnpm readiness:commerce-backend` and `pnpm readiness:commerce-backend:strict`
+  - CI `commerce-readiness` step in `.github/workflows/ci.yml`
+- Completed non-core module relocation to `../Dashing commerce PLANS/emdash-extensions` and aligned moved-module imports with explicit `link:` references.
+- Implemented product-catalog safety work in `packages/plugins/commerce`:
+  - canonical storefront lookup by slug with redirect/canonical hints
+  - stored product slug history tracking
+  - variable-product attribute-edit safeguards and SKU lifecycle state (`valid`, `requires_review`, `auto_paused`, `reconciled`)
+  - pause/review/reconcile flow for SKU safety after attribute changes
+- Removed greenfield-only legacy compatibility paths in finalize/webhook code that were no longer needed.
+- Tightened Stripe webhook metadata typing/contracts to canonical keys only.
+- Added `packages/plugins/commerce` quality scripts:
+  - `check` (`typecheck && lint`)
+  - `lint` (`oxlint --type-aware`)
+- Added and expanded test coverage for catalog, checkout lock behavior, and webhook metadata contracts.
+- Regenerated and shared current external review archive:
+  - `commerce-plugin-external-review.zip`
+  - `dashing-commerce-external-review-code-contracts.zip`
 
 ## 3) Failures, open issues, and lessons learned
-Known open risk items before broader external delivery:
+Known open risks:
 
-- No production `dashcommerce.gdpr` package exists in `packages/plugins` yet; only scaffold/reference implementation exists.
-- Host-side registration/seam integration for production `dashcommerce.gdpr` in this repo is scaffold-level and must be verified in the target host package.
-- End-to-end proof for GDPR route lifecycle + provider registry + migration execution together is not yet complete.
-- Legal/consent/retention defaults and marketing enforcement are still incomplete for final runtime.
-- Core typing debt remains in `pnpm --filter ./packages/core typecheck` and is tracked as pre-existing debt.
+- Admin and storefront UI smoke passes are planned but not yet fully completed.
+- No production-grade `dashcommerce.gdpr` plugin package exists yet under `packages/plugins`.
+- Core typing debt in `packages/core` remains outside this phase.
+- Duplicate-concurrent webhook handling remains a residual edge-risk; it is tracked in the review notes and remains intentional given storage-layer limitations.
 
-Lessons enforced for this phase:
+Enforced lessons:
 
-- Do not expand runtime topology before contract-hardening is proven (`checkout`, `webhook`, and finalization pathways).
-- Keep extension changes additive, interface-first, and test-driven.
-- Treat path/reference drift as a release blocker; validate with scripted readiness checks and CI.
-- Prefer deterministic, objective governance metadata for provider extensions and optional privilege systems.
+- Keep scope within contracts first: validate route and handler contracts before broad UI edits.
+- Maintain kernel scope lock: no payment/finalization/topology changes without targeted contract and regression tests.
+- Treat path/reference drift as a release blocker; keep moved-module references explicit and documented.
 
 ## 4) Files changed, key insights, and gotchas
-Priority files for continuation:
+Files to review first for continuation:
 
 - `scripts/commerce-backend-readiness.mjs`
-- `package.json` (`readiness:commerce-backend` scripts)
-- `.github/workflows/ci.yml` (`commerce-readiness` job)
-- `demos/*/package.json`, `templates/*/package.json`
-- `e2e/fixture/package.json`
-- `packages/core/tests/integration/fixture/package.json`
-- `gdpr-plugin-implementation-spec.md`
-- `../Dashing commerce PLANS/emdash-extensions/README.md`
-- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/*`
-- `HANDOVER.md` (this file)
-
-Key insight:
-
-- The project now has a stable handoff contract boundary between core commerce and optional modules, but this boundary still needs one production validation pass from a final host integration package.
-
-Gotchas to avoid:
-
-- Extension path has a space: `Dashing commerce PLANS`. Always quote this path in shell and scripts.
-- Do not run `workspace:*` for moved extension module dependencies; use explicit `link:` to the extension workspace.
-- Do not widen `checkout`/`finalize` behavior without focused regression tests.
-- Do not treat optional modules (GDPR, fairness/promotions, provider tooling) as required for core commerce success path.
-
-## 5) Key files and directories
-
-Root:
-
-- `HANDOVER.md` (active execution handoff)
-- `gdpr-plugin-implementation-spec.md`
-- `commerce-backend-readiness-punch-list.md`
-- `scripts/commerce-backend-readiness.mjs`
-- `package.json`
-- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md`
-- `COMMERCIAL_VIABILITY_ADDENDUM.md`
-- `COMMERCE_DOCS_INDEX.md`
 - `.github/workflows/ci.yml`
-
-Core commerce:
-
+- `package.json`
+- `HANDOVER.md` (this file)
+- `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
+- `packages/plugins/commerce/package.json`
 - `packages/plugins/commerce/src/index.ts`
-- `packages/plugins/commerce/src/handlers/*`
-- `packages/plugins/commerce/src/orchestration/*`
-- `packages/plugins/commerce/src/services/*`
+- `packages/plugins/commerce/src/handlers/catalog.ts`
+- `packages/plugins/commerce/src/handlers/catalog-product.ts`
+- `packages/plugins/commerce/src/handlers/catalog.test.ts`
+- `packages/plugins/commerce/src/handlers/webhooks-stripe.ts`
+- `packages/plugins/commerce/src/handlers/webhooks-stripe.test.ts`
+- `packages/plugins/commerce/src/handlers/checkout.ts`
+- `packages/plugins/commerce/src/handlers/checkout.test.ts`
+- `packages/plugins/commerce/src/handlers/finalize-payment.ts`
 - `packages/plugins/commerce/src/storage.ts`
+- `packages/plugins/commerce/src/types.ts`
+- `packages/plugins/commerce/src/schemas.ts`
 - `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
 - `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
 - `packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
-- `packages/plugins/commerce/CI_REGRESSION_CHECKLIST.md`
 
-Extension workspace:
+Key operational gotcha:
 
-- `../Dashing commerce PLANS/emdash-extensions/README.md`
-- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`
-- `../Dashing commerce PLANS/emdash-extensions/{ai-moderation,api-test,atproto,audit-log,color,embeds,forms,marketplace,marketplace-test,sandboxed-test,webhook-notifier,x402}`
+- Extension workspace path contains a space: `Dashing commerce PLANS`; always quote it in shell, scripts, and docs.
 
-## 6) Next-step acceptance before external handoff
+## 5) Key files and directories
 
-- Keep kernel scope lock active:
-  - no checkout/payment finalize topology changes before duplicate-flight/lease/possession checks are revalidated.
-- Run readiness + core verification before new external developer starts:
-  - `pnpm readiness:commerce-backend:strict`
-  - `pnpm --silent lint:quick`
-  - `pnpm --filter ./packages/plugins/commerce typecheck`
-  - `pnpm --filter ./packages/plugins/commerce test`
-- Produce a production host-integration proof package for GDPR (`dashcommerce.gdpr`) and wire it into install/boot flow with the same seam-only registration model.
-- Run the preliminary UI gate before doing rudimentary admin and consumer manual testing:
+- Core docs:
+  - `HANDOVER.md`
   - `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
+  - `COMMERCE_DOCS_INDEX.md`
+  - `COMMERCE_EXTENSION_SURFACE.md`
+  - `commerce-backend-readiness-punch-list.md`
+  - `external_review.md`
+- Core code:
+  - `packages/plugins/commerce/src`
+  - `packages/plugins/commerce/storage.ts`
+  - `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
+- Integration and readiness:
+  - `package.json`
+  - `scripts/commerce-backend-readiness.mjs`
+  - `.github/workflows/ci.yml`
+  - `demos/*/package.json`
+  - `templates/*/package.json`
+- Extension workspace:
+  - `../Dashing commerce PLANS/emdash-extensions/README.md`
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`
+
+## 6) Next-step acceptance before wider testing
+Use this as the gate before broad UI work:
+
+- `pnpm readiness:commerce-backend:strict`
+- `pnpm --silent lint:quick`
+- `pnpm --filter ./packages/plugins/commerce typecheck`
+- `pnpm --filter ./packages/plugins/commerce test`
+- `pnpm test` (repo-wide pass when time permits)
+- Confirm `ADMIN_CONSUMER_UI_SMOKE_READINESS.md` checklist is complete

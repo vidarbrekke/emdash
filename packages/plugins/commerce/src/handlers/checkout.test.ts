@@ -42,6 +42,8 @@ vi.mock("../lib/rate-limit-kv.js", () => ({
 	__esModule: true,
 	consumeKvRateLimit: (opts: unknown) => consumeKvRateLimit(opts),
 }));
+const CHECKOUT_ORDER_ID_PREFIX_RE = /^checkout-order:/;
+const CHECKOUT_ATTEMPT_ID_PREFIX_RE = /^checkout-attempt:/;
 
 type MemCollection<T extends object> = {
 	get(id: string): Promise<T | null>;
@@ -2140,8 +2142,8 @@ describe("consumer checkout response contract", () => {
 		});
 		const first = await checkoutHandler(baseContext);
 
-		expect(first.orderId).toMatch(/^checkout-order:/);
-		expect(first.paymentAttemptId).toMatch(/^checkout-attempt:/);
+		expect(first.orderId).toMatch(CHECKOUT_ORDER_ID_PREFIX_RE);
+		expect(first.paymentAttemptId).toMatch(CHECKOUT_ATTEMPT_ID_PREFIX_RE);
 		expect(first.paymentPhase).toBe("payment_pending");
 		expect(first.totalMinor).toBe(120);
 		expect(first.currency).toBe("USD");

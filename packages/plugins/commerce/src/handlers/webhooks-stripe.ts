@@ -19,6 +19,7 @@ const STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS = STRIPE_WEBHOOK_SIGNATURE.minToler
 const STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS = STRIPE_WEBHOOK_SIGNATURE.maxToleranceSeconds;
 const STRIPE_SIGNATURE_TIMESTAMP_RE = /^\d+$/;
 const STRIPE_PROVIDER_ID = "stripe";
+const STRIPE_SIGNATURE_TIMESTAMP_DIGITS_RE = /^\d+$/;
 
 const STRIPE_WEBHOOK_METADATA_KEYS = {
 	orderId: "orderId",
@@ -57,7 +58,11 @@ function normalizeHeaderKeyValue(raw: string): [string, string] | null {
 
 function clampStripeTolerance(raw: unknown): number {
 	const parsed =
-		typeof raw === "number" ? raw : typeof raw === "string" && /^\d+$/.test(raw.trim()) ? Number.parseInt(raw, 10) : Number.NaN;
+		typeof raw === "number"
+			? raw
+			: typeof raw === "string" && STRIPE_SIGNATURE_TIMESTAMP_DIGITS_RE.test(raw.trim())
+				? Number.parseInt(raw, 10)
+				: Number.NaN;
 	if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return STRIPE_SIGNATURE_TOLERANCE_SECONDS;
 	if (parsed < STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS) return STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS;
 	if (parsed > STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS) return STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS;

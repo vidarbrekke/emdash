@@ -34,7 +34,7 @@ describe("catalog-domain helpers", () => {
 		expect(() => applyProductUpdatePatch(product, asProductPatch({ type: "bundle" }), isoNow)).toThrow();
 	});
 
-	it("prevents slug rewrites on active products", () => {
+	it("allows slug updates on active products", () => {
 		const product: StoredProduct = {
 			id: "prod_1",
 			type: "simple",
@@ -51,7 +51,8 @@ describe("catalog-domain helpers", () => {
 			updatedAt: "2025-12-01T00:00:00.000Z",
 		};
 
-		expect(() => applyProductUpdatePatch(product, asProductPatch({ slug: "new-slug" }), isoNow)).toThrow();
+		const output = applyProductUpdatePatch(product, asProductPatch({ slug: "new-slug" }), isoNow);
+		expect(output.slug).toBe("new-slug");
 	});
 
 	it("applies safe mutable product and sku updates", () => {

@@ -308,7 +308,7 @@ function reconcileSkuLifecycleState(
 	return {
 		...sku,
 		status: "inactive",
-		lifecycleState: sku.lifecycleState ?? "requires_review",
+		lifecycleState: "requires_review",
 		lifecycleStateReason: "Marked inactive by admin",
 		lifecycleStateUpdatedAt: nowIso,
 	};
@@ -373,8 +373,9 @@ async function resolveProductForStorefrontSlug(args: {
 
 	while (depth < maxDepth) {
 		const match = await products.query({ where: { slug: cursor }, limit: 1 });
-		if (match.items.length > 0) {
-			return match.items[0].data;
+		const matchData = match.items[0]?.data;
+		if (matchData) {
+			return matchData;
 		}
 
 		if (!productSlugHistory) {
@@ -386,7 +387,7 @@ async function resolveProductForStorefrontSlug(args: {
 			return null;
 		}
 
-		const replacedBy = legacyRows[0].data.replacedBy;
+		const replacedBy = legacyRows[0]?.data.replacedBy;
 		if (!replacedBy) {
 			return null;
 		}
@@ -423,10 +424,11 @@ async function loadSlugResolutionHint(args: {
 			if (legacyRows.length === 0) {
 				break;
 			}
-			canonicalSlug = legacyRows[0].data.replacedBy ?? canonicalSlug;
-			if (!legacyRows[0].data.replacedBy) {
+			const legacyData = legacyRows[0]?.data;
+			if (!legacyData || !legacyData.replacedBy) {
 				break;
 			}
+			canonicalSlug = legacyData.replacedBy;
 			const canonicalProduct = (await products.query({ where: { slug: canonicalSlug }, limit: 1 })).items[0]?.data;
 			if (canonicalProduct) {
 				return {
@@ -435,7 +437,7 @@ async function loadSlugResolutionHint(args: {
 					wasSlugRedirected: true,
 				};
 			}
-			cursor = legacyRows[0].data.replacedBy;
+			cursor = legacyData.replacedBy;
 			depth += 1;
 		}
 	}
@@ -454,10 +456,10 @@ async function appendProductSlugHistory(args: {
 	nowIso: string;
 	productSlugHistory: Collection<StoredProductSlugHistory> | null;
 }): Promise<void> {
+	const { productId, previousSlug, nextSlug, nowIso, productSlugHistory } = args;
 	if (!previousSlug || previousSlug === nextSlug) {
 		return;
 	}
-	const { productId, previousSlug, nextSlug, nowIso, productSlugHistory } = args;
 	if (!productSlugHistory) {
 		return;
 	}
