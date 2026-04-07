@@ -1,198 +1,108 @@
 # HANDOVER
 
 ## 1) Project purpose and current problem
-This repository is an EmDash monorepo with active work focused on `packages/plugins/commerce` and a first-party GDPR extension handoff. Additional extension/module projects are now maintained in `../Dashing commerce PLANS/emdash-extensions`.
+EmDash is maintained as a closed-kernel commerce platform with a separate extension path for optional modules. The active focus is to keep the money path stable (`checkout`, `webhook`/`finalize`, inventory/claim invariants) while building a clean external handoff flow for non-core modules.
 
-Current branch priority is:
+The specific problem at this stage is alignment: the repository split and extension movement to `../Dashing commerce PLANS/emdash-extensions` must stay synchronized with runtime contracts, dependency declarations, and onboarding docs so new work can be built and tested without hidden drift.
 
-- keep existing commerce kernel behavior stable (checkout/webhooks/finalize),
-- align external-review correction/handoff material,
-- and ship a V1-complete reference package scaffold for `dashcommerce.gdpr` without changing core business logic.
+## 2) Completed work and outcomes
+The following work is complete and in the current branch:
 
-The immediate risk is not feature drift; it is misalignment between:
-
-- runtime implementation,
-- public extension contract,
-- and onboarding documentation.
-
-The active branch is `main`.
-
-## 2) Completed work and outcomes (current iteration)
-
-### Commerce correctness baseline (already stabilized in this pass)
-- storefront product-read correctness has been enforced at route boundaries (status/storefront filters + availability checks on storefront-eligible SKU rows),
-- route contracts and schema/path usage were normalized where touched,
-- finalization/checkout replay semantics were preserved while hardening checkout/idempotency lock handling,
-- and targeted regression tests were added for checkout lock / fallback behavior.
-
-### Runtime + handoff alignment (this iteration)
-- new handoff spec created: `gdpr-plugin-implementation-spec.md`,
-- new starter scaffold created at `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`,
-- scaffold files added:
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/manifest.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/index.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/README.md`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/package.template.json`
-- provider contribution types and registry hooks were added to `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts` and `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`:
-  - `GdprProviderManifest`, `GdprThirdPartyProviderBundle`, and validated registration checks
-  - `/admin/api/gdpr/providers` route to inspect registered providers
-- `HANDOVER.md` updated to include GDPR handoff state and integration checkpoints.
-- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` added as the policy layer for optional promotional privilege workflows.
-- `COMMERCIAL_VIABILITY_ADDENDUM.md` added to lock the commercial/optionality boundary and avoid non-commercial drift.
-
-### Operational proof status
-- `COMMERCE_DOCS_INDEX.md` and `CI_REGRESSION_CHECKLIST.md` remain the source of execution gates for commerce.
-- `HANDOVER.md` is now explicitly aligned to extension handoff expectations.
-- `pnpm --silent lint:quick`, `pnpm --filter ./packages/plugins/commerce typecheck`, `pnpm --filter ./packages/plugins/commerce test` were reported green in last captured state; this is unchanged since the prior pass and should be re-run on final merge if CI policy changes.
-- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` defines fairness and moderation requirements for optional privilege systems and should be treated as a required companion doc.
-- `COMMERCIAL_VIABILITY_ADDENDUM.md` defines what remains mandatory in core versus paid optional capabilities.
-
-## GDPR reference module handoff (new in this pass)
-- New spec for external developer handoff: `gdpr-plugin-implementation-spec.md`
-- New scaffold package path: `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`
-- Added starter artifacts:
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/manifest.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/types.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/module.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/index.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/src/migrations/0001_create_gdpr_tables.ts`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/README.md`
-  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/package.template.json`
-- New scaffold is explicitly aligned to `dashcommerce-extension-architecture-spec.md` (public seam-first extension model, namespaced module assets, optional installability).
-- `gdpr-plugin-implementation-spec.md` now references the starter and includes a concrete bootstrap checklist.
+- Commerce kernel behavior remains the primary correctness boundary. Existing scope-lock rules from the extension surface are preserved: checkout/payment state creation and payment transitions remain controlled by the kernel path, and finalize logic is treated as closed-kernel for now.
+- Non-core plugin modules were moved to `../Dashing commerce PLANS/emdash-extensions` and documented as separate projects.
+- The extension dependency model was corrected to explicit `link:` paths in consumers that reference moved modules (demos, templates, fixture projects).
+- `preview-releases.yml` was corrected so removed package paths are no longer part of preview publish.
+- A runnable readiness gate was added:
+  - `scripts/commerce-backend-readiness.mjs`
+  - `pnpm readiness:commerce-backend`
+  - `pnpm readiness:commerce-backend:strict`
+  - CI job `commerce-readiness` added to `.github/workflows/ci.yml`.
+- GDPR reference work is now scaffold-complete and split-aware:
+  - `gdpr-plugin-implementation-spec.md` (authoritative handoff spec)
+  - `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/` scaffold with `manifest.ts`, `types.ts`, `module.ts`, migration (`0001_create_gdpr_tables.ts`), and package template.
+  - Third-party provider extension contract types added (`GdprProviderManifest`, `GdprProviderSideEffect`, `GdprProviderRiskLevel`, `GdprThirdPartyProviderBundle`) and provider listing/admin route exposure in scaffold.
+- Governance and strategy references are present in current documentation set (`GOODNESS_AND_ACCESSIBILITY_CHARTER.md`, `COMMERCIAL_VIABILITY_ADDENDUM.md`, `COMMERCE_DOCS_INDEX.md`, `CI_REGRESSION_CHECKLIST.md`, `COMMERCE_EXTENSION_SURFACE.md`, `FINALIZATION_REVIEW_AUDIT.md`).
 
 ## 3) Failures, open issues, and lessons learned
-Known open items to validate in next pass:
+Known open risk items before broader external delivery:
 
-- confirm P0 lock/checkout invariants remain intact after any additional patching (single-open-checkout behavior must stay enforced),
-- confirm host-side GDPR extension registration hooks exist in the final production module package (not just scaffold),
-- confirm legal retention/defaults/hard-hold behavior with real provider implementations,
-- confirm route/migration lifecycle behavior with concrete end-to-end scripts.
-- confirm V1 consent/analytics/marketing enforcement contract from the authoritative guide (subject model, consent service, tracking blockers).
+- No production `dashcommerce.gdpr` package exists in `packages/plugins` yet; only scaffold/reference implementation exists.
+- Host-side registration/seam integration for production `dashcommerce.gdpr` in this repo is scaffold-level and must be verified in the target host package.
+- End-to-end proof for GDPR route lifecycle + provider registry + migration execution together is not yet complete.
+- Legal/consent/retention defaults and marketing enforcement are still incomplete for final runtime.
+- Core typing debt remains in `pnpm --filter ./packages/core typecheck` and is tracked as pre-existing debt.
 
-P1 gaps:
-- duplicated rule logic for bundle discount validation (schema + handler logic),
-- repeated `asCollection`/storage-typing helper usage across checkout/cart/extension seam files.
+Lessons enforced for this phase:
 
-Structural risk remains concentrated in:
-- `src/handlers/catalog-product.ts`
-- `src/handlers/catalog-read-model.ts`
-- `src/orchestration/finalize-payment.ts`
-- `src/index.ts` route registration
-
-P2 items should remain deferred until P0/P1 are closed.
-
-Validation status remains: `pnpm --silent lint:quick` pass, `pnpm --filter ./packages/plugins/commerce typecheck` pass, `pnpm --filter ./packages/plugins/commerce test` pass. `pnpm --filter ./packages/core typecheck` still fails on baseline core typing debt outside this scoped pass; it is not newly introduced by this plugin handoff.
-
-Key lessons to keep:
-- enforce policy early in the request path,
-- keep DTO shaping separate from command/method policy,
-- apply targeted fixes with direct tests,
-- avoid architecture expansion (provider routing/MCP command surface) before correctness and invariants are closed.
-
-Alignment rule for this stage:
-- any developer handoff artifact (spec, scaffold, package docs, migration notes) must be checked against:
-  - `dashcommerce-extension-architecture-spec.md`
-  - `HANDOVER.md`
-  - `gdpr-plugin-implementation-spec.md`
-  - `COMMERCE_EXTENSION_SURFACE.md`
-- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md`
-- `COMMERCIAL_VIABILITY_ADDENDUM.md`
+- Do not expand runtime topology before contract-hardening is proven (`checkout`, `webhook`, and finalization pathways).
+- Keep extension changes additive, interface-first, and test-driven.
+- Treat path/reference drift as a release blocker; validate with scripted readiness checks and CI.
+- Prefer deterministic, objective governance metadata for provider extensions and optional privilege systems.
 
 ## 4) Files changed, key insights, and gotchas
-The docs and plugin surface currently in scope for continuation are:
-- `packages/plugins/commerce/src/handlers/checkout.ts` (cart checkout invariant work and tests)
-- `packages/plugins/commerce/src/handlers/catalog-product.ts` (split command/query and move mappers out)
-- `packages/plugins/commerce/src/handlers/catalog-read-model.ts` (query/read-model responsibilities)
-- `packages/plugins/commerce/src/handlers/catalog.ts` (route wrapper semantics)
-- `packages/plugins/commerce/src/orchestration/finalize-payment.ts` / `finalize-payment-inventory.ts` (phase split only after checkout invariant is stabilized)
-- `packages/plugins/commerce/src/schemas.ts` (shared validation source)
-- `packages/plugins/commerce/src/storage.ts`, `src/types.ts`
-- `gdpr-plugin-implementation-spec.md` (handoff spec)
-- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/*` (new starter module scaffold)
+Priority files for continuation:
 
-Gotchas:
-- Do not widen behavior in payment/finalize/idempotency/claim logic without regression tests.
-- Do not expose storefront availability from non-storefront-eligible aggregate paths.
-- Do not merge core typing debt in this plugin scope.
+- `scripts/commerce-backend-readiness.mjs`
+- `package.json` (`readiness:commerce-backend` scripts)
+- `.github/workflows/ci.yml` (`commerce-readiness` job)
+- `demos/*/package.json`, `templates/*/package.json`
+- `e2e/fixture/package.json`
+- `packages/core/tests/integration/fixture/package.json`
+- `gdpr-plugin-implementation-spec.md`
+- `../Dashing commerce PLANS/emdash-extensions/README.md`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/*`
+- `HANDOVER.md` (this file)
+
+Key insight:
+
+- The project now has a stable handoff contract boundary between core commerce and optional modules, but this boundary still needs one production validation pass from a final host integration package.
+
+Gotchas to avoid:
+
+- Extension path has a space: `Dashing commerce PLANS`. Always quote this path in shell and scripts.
+- Do not run `workspace:*` for moved extension module dependencies; use explicit `link:` to the extension workspace.
+- Do not widen `checkout`/`finalize` behavior without focused regression tests.
+- Do not treat optional modules (GDPR, fairness/promotions, provider tooling) as required for core commerce success path.
 
 ## 5) Key files and directories
-`packages/plugins/commerce/src/handlers/`
-`packages/plugins/commerce/src/lib/`
-`packages/plugins/commerce/src/orchestration/`
-`packages/plugins/commerce/src/kernel/`
-`packages/plugins/commerce/src/storage.ts`
-`packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
-`packages/plugins/commerce/CI_REGRESSION_CHECKLIST.md`
-`packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
-`packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
-`packages/plugins/commerce/AI-EXTENSIBILITY.md`
-`packages/plugins/commerce/COMMERCE_AI_ROADMAP.md`
-`progress-review.md` and `external_review.md` (third-party context)
-`HANDOVER.md` (this file)
 
-Additional root-level references for the next phase:
-- `dashcommerce-extension-architecture-spec.md`
+Root:
+
+- `HANDOVER.md` (active execution handoff)
 - `gdpr-plugin-implementation-spec.md`
-- `emdash-commerce-gdpr-extension-authoritative-guide.md`
+- `commerce-backend-readiness-punch-list.md`
+- `scripts/commerce-backend-readiness.mjs`
+- `package.json`
 - `GOODNESS_AND_ACCESSIBILITY_CHARTER.md`
-- `eu-selling-marketing-gdpr-guide.md`
-- `announcement_public_beta.md`
-- `announcement_ga.md`
+- `COMMERCIAL_VIABILITY_ADDENDUM.md`
+- `COMMERCE_DOCS_INDEX.md`
+- `.github/workflows/ci.yml`
 
-## 6) Alignment delta (must be clean before external handoff)
+Core commerce:
 
-### Green (aligned now)
-- public extension strategy defined in architecture spec and referenced in GDPR spec,
-- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter` scaffold is present and namespaced (`dc_gdpr_*`, `modules.gdpr.*` guidance reflected),
-- `HANDOVER.md` now includes the GDPR handoff scope and known risks,
-- `gdpr-plugin-implementation-spec.md` now includes a baseline consent + enforcement checklist derived from the authoritative guide.
-- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter` now includes an explicit third-party contribution contract in both types and module bootstrap (`GdprProviderManifest`, provider registry, providers endpoint).
-- `GOODNESS_AND_ACCESSIBILITY_CHARTER.md` now frames optional privilege fairness, anti-bias constraints, moderation evidence, and reviewability.
-- `COMMERCIAL_VIABILITY_ADDENDUM.md` now formalizes core-vs-optional strategy, launch guardrails, and monetization posture for external handoff.
+- `packages/plugins/commerce/src/index.ts`
+- `packages/plugins/commerce/src/handlers/*`
+- `packages/plugins/commerce/src/orchestration/*`
+- `packages/plugins/commerce/src/services/*`
+- `packages/plugins/commerce/src/storage.ts`
+- `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
+- `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
+- `packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
+- `packages/plugins/commerce/CI_REGRESSION_CHECKLIST.md`
 
-### Yellow (in-progress / verified as scaffold)
-- host API contract for module registration and hooks is still expected to be validated against final runtime (`CommerceHost` shape in scaffold is placeholder for actual host API),
-- module lifecycle/job migration registration is present as scaffold and must be reified into a production package,
-- P0/P1 regression assertions are not yet re-verified in this final repository state.
+Extension workspace:
 
-### Red (hard blockers before external delivery)
-- final production `dashcommerce.gdpr` package is not yet created in `packages/plugins` and not yet wired into install path,
-- no end-to-end proof exists for GDPR route lifecycle + provider registry + storage migrations together,
-- legal/retention policy defaults and hard-hold semantics are not yet finalized in executable logic,
-- explicit consent gating for marketing and analytics is not yet implemented or tested in-module.
+- `../Dashing commerce PLANS/emdash-extensions/README.md`
+- `../Dashing commerce PLANS/emdash-extensions/gdpr-plugin-starter/`
+- `../Dashing commerce PLANS/emdash-extensions/{ai-moderation,api-test,atproto,audit-log,color,embeds,forms,marketplace,marketplace-test,sandboxed-test,webhook-notifier,x402}`
 
-### Handoff acceptance (minimum)
-- no core behavior expansion outside stated scope,
-- all migration/schema ownership remains inside module scope,
-- route + hook + migration registration is exercised with concrete tests before external agent start.
+## 6) Next-step acceptance before external handoff
 
-If any `Red` item persists, do not hand off to external implementation.
-
-## 7) Devil's-advocate review of the extension split (fact-based)
-
-The concern is not “this is bad” versus “this is fine”; it is whether the separation improves long-term velocity and risk posture.
-
-### Concern 1: “This looks like fear-based over-splitting.”
-- Evidence: split follows explicit boundary lines (`packages/plugins/*`, plugin-level feature folders, payment adapters, plugin marketplace worker), not arbitrary code.
-- Mitigation: keep only non-kernel modules in the external directory, and preserve `packages/plugins/commerce` + core packages as the executable platform kernel.
-- Verification marker: external path now only contains `ai-moderation`, `api-test`, `atproto`, `audit-log`, `color`, `embeds`, `forms`, `marketplace`, `marketplace-test`, `sandboxed-test`, `webhook-notifier`, `x402`, and `gdpr-plugin-starter`; no `@emdash-cms/plugin-dashing-commerce` kernel dependency exists there.
-
-### Concern 2: “Docs and CI are now lying.”
-- Evidence: stale references still exist to moved modules in docs, package manifests, and CI configuration.
-- Mitigation:
-  - Updated handoff documents (`gdpr-plugin-implementation-spec.md`, `HANDOVER.md`) to point to `../Dashing commerce PLANS/emdash-extensions`.
-  - Updated `preview-releases.yml` publish list to remove deleted package paths.
-  - Next immediate cleanup task: update demo/test manifests that still reference moved plugin paths as `workspace:*`.
-- Decision: this is a legitimate technical debt item, not a blocker to extension architecture validity.
-
-### Concern 3: “This will hurt onboarding due path assumptions.”
-- Evidence: the external directory name contains spaces (`Dashing commerce PLANS`), which can break poorly-quoted scripts.
-- Mitigation: use shell-quoted paths in docs and automation, and prefer path variables in new automation over inline string concatenation.
-
-### Concern 4: “Will this reduce external review clarity?”
-- Evidence: external reviewer can now inspect plugin experiments independently of core PR noise.
-- Mitigation: provide a single top-level index (required to be created in `../Dashing commerce PLANS/emdash-extensions`) listing module ownership and publish plans before public release.
+- Keep kernel scope lock active:
+  - no checkout/payment finalize topology changes before duplicate-flight/lease/possession checks are revalidated.
+- Run readiness + core verification before new external developer starts:
+  - `pnpm readiness:commerce-backend:strict`
+  - `pnpm --silent lint:quick`
+  - `pnpm --filter ./packages/plugins/commerce typecheck`
+  - `pnpm --filter ./packages/plugins/commerce test`
+- Produce a production host-integration proof package for GDPR (`dashcommerce.gdpr`) and wire it into install/boot flow with the same seam-only registration model.
