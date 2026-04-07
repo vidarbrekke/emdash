@@ -22,6 +22,8 @@
 		"lint:quick": "oxlint -f json",
 		"lint:json": "oxlint --type-aware -f json",
 		"lint:fix": "oxlint --type-aware --fix",
+		"readiness:commerce-backend": "node scripts/commerce-backend-readiness.mjs",
+		"readiness:commerce-backend:strict": "node scripts/commerce-backend-readiness.mjs --strict",
 		"knip": "knip --no-exit-code --exclude unlisted,unresolved,exports,types,duplicates",
 		"new": "create-emdash",
 		"screenshots": "node scripts/screenshot-all-templates.mjs"
