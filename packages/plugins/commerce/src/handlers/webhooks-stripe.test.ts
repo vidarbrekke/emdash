@@ -43,8 +43,8 @@ describe("stripe webhook signature helpers", () => {
 			object: {
 				id: "pi_live_test",
 				metadata: {
-					emdashOrderId: "order_1",
-					emdashFinalizeToken: "token_12345678901234",
+					orderId: "order_1",
+					finalizeToken: "token_12345678901234",
 				},
 			},
 		},
@@ -165,7 +165,7 @@ describe("stripe webhook signature helpers", () => {
 	it("rejects event payload metadata values that are blank after trimming", () => {
 		const metadata = extractStripeFinalizeMetadata({
 			id: "evt_blank",
-			data: { object: { id: "pi_1", metadata: { emdashOrderId: "   ", emdashFinalizeToken: "\t" } } },
+			data: { object: { id: "pi_1", metadata: { orderId: "   ", finalizeToken: "\t" } } },
 		});
 
 		expect(metadata).toBeNull();
@@ -174,7 +174,7 @@ describe("stripe webhook signature helpers", () => {
 	it("rejects event payload metadata values with incorrect types", () => {
 		const metadata = extractStripeFinalizeMetadata({
 			id: "evt_types",
-			data: { object: { id: "pi_1", metadata: { emdashOrderId: 123, emdashFinalizeToken: true } } },
+			data: { object: { id: "pi_1", metadata: { orderId: 123, finalizeToken: true } } },
 		});
 
 		expect(metadata).toBeNull();
@@ -183,7 +183,25 @@ describe("stripe webhook signature helpers", () => {
 	it("rejects empty event ids", () => {
 		const metadata = extractStripeFinalizeMetadata({
 			id: "   ",
-			data: { object: { id: "pi_1", metadata: { emdashOrderId: "order_1", emdashFinalizeToken: "token_12345678901234" } } },
+			data: { object: { id: "pi_1", metadata: {} } },
+		});
+
+		expect(metadata).toBeNull();
+	});
+
+	it("rejects legacy metadata alias keys", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			id: "evt_legacy_aliases",
+			type: "payment_intent.succeeded",
+			data: {
+				object: {
+					id: "pi_1",
+					metadata: {
+						emdashOrderId: "order_1",
+						emdashFinalizeToken: "token_12345678901234",
+					},
+				},
+			},
 		});
 
 		expect(metadata).toBeNull();

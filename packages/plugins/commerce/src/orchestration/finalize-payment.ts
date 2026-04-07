@@ -82,7 +82,6 @@ export type FinalizePaymentPorts = {
 };
 
 const WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS = 30_000;
-const FINALIZE_INVARIANT_CHECKS = process.env.COMMERCE_ENABLE_FINALIZE_INVARIANT_CHECKS === "1";
 /**
  * Canonical finalize control-flow now always uses strict lease semantics.
  * `COMMERCE_USE_LEASED_FINALIZE` is retained for rollout evidence and
@@ -853,10 +852,6 @@ export async function finalizePaymentFromWebhook(
 		stage: "completed",
 	});
 
-	if (FINALIZE_INVARIANT_CHECKS) {
-		await validateFinalizationInvariants(ports, input, logContext);
-	}
-
 	return { kind: "completed", orderId: input.orderId };
 }
 
@@ -887,40 +882,6 @@ export async function queryFinalizationStatus(
 	};
 	status.resumeState = deriveFinalizationResumeState(status);
 	return status;
-}
-
-async function validateFinalizationInvariants(
-	ports: FinalizePaymentPorts,
-	input: FinalizeWebhookInput,
-	logContext: FinalizeLogContext,
-): Promise<void> {
-	const status = await queryFinalizationStatus(
-		ports,
-		input.orderId,
-		input.providerId,
-		input.externalEventId,
-	);
-	if (!status.isOrderPaid) {
-		ports.log?.warn("commerce.finalize.invariant_failed", {
-			...logContext,
-			reason: "order_not_paid_after_complete",
-			resumeState: status.resumeState,
-		});
-	}
-	if (!status.isPaymentAttemptSucceeded) {
-		ports.log?.warn("commerce.finalize.invariant_failed", {
-			...logContext,
-			reason: "payment_attempt_not_succeeded_after_complete",
-			resumeState: status.resumeState,
-		});
-	}
-	if (!status.isInventoryApplied) {
-		ports.log?.warn("commerce.finalize.invariant_failed", {
-			...logContext,
-			reason: "inventory_not_applied_after_complete",
-			resumeState: status.resumeState,
-		});
-	}
 }
 
 export type { FinalizationStatus } from "./finalize-payment-status.js";

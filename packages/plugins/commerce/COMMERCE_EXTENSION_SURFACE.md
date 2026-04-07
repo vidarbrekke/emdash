@@ -104,11 +104,10 @@ Operators can combine:
 - `queryFinalizationState` read model (order/receipt/attempt/ledger state), and
 - read-only inventory/stock checks during incident review.
 
-For deeper drift detection, set `COMMERCE_ENABLE_FINALIZE_INVARIANT_CHECKS=1` so
-completed finalize calls also log warning-level invariant signals when order paid,
-attempt success, and ledger/stock application are unexpectedly out of sync.
-This flag should be used as a temporary safety net during incident response only,
- not as part of normal fast-path processing.
+For deeper drift detection, use the query model directly during incident response
+to compare `isOrderPaid`, `isPaymentAttemptSucceeded`, and `isInventoryApplied`.
+The fast-path finalize path does not currently emit additional invariant-check
+warnings.
 
 ### Paid-vs-receipt semantics for storefront and support tooling
 

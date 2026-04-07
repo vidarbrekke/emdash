@@ -19,12 +19,14 @@ const STRIPE_SIGNATURE_TOLERANCE_MIN_SECONDS = STRIPE_WEBHOOK_SIGNATURE.minToler
 const STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS = STRIPE_WEBHOOK_SIGNATURE.maxToleranceSeconds;
 const STRIPE_SIGNATURE_TIMESTAMP_RE = /^\d+$/;
 const STRIPE_PROVIDER_ID = "stripe";
-const STRIPE_METADATA_ORDER_ID_KEYS = ["orderId", "emdashOrderId", "emdash_order_id"] as const;
-const STRIPE_METADATA_FINALIZE_TOKEN_KEYS = [
-	"finalizeToken",
-	"emdashFinalizeToken",
-	"emdash_finalize_token",
-] as const;
+
+function readRequiredMetadataField(metadata: Record<string, unknown>, key: string): string | undefined {
+	const raw = metadata[key];
+	if (typeof raw !== "string") return undefined;
+	const normalized = raw.trim();
+	if (!normalized.length) return undefined;
+	return normalized;
+}
 
 type ParsedStripeSignature = {
 	timestamp: number;
@@ -55,16 +57,6 @@ function clampStripeTolerance(raw: unknown): number {
 	return parsed;
 }
 
-function selectFromMetadata(input: Record<string, unknown> | undefined, keys: readonly string[]): string | undefined {
-	for (const key of keys) {
-		const value = input?.[key];
-		if (typeof value !== "string") continue;
-		const normalized = value.trim();
-		if (normalized.length > 0) return normalized;
-	}
-	return undefined;
-}
-
 function extractStripeFinalizeMetadata(event: unknown): StripeMetadataInput | null {
 	if (!event || typeof event !== "object") return null;
 	const payload = event as StripeWebhookEventInput;
@@ -82,8 +74,8 @@ function extractStripeFinalizeMetadata(event: unknown): StripeMetadataInput | nu
 	if (!metadata || typeof metadata !== "object") return null;
 	const objectMetadata = metadata as Record<string, unknown>;
 
-	const orderId = selectFromMetadata(objectMetadata, STRIPE_METADATA_ORDER_ID_KEYS);
-	const finalizeToken = selectFromMetadata(objectMetadata, STRIPE_METADATA_FINALIZE_TOKEN_KEYS);
+	const orderId = readRequiredMetadataField(objectMetadata, "orderId");
+	const finalizeToken = readRequiredMetadataField(objectMetadata, "finalizeToken");
 	if (!orderId || !finalizeToken) return null;
 
 	return {

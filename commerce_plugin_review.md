@@ -177,17 +177,16 @@ This is the sort of compatibility behavior that quietly survives forever and lat
 
 ---
 
-### 5) Finalization behavior is still split by environment toggles
+### 5) Finalization behavior has a historical staged-rollout flag footprint
 
 **Why this matters**
 
-The finalize path still depends on environment flags for behavior selection.
+The finalize path had environment-gated behavior in earlier revisions; review evidence now needs to reflect that one legacy flag has been removed.
 
 **Evidence**
 
 `src/orchestration/finalize-payment.ts:84-86`
 
-- `COMMERCE_ENABLE_FINALIZE_INVARIANT_CHECKS`
 - `COMMERCE_USE_LEASED_FINALIZE`
 
 Package-level docs also confirm this staged rollout posture:
@@ -198,7 +197,8 @@ Package-level docs also confirm this staged rollout posture:
 
 **Risk**
 
-For a not-yet-deployed plugin, rollout toggles preserve unnecessary alternate runtime paths and make the release posture ambiguous.
+For a not-yet-deployed plugin, rollout toggles should be reduced to the minimum
+required evidence path and not used to introduce additional alternate runtime behavior.
 
 **Recommendation**
 
