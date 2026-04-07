@@ -7,6 +7,8 @@ import {
 	listProductSkusHandler,
 	listProductsHandler,
 } from "./handlers/catalog.js";
+import { checkoutGetOrderHandler } from "./handlers/checkout-get-order.js";
+import { checkoutHandler } from "./handlers/checkout.js";
 
 describe("dashing-commerce plugin route surface", () => {
 	it("exposes admin-only catalog read routes", () => {
@@ -38,6 +40,13 @@ describe("dashing-commerce plugin route surface", () => {
 		const storefrontProductGet = routes["catalog/product/get"];
 		expect(storefrontProductGet).toMatchObject({ public: true, handler: getStorefrontProductHandler });
 		expect(routes["admin/catalog/product/get"]?.handler).not.toBe(storefrontProductGet?.handler);
+	});
+
+	it("keeps checkout endpoints public for consumer usage", () => {
+		const routes = createPlugin().routes;
+
+		expect(routes["checkout"]).toMatchObject({ public: true, handler: checkoutHandler });
+		expect(routes["checkout/get-order"]).toMatchObject({ public: true, handler: checkoutGetOrderHandler });
 	});
 });
 

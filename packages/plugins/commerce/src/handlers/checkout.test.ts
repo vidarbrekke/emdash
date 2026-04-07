@@ -2093,3 +2093,70 @@ describe("checkout order snapshot capture", () => {
 		).rejects.toMatchObject({ code: "insufficient_stock" });
 	});
 });
+
+describe("consumer checkout response contract", () => {
+	it("returns only consumer-safe checkout fields and preserves replay determinism", async () => {
+		const now = "2026-04-06T12:00:00.000Z";
+		const cartId = "consumer-contract-cart";
+		const idempotencyKey = "contract-consumer-16";
+		const ownerToken = "owner-token-contract";
+		const cart: StoredCart = {
+			currency: "USD",
+			lineItems: [{ productId: "p1", quantity: 1, inventoryVersion: 1, unitPriceMinor: 120 }],
+			ownerTokenHash: await sha256HexAsync(ownerToken),
+			createdAt: now,
+			updatedAt: now,
+		};
+		const idempotencyKeys = new MemColl<StoredIdempotencyKey>();
+		const orders = new MemColl<StoredOrder>();
+		const paymentAttempts = new MemColl<StoredPaymentAttempt>();
+		const carts = new MemColl(new Map([[cartId, cart]]));
+		const inventoryStock = new MemColl(
+			new Map([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 1,
+						quantity: 15,
+						updatedAt: now,
+					},
+				],
+			]),
+		);
+		const kv = new MemKv();
+
+		const baseContext = contextFor({
+			idempotencyKeys,
+			orders,
+			paymentAttempts,
+			carts,
+			inventoryStock,
+			kv,
+			idempotencyKey,
+			cartId,
+			ownerToken,
+		});
+		const first = await checkoutHandler(baseContext);
+
+		expect(first.orderId).toMatch(/^checkout-order:/);
+		expect(first.paymentAttemptId).toMatch(/^checkout-attempt:/);
+		expect(first.paymentPhase).toBe("payment_pending");
+		expect(first.totalMinor).toBe(120);
+		expect(first.currency).toBe("USD");
+		expect(typeof first.finalizeToken).toBe("string");
+		expect((first as { replayIntegrity?: unknown }).replayIntegrity).toBeUndefined();
+
+		const publicKeys = Object.keys(first);
+		expect(publicKeys).not.toContain("replayIntegrity");
+		expect(publicKeys).toEqual(
+			expect.arrayContaining(["orderId", "paymentAttemptId", "paymentPhase", "totalMinor", "currency", "finalizeToken"]),
+		);
+
+		const second = await checkoutHandler(baseContext);
+		expect(second).toEqual(first);
+		expect((second as { replayIntegrity?: unknown }).replayIntegrity).toBeUndefined();
+		expect(Object.keys(second)).toEqual(publicKeys);
+	});
+});
