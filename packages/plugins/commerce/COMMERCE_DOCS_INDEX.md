@@ -123,6 +123,7 @@ reliability-support-catalog extension backlog.
 | `recommendations`    | Disabled contract for UIs                                                                        |
 | `catalog/product/create` | Validate and create a product row                                                                |
 | `catalog/product/get`    | Retrieve one product by id                                                                        |
+| `catalog/product/get-by-slug` | Retrieve one product by canonical or legacy slug (with redirect hint fields)                           |
 | `catalog/products`       | List products by type/status/visibility                                                            |
 | `catalog/sku/create`     | Create a SKU for an existing product                                                               |
 | `catalog/sku/list`       | List SKUs for one product                                                                         |

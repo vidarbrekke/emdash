@@ -7,6 +7,7 @@ import type {
 	StoredProductAssetLink,
 	StoredProductAttribute,
 	StoredProductAttributeValue,
+	StoredProductSlugHistory,
 	StoredBundleComponent,
 	StoredDigitalAsset,
 	StoredDigitalEntitlement,
@@ -95,6 +96,7 @@ import {
 	createDigitalAssetHandler,
 	createDigitalEntitlementHandler,
 	removeDigitalEntitlementHandler,
+	getStorefrontProductBySlugHandler,
 } from "./catalog.js";
 
 const PRODUCT_ID_PREFIX = /^prod_/;
@@ -247,6 +249,7 @@ function catalogCtx<TInput>(
 	digitalAssets = new MemColl<StoredDigitalAsset>(),
 	digitalEntitlements = new MemColl<StoredDigitalEntitlement>(),
 	inventoryStock = new MemColl<StoredInventoryStock>(),
+	productSlugHistory = new MemColl<StoredProductSlugHistory>(),
 ): RouteContext<TInput> {
 	return {
 		request: new Request("https://example.test/catalog", { method: "POST" }),
@@ -264,9 +267,10 @@ function catalogCtx<TInput>(
 			productCategoryLinks,
 			productTags,
 			productTagLinks,
-			digitalAssets,
-			digitalEntitlements,
-			inventoryStock,
+		digitalAssets,
+		digitalEntitlements,
+		inventoryStock,
+		productSlugHistory,
 		},
 		requestMeta: { ip: "127.0.0.1" },
 		kv: {},
@@ -606,6 +610,107 @@ describe("catalog product handlers", () => {
 		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});
 
+	it("auto-pauses existing variable SKUs after attribute updates", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productAttributes = new MemColl<StoredProductAttribute>();
+		const productAttributeValues = new MemColl<StoredProductAttributeValue>();
+		const productSkus = new MemColl<StoredProductSku>();
+		const productSkuOptionValues = new MemColl<StoredProductSkuOptionValue>();
+
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "active",
+			visibility: "public",
+			slug: "socks",
+			title: "Sock Set",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributes.put("attr_color", {
+			id: "attr_color",
+			productId: "prod_var",
+			name: "Color",
+			code: "color",
+			kind: "variant_defining",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributeValues.put("val_color_red", {
+			id: "val_color_red",
+			attributeId: "attr_color",
+			value: "Red",
+			code: "red",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkus.put("sku_active", {
+			id: "sku_active",
+			productId: "prod_var",
+			skuCode: "VAR-RED",
+			status: "active",
+			unitPriceMinor: 1200,
+			inventoryQuantity: 10,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkuOptionValues.put("opt_red", {
+			id: "opt_red",
+			skuId: "sku_active",
+			attributeId: "attr_color",
+			attributeValueId: "val_color_red",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		await updateProductHandler(
+			catalogCtx(
+				{
+					productId: "prod_var",
+					attributes: [
+						{
+							name: "Material",
+							code: "material",
+							kind: "variant_defining",
+							position: 0,
+							values: [{ value: "Wool", code: "wool", position: 0 }],
+						},
+					],
+				},
+				products,
+				productSkus,
+				new MemColl(),
+				new MemColl(),
+				productAttributes,
+				productAttributeValues,
+				productSkuOptionValues,
+			),
+		);
+
+		const updatedSku = await productSkus.get("sku_active");
+		expect(updatedSku).toMatchObject({
+			status: "inactive",
+			lifecycleState: "auto_paused",
+			lifecycleStateReason: "Attribute updates require manual SKU review",
+		});
+		const remainingAttributeValues = (await productAttributeValues.query({ where: { attributeId: "attr_color" } })).items;
+		expect(remainingAttributeValues).toHaveLength(0);
+		const remainingOptions = (await productSkuOptionValues.query({ where: { skuId: "sku_active" } })).items;
+		expect(remainingOptions).toHaveLength(0);
+		const currentAttributes = (await productAttributes.query({ where: { productId: "prod_var" } })).items;
+		expect(currentAttributes).toHaveLength(1);
+	});
+
 	it("updates mutable product fields and preserves immutable fields", async () => {
 		const products = new MemColl<StoredProduct>();
 		await products.put("prod_1", {
@@ -642,6 +747,87 @@ describe("catalog product handlers", () => {
 		expect(out.product.id).toBe("prod_1");
 		expect(out.product.type).toBe("simple");
 		expect(out.product.createdAt).toBe("2026-01-01T00:00:00.000Z");
+	});
+
+	it("records slug history when slug changes", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productSlugHistory = new MemColl<StoredProductSlugHistory>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "old-slug",
+			currentSlug: "old-slug",
+			title: "History Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const out = await updateProductHandler(
+			catalogCtx(
+				{
+					productId: "prod_1",
+					slug: "new-slug",
+				},
+				products,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				productSlugHistory,
+			),
+		);
+
+		expect(out.product.slug).toBe("new-slug");
+		expect(out.product.currentSlug).toBe("new-slug");
+		const historyItems = (await productSlugHistory.query({ where: { productId: "prod_1" } })).items;
+		expect(historyItems).toHaveLength(1);
+		expect(historyItems[0].data).toMatchObject({
+			productId: "prod_1",
+			slug: "old-slug",
+			replacedBy: "new-slug",
+		});
+
+		const aliasDetail = await getStorefrontProductBySlugHandler(
+			catalogCtx(
+				{ slug: "old-slug" },
+				products,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				productSlugHistory,
+			),
+		);
+		expect(aliasDetail.wasSlugRedirected).toBe(true);
+		expect(aliasDetail.canonicalSlug).toBe("new-slug");
+		expect(aliasDetail.requestedSlug).toBe("old-slug");
 	});
 
 	it("rejects immutable product field updates", async () => {
@@ -1077,6 +1263,120 @@ describe("catalog product handlers", () => {
 		expect(detail.skus?.[0]).toMatchObject({ id: "sku_1", availability: "in_stock" });
 		expect("inventoryQuantity" in (detail.skus![0] as object)).toBe(false);
 		expect("inventoryVersion" in (detail.skus![0] as object)).toBe(false);
+	});
+
+	it("resolves storefront products via slug with canonical hint", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "summer-tee",
+			currentSlug: "summer-tee",
+			title: "Summer Tee",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SUMMER-SKU",
+			status: "active",
+			unitPriceMinor: 500,
+			inventoryQuantity: 10,
+			inventoryVersion: 2,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const detail = await getStorefrontProductBySlugHandler(
+			catalogCtx(
+				{ slug: "summer-tee" },
+				products,
+				skus,
+			),
+		);
+		expect(detail.product.id).toBe("prod_1");
+		expect(detail.requestedSlug).toBe("summer-tee");
+		expect(detail.canonicalSlug).toBe("summer-tee");
+		expect(detail.wasSlugRedirected).toBe(false);
+	});
+
+	it("returns canonical slug hint for legacy slug redirects", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		const productSlugHistory = new MemColl<StoredProductSlugHistory>();
+
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "summer-tee",
+			currentSlug: "summer-tee",
+			title: "Summer Tee",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SUMMER-SKU",
+			status: "active",
+			unitPriceMinor: 500,
+			inventoryQuantity: 10,
+			inventoryVersion: 2,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSlugHistory.put("slug_legacy", {
+			productId: "prod_1",
+			slug: "summer-tee-2024",
+			replacedBy: "summer-tee",
+			createdAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const detail = await getStorefrontProductBySlugHandler(
+			catalogCtx(
+				{ slug: "summer-tee-2024" },
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				productSlugHistory,
+			),
+		);
+		expect(detail.product.id).toBe("prod_1");
+		expect(detail.requestedSlug).toBe("summer-tee-2024");
+		expect(detail.canonicalSlug).toBe("summer-tee");
+		expect(detail.wasSlugRedirected).toBe(true);
 	});
 
 	it("hides inactive SKUs from storefront product detail payloads", async () => {
@@ -2994,6 +3294,66 @@ describe("catalog SKU handlers", () => {
 			),
 		);
 		expect(archived.sku.status).toBe("inactive");
+	});
+
+	it("reconciles lifecycle state when SKU is reactivated", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("parent", {
+			id: "parent",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "parent",
+			title: "Parent",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_auto", {
+			id: "sku_auto",
+			productId: "parent",
+			skuCode: "AUTO",
+			status: "active",
+			unitPriceMinor: 2000,
+			inventoryQuantity: 1,
+			inventoryVersion: 1,
+			requiresShipping: false,
+			isDigital: false,
+			lifecycleState: "valid",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const deactivated = await setSkuStatusHandler(
+			catalogCtx(
+				{
+					skuId: "sku_auto",
+					status: "inactive",
+				},
+				products,
+				skus,
+			),
+		);
+		expect(deactivated.sku.status).toBe("inactive");
+		expect(deactivated.sku.lifecycleState).toBe("requires_review");
+
+		const activated = await setSkuStatusHandler(
+			catalogCtx(
+				{
+					skuId: "sku_auto",
+					status: "active",
+				},
+				products,
+				skus,
+			),
+		);
+		expect(activated.sku.status).toBe("active");
+		expect(activated.sku.lifecycleState).toBe("reconciled");
 	});
 });
 

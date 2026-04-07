@@ -49,6 +49,7 @@ import {
 	handleSetSkuStatus,
 	handleListProductSkus,
 	handleGetStorefrontProduct,
+	handleGetStorefrontProductBySlug,
 	handleListStorefrontProducts,
 	handleListStorefrontProductSkus,
 } from "./catalog-product.js";
@@ -71,6 +72,7 @@ import type {
 	ProductSkuStateInput,
 	ProductSkuUpdateInput,
 	ProductGetInput,
+	ProductGetBySlugInput,
 	ProductListInput,
 	ProductSkuCreateInput,
 	DigitalAssetCreateInput,
@@ -233,6 +235,9 @@ export type StorefrontProductDetail = {
 	tags: ProductTagDTO[];
 	primaryImage?: ProductPrimaryImageDTO;
 	galleryImages?: ProductPrimaryImageDTO[];
+	requestedSlug?: string;
+	canonicalSlug?: string;
+	wasSlugRedirected?: boolean;
 };
 
 export type StorefrontProductListResponse = {
@@ -370,6 +375,13 @@ export async function getStorefrontProductHandler(
 ): Promise<StorefrontProductDetail> {
 	requirePost(ctx);
 	return handleGetStorefrontProduct(ctx);
+}
+
+export async function getStorefrontProductBySlugHandler(
+	ctx: RouteContext<ProductGetBySlugInput>,
+): Promise<StorefrontProductDetail> {
+	requirePost(ctx);
+	return handleGetStorefrontProductBySlug(ctx);
 }
 
 export async function listStorefrontProductsHandler(

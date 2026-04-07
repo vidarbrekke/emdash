@@ -14,6 +14,20 @@ type BundleDiscountInput = {
 	bundleDiscountValueBps?: number;
 };
 
+const productAttributeValueInputSchema = z.object({
+	value: z.string().trim().min(1).max(128),
+	code: z.string().trim().min(1).max(64).toLowerCase(),
+	position: z.number().int().min(0).max(10_000).default(0),
+});
+const productAttributeInputSchema = z.object({
+	name: z.string().trim().min(1).max(128),
+	code: z.string().trim().min(1).max(64).toLowerCase(),
+	kind: z.enum(["variant_defining", "descriptive"]).default("descriptive"),
+	position: z.number().int().min(0).max(10_000).default(0),
+	values: z.array(productAttributeValueInputSchema).min(1).default([]),
+});
+const productAttributeInputListSchema = z.array(productAttributeInputSchema).default([]);
+
 function addBundleDiscountIssue(ctx: z.RefinementCtx, message: string, path: string[]): void {
 	ctx.addIssue({
 		code: z.ZodIssueCode.custom,
@@ -201,26 +215,7 @@ export const productCreateInputSchema = z.object({
 	sortOrder: z.number().int().min(0).max(10_000).default(0),
 	requiresShippingDefault: z.boolean().default(true),
 	taxClassDefault: z.string().trim().max(64).optional(),
-	attributes: z
-		.array(
-			z.object({
-				name: z.string().trim().min(1).max(128),
-				code: z.string().trim().min(1).max(64).toLowerCase(),
-				kind: z.enum(["variant_defining", "descriptive"]).default("descriptive"),
-				position: z.number().int().min(0).max(10_000).default(0),
-				values: z
-					.array(
-						z.object({
-							value: z.string().trim().min(1).max(128),
-							code: z.string().trim().min(1).max(64).toLowerCase(),
-							position: z.number().int().min(0).max(10_000).default(0),
-						}),
-					)
-					.min(1)
-					.default([]),
-			}),
-		)
-		.default([]),
+	attributes: productAttributeInputListSchema,
 	bundleDiscountType: z.enum(["none", "fixed_amount", "percentage"]).default("none"),
 	bundleDiscountValueMinor: z.number().int().min(0).optional(),
 	bundleDiscountValueBps: z.number().int().min(0).max(10_000).optional(),
@@ -233,6 +228,11 @@ export const productGetInputSchema = z.object({
 	productId: z.string().trim().min(3).max(128),
 });
 export type ProductGetInput = z.infer<typeof productGetInputSchema>;
+
+export const productGetBySlugInputSchema = z.object({
+	slug: z.string().trim().min(2).max(128).toLowerCase(),
+});
+export type ProductGetBySlugInput = z.infer<typeof productGetBySlugInputSchema>;
 
 export const productListInputSchema = z.object({
 	type: z.enum(["simple", "variable", "bundle"]).optional(),
@@ -291,6 +291,7 @@ export const productUpdateInputSchema = z.object({
 		.optional(),
 	bundleDiscountValueMinor: z.number().int().min(0).optional(),
 	bundleDiscountValueBps: z.number().int().min(0).max(10_000).optional(),
+	attributes: z.array(productAttributeInputSchema).optional(),
 }).superRefine((input, ctx) => {
 	validateBundleDiscountPatchShape(ctx, input);
 });

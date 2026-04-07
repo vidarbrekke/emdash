@@ -11,6 +11,7 @@ import { inventoryStockDocId } from "../lib/inventory-stock.js";
 import type {
 	ProductCreateInput,
 	ProductGetInput,
+	ProductGetBySlugInput,
 	ProductListInput,
 	ProductSkuCreateInput,
 	ProductSkuStateInput,
@@ -26,6 +27,7 @@ import type {
 	StoredDigitalEntitlement,
 	StoredInventoryStock,
 	StoredProduct,
+	StoredProductSlugHistory,
 	StoredProductAsset,
 	StoredProductAttribute,
 	StoredProductAttributeValue,
@@ -82,6 +84,23 @@ import {
 
 type ProductCategoryIdFilter = { categoryId: string };
 type ProductTagIdFilter = { tagId: string };
+type ProductAttributeInput = {
+	name: string;
+	code: string;
+	kind: "variant_defining" | "descriptive";
+	position: number;
+	values: Array<{
+		value: string;
+		code: string;
+		position: number;
+	}>;
+};
+
+type SlugResolutionHint = {
+	requestedSlug: string;
+	canonicalSlug: string;
+	wasSlugRedirected: boolean;
+};
 
 async function syncInventoryStockForSku(
 	inventoryStock: Collection<StoredInventoryStock> | null,
@@ -152,6 +171,149 @@ function assertSimpleProductSkuCapacity(product: StoredProduct, existingSkuCount
 	}
 }
 
+function validateProductAttributePatch(attributes: ProductAttributeInput[]): void {
+	const attributeCodes = new Set<string>();
+	for (const attribute of attributes) {
+		if (attributeCodes.has(attribute.code)) {
+			throw PluginRouteError.badRequest(`Duplicate attribute code: ${attribute.code}`);
+		}
+		attributeCodes.add(attribute.code);
+
+		if (attribute.values.length === 0) {
+			throw PluginRouteError.badRequest(`Attribute ${attribute.code} must have at least one value`);
+		}
+
+		const valueCodes = new Set<string>();
+		for (const value of attribute.values) {
+			if (valueCodes.has(value.code)) {
+				throw PluginRouteError.badRequest(`Duplicate value code ${value.code} for attribute ${attribute.code}`);
+			}
+			valueCodes.add(value.code);
+		}
+	}
+}
+
+function hasVariantDefiningAttribute(attributes: ProductAttributeInput[]): boolean {
+	return attributes.some((attribute) => attribute.kind === "variant_defining");
+}
+
+async function replaceVariableProductAttributes(args: {
+	product: StoredProduct;
+	attributes: ProductAttributeInput[];
+	nowIso: string;
+	productAttributes: Collection<StoredProductAttribute>;
+	productAttributeValues: Collection<StoredProductAttributeValue>;
+	productSkus: Collection<StoredProductSku>;
+	productSkuOptionValues: Collection<StoredProductSkuOptionValue>;
+}): Promise<void> {
+	const {
+		product,
+		attributes,
+		nowIso,
+		productAttributes,
+		productAttributeValues,
+		productSkus,
+		productSkuOptionValues,
+	} = args;
+
+	const existingAttributes = (await productAttributes.query({ where: { productId: product.id } })).items.map((row) => row.data);
+	const existingAttributeIds = existingAttributes.map((attribute) => attribute.id);
+
+	const productSkusResult = await productSkus.query({ where: { productId: product.id } });
+	const productSkuIds = productSkusResult.items.map((row) => row.data.id);
+
+	if (productSkuIds.length > 0) {
+		const existingOptionRows = await productSkuOptionValues.query({ where: { skuId: { in: productSkuIds } } });
+		for (const optionRow of existingOptionRows.items) {
+			await productSkuOptionValues.delete(optionRow.id);
+		}
+	}
+
+	for (const attributeId of existingAttributeIds) {
+		const existingValues = await productAttributeValues.query({ where: { attributeId } });
+		for (const valueRow of existingValues.items) {
+			await productAttributeValues.delete(valueRow.id);
+		}
+	}
+	for (const attribute of existingAttributes) {
+		await productAttributes.delete(attribute.id);
+	}
+
+	for (const attributeInput of attributes) {
+		const attributeId = `${product.id}_attr_${await randomHex(6)}`;
+		await productAttributes.put(attributeId, {
+			id: attributeId,
+			productId: product.id,
+			name: attributeInput.name,
+			code: attributeInput.code,
+			kind: attributeInput.kind,
+			position: attributeInput.position,
+			createdAt: nowIso,
+			updatedAt: nowIso,
+		});
+
+		for (const valueInput of attributeInput.values) {
+			const valueId = `${attributeId}_val_${await randomHex(6)}`;
+			await productAttributeValues.put(valueId, {
+				id: valueId,
+				attributeId,
+				value: valueInput.value,
+				code: valueInput.code,
+				position: valueInput.position,
+				createdAt: nowIso,
+				updatedAt: nowIso,
+			});
+		}
+	}
+}
+
+async function pauseVariableSkusForAttributeChange(args: {
+	productSkus: Collection<StoredProductSku>;
+	productId: string;
+	nowIso: string;
+}): Promise<void> {
+	const { productSkus, productId, nowIso } = args;
+	const result = await productSkus.query({ where: { productId } });
+	for (const row of result.items) {
+		const sku = row.data;
+		if (sku.status === "inactive") {
+			continue;
+		}
+		await productSkus.put(sku.id, {
+			...sku,
+			status: "inactive",
+			lifecycleState: "auto_paused",
+			lifecycleStateUpdatedAt: nowIso,
+			lifecycleStateReason: "Attribute updates require manual SKU review",
+		});
+	}
+}
+
+function reconcileSkuLifecycleState(
+	sku: StoredProductSku,
+	nowIso: string,
+	action: "activate" | "deactivate",
+): StoredProductSku {
+	if (action === "activate") {
+		const nextState = sku.lifecycleState === "auto_paused" || sku.lifecycleState === "requires_review" ? "reconciled" : sku.lifecycleState ?? "reconciled";
+		return {
+			...sku,
+			status: "active",
+			lifecycleState: nextState,
+			lifecycleStateReason: "Reconciled via explicit activation",
+			lifecycleStateUpdatedAt: nowIso,
+		};
+	}
+
+	return {
+		...sku,
+		status: "inactive",
+		lifecycleState: sku.lifecycleState ?? "requires_review",
+		lifecycleStateReason: "Marked inactive by admin",
+		lifecycleStateUpdatedAt: nowIso,
+	};
+}
+
 function toWhere(input: { type?: string; status?: string; visibility?: string }) {
 	const where: Record<string, string> = {};
 	if (input.type) where.type = input.type;
@@ -199,6 +361,115 @@ function assertStorefrontProductVisible(product: StoredProduct): void {
 	}
 }
 
+async function resolveProductForStorefrontSlug(args: {
+	products: Collection<StoredProduct>;
+	productSlugHistory: Collection<StoredProductSlugHistory> | null;
+	requestedSlug: string;
+}): Promise<StoredProduct | null> {
+	const { products, productSlugHistory, requestedSlug } = args;
+	let cursor = requestedSlug;
+	let depth = 0;
+	const maxDepth = 5;
+
+	while (depth < maxDepth) {
+		const match = await products.query({ where: { slug: cursor }, limit: 1 });
+		if (match.items.length > 0) {
+			return match.items[0].data;
+		}
+
+		if (!productSlugHistory) {
+			return null;
+		}
+
+		const legacyRows = (await productSlugHistory.query({ where: { slug: cursor }, limit: 1 })).items;
+		if (legacyRows.length === 0) {
+			return null;
+		}
+
+		const replacedBy = legacyRows[0].data.replacedBy;
+		if (!replacedBy) {
+			return null;
+		}
+		cursor = replacedBy;
+		depth += 1;
+	}
+
+	return null;
+}
+
+async function loadSlugResolutionHint(args: {
+	products: Collection<StoredProduct>;
+	productSlugHistory: Collection<StoredProductSlugHistory> | null;
+	requestedSlug: string;
+}): Promise<SlugResolutionHint> {
+	const { products, productSlugHistory, requestedSlug } = args;
+	const directMatch = (await products.query({ where: { slug: requestedSlug }, limit: 1 })).items[0]?.data;
+	if (directMatch) {
+		return {
+			requestedSlug,
+			canonicalSlug: directMatch.currentSlug ?? directMatch.slug,
+			wasSlugRedirected: false,
+		};
+	}
+
+	let cursor = requestedSlug;
+	let depth = 0;
+	let canonicalSlug = requestedSlug;
+	const maxDepth = 5;
+
+	if (productSlugHistory) {
+		while (depth < maxDepth) {
+			const legacyRows = (await productSlugHistory.query({ where: { slug: cursor }, limit: 1 })).items;
+			if (legacyRows.length === 0) {
+				break;
+			}
+			canonicalSlug = legacyRows[0].data.replacedBy ?? canonicalSlug;
+			if (!legacyRows[0].data.replacedBy) {
+				break;
+			}
+			const canonicalProduct = (await products.query({ where: { slug: canonicalSlug }, limit: 1 })).items[0]?.data;
+			if (canonicalProduct) {
+				return {
+					requestedSlug,
+					canonicalSlug: canonicalProduct.currentSlug ?? canonicalProduct.slug,
+					wasSlugRedirected: true,
+				};
+			}
+			cursor = legacyRows[0].data.replacedBy;
+			depth += 1;
+		}
+	}
+
+	return {
+		requestedSlug,
+		canonicalSlug: requestedSlug,
+		wasSlugRedirected: false,
+	};
+}
+
+async function appendProductSlugHistory(args: {
+	productId: string;
+	previousSlug: string;
+	nextSlug: string;
+	nowIso: string;
+	productSlugHistory: Collection<StoredProductSlugHistory> | null;
+}): Promise<void> {
+	if (!previousSlug || previousSlug === nextSlug) {
+		return;
+	}
+	const { productId, previousSlug, nextSlug, nowIso, productSlugHistory } = args;
+	if (!productSlugHistory) {
+		return;
+	}
+	const historyId = `slughist_${productId}_${await randomHex(6)}`;
+	await productSlugHistory.put(historyId, {
+		productId,
+		slug: previousSlug,
+		createdAt: nowIso,
+		replacedBy: nextSlug,
+	});
+}
+
 function normalizeStorefrontProductListInput(input: ProductListInput): ProductListInput {
 	return {
 		...input,
@@ -229,7 +500,10 @@ function toStorefrontVariantMatrixRow(row: VariantMatrixDTO) {
 	};
 }
 
-function toStorefrontProductDetail(response: ProductResponse): StorefrontProductDetail {
+function toStorefrontProductDetail(
+	response: ProductResponse,
+	hint?: SlugResolutionHint,
+): StorefrontProductDetail {
 	const storefrontSkus = response.skus ? selectStorefrontSkus(response.skus) : undefined;
 	const storefrontVariantMatrix = response.variantMatrix ? response.variantMatrix.filter((row) => row.status === "active") : undefined;
 	return {
@@ -241,6 +515,9 @@ function toStorefrontProductDetail(response: ProductResponse): StorefrontProduct
 		tags: response.tags ?? [],
 		primaryImage: response.primaryImage,
 		galleryImages: response.galleryImages,
+		requestedSlug: hint?.requestedSlug,
+		canonicalSlug: hint?.canonicalSlug,
+		wasSlugRedirected: hint?.wasSlugRedirected,
 	};
 }
 
@@ -353,6 +630,7 @@ export async function handleCreateProduct(ctx: RouteContext<ProductCreateInput>)
 		status,
 		visibility,
 		slug: ctx.input.slug,
+		currentSlug: ctx.input.slug,
 		title: ctx.input.title,
 		shortDescription,
 		longDescription,
@@ -411,21 +689,74 @@ export async function handleCreateProduct(ctx: RouteContext<ProductCreateInput>)
 export async function handleUpdateProduct(ctx: RouteContext<ProductUpdateInput>): Promise<ProductResponse> {
 	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
+	const productAttributes = asCollection<StoredProductAttribute>(ctx.storage.productAttributes);
+	const productAttributeValues = asCollection<StoredProductAttributeValue>(ctx.storage.productAttributeValues);
+	const productSkuOptionValues = asCollection<StoredProductSkuOptionValue>(ctx.storage.productSkuOptionValues);
+	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
+	const productSlugHistory = asOptionalCollection<StoredProductSlugHistory>(ctx.storage.productSlugHistory);
 	const nowIso = getNowIso();
 
 	const existing = await products.get(ctx.input.productId);
 	if (!existing) {
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not found" });
 	}
-	const { productId, ...patch } = ctx.input;
+	const { productId, attributes, ...patch } = ctx.input as ProductUpdateInput & {
+		attributes?: ProductAttributeInput[];
+	};
 	assertBundleDiscountPatchForProduct(existing, patch);
 
+	const hasAttributePatch = attributes !== undefined;
+	if (hasAttributePatch) {
+		if (existing.type !== "variable") {
+			throw PluginRouteError.badRequest("Only variable products can define attributes");
+		}
+		if (attributes.length === 0) {
+			throw PluginRouteError.badRequest("Variable products must define at least one attribute");
+		}
+		validateProductAttributePatch(attributes);
+		if (!hasVariantDefiningAttribute(attributes)) {
+			throw PluginRouteError.badRequest("Variable products must include at least one variant-defining attribute");
+		}
+	}
+
+	const previousCanonicalSlug = existing.currentSlug ?? existing.slug;
+	const nextSlug = patch.slug;
+
 	const product = applyProductUpdatePatch(existing, patch, nowIso);
-	const conflict = patch.slug !== undefined ? {
-		where: { slug: patch.slug },
-		message: `Product slug already exists: ${patch.slug}`,
+	product.currentSlug = patch.slug ?? previousCanonicalSlug;
+	const conflict = nextSlug !== undefined ? {
+		where: { slug: nextSlug },
+		message: `Product slug already exists: ${nextSlug}`,
 	} : undefined;
 	await putWithUpdateConflictHandling(products, productId, product, conflict);
+
+	if (nextSlug !== undefined && nextSlug !== previousCanonicalSlug) {
+		await appendProductSlugHistory({
+			productId,
+			previousSlug: previousCanonicalSlug,
+			nextSlug,
+			nowIso,
+			productSlugHistory,
+		});
+	}
+
+	if (hasAttributePatch) {
+		await replaceVariableProductAttributes({
+			product,
+			attributes,
+			nowIso,
+			productAttributes,
+			productAttributeValues,
+			productSkus,
+			productSkuOptionValues,
+		});
+		await pauseVariableSkusForAttributeChange({
+			productSkus,
+			productId,
+			nowIso,
+		});
+	}
+
 	return { product };
 }
 
@@ -810,11 +1141,17 @@ export async function handleUpdateProductSku(ctx: RouteContext<ProductSkuUpdateI
 
 	const { skuId, ...patch } = ctx.input;
 	const sku = applyProductSkuUpdatePatch(existing, patch, nowIso);
+	let updatedSku = sku;
+	if (patch.status === "active") {
+		updatedSku = reconcileSkuLifecycleState(sku, nowIso, "activate");
+	} else if (patch.status === "inactive") {
+		updatedSku = reconcileSkuLifecycleState(sku, nowIso, "deactivate");
+	}
 	const conflict = patch.skuCode !== undefined ? {
 		where: { skuCode: patch.skuCode },
 		message: `SKU code already exists: ${patch.skuCode}`,
 	} : undefined;
-	await putWithUpdateConflictHandling(productSkus, skuId, sku, conflict);
+	await putWithUpdateConflictHandling(productSkus, skuId, updatedSku, conflict);
 	const shouldSyncInventoryStock = patch.inventoryQuantity !== undefined || patch.inventoryVersion !== undefined;
 	if (shouldSyncInventoryStock) {
 		const product = await products.get(existing.productId);
@@ -826,29 +1163,35 @@ export async function handleUpdateProductSku(ctx: RouteContext<ProductSkuUpdateI
 		await syncInventoryStockForSku(
 			inventoryStock,
 			product,
-			sku,
+			updatedSku,
 			nowIso,
 			includeProductLevelStock,
 		);
 	}
 
-	return { sku };
+	return { sku: updatedSku };
 }
 
 export async function handleSetSkuStatus(ctx: RouteContext<ProductSkuStateInput>): Promise<ProductSkuResponse> {
 	requirePost(ctx);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
+	const nowIso = getNowIso();
 
 	const existing = await productSkus.get(ctx.input.skuId);
 	if (!existing) {
 		throwCommerceApiError({ code: "VARIANT_UNAVAILABLE", message: "SKU not found" });
 	}
 
-	const updated: StoredProductSku = {
+	let updated: StoredProductSku = {
 		...existing,
 		status: ctx.input.status,
-		updatedAt: getNowIso(),
+		updatedAt: nowIso,
 	};
+	if (ctx.input.status === "active") {
+		updated = reconcileSkuLifecycleState(updated, updated.updatedAt, "activate");
+	} else {
+		updated = reconcileSkuLifecycleState(updated, nowIso, "deactivate");
+	}
 	await productSkus.put(ctx.input.skuId, updated);
 	return { sku: updated };
 }
@@ -875,6 +1218,34 @@ export async function handleGetStorefrontProduct(ctx: RouteContext<ProductGetInp
 	assertStorefrontProductVisible(product);
 	const internal = await handleGetProduct(ctx);
 	return toStorefrontProductDetail(internal);
+}
+
+export async function handleGetStorefrontProductBySlug(ctx: RouteContext<ProductGetBySlugInput>): Promise<StorefrontProductDetail> {
+	const products = asCollection<StoredProduct>(ctx.storage.products);
+	const productSlugHistory = asOptionalCollection<StoredProductSlugHistory>(ctx.storage.productSlugHistory);
+
+	const requestedSlug = ctx.input.slug;
+	const product = await resolveProductForStorefrontSlug({
+		products,
+		productSlugHistory,
+		requestedSlug,
+	});
+	if (!product) {
+		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not available" });
+	}
+
+	const hint = await loadSlugResolutionHint({
+		products,
+		productSlugHistory,
+		requestedSlug,
+	});
+	assertStorefrontProductVisible(product);
+
+	const internal = await handleGetProduct({
+		...ctx,
+		input: { productId: product.id },
+	} as RouteContext<ProductGetInput>);
+	return toStorefrontProductDetail(internal, hint);
 }
 
 export async function handleListStorefrontProducts(ctx: RouteContext<ProductListInput>): Promise<StorefrontProductListResponse> {

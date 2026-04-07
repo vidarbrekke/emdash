@@ -9,6 +9,10 @@ export type CommerceStorage = PluginStorageConfig & {
 		indexes: ["type", "status", "visibility", "slug", "createdAt", "updatedAt", "featured"];
 		uniqueIndexes: [["slug"]];
 	};
+	productSlugHistory: {
+		indexes: ["productId", "slug", "createdAt"];
+		uniqueIndexes: [["slug"]];
+	};
 	productAttributes: {
 		indexes: ["productId", "kind", "code", "position", ["productId", "kind"], ["productId", "code"]];
 		uniqueIndexes: [["productId", "code"]];
@@ -125,6 +129,10 @@ export type CommerceStorage = PluginStorageConfig & {
 export const COMMERCE_STORAGE_CONFIG = {
 	products: {
 		indexes: ["type", "status", "visibility", "slug", "createdAt", "updatedAt", "featured"] as const,
+		uniqueIndexes: [["slug"]] as const,
+	},
+	productSlugHistory: {
+		indexes: ["productId", "slug", "createdAt"] as const,
 		uniqueIndexes: [["slug"]] as const,
 	},
 	productAttributes: {

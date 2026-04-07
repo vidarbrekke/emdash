@@ -43,18 +43,13 @@ export function applyProductUpdatePatch<T extends ProductPatch>(
 		}
 	}
 
-	if (
-		patch.slug !== undefined &&
-		existing.status === "active" &&
-		patch.slug !== existing.slug
-	) {
-		throw PluginRouteError.badRequest("Cannot change slug after a product is active");
-	}
-
 	const next = applyProductLifecycle(
 		{
 			...existing,
 			...patch,
+			// `attributes` are managed in the route handler because attributes require
+			// coordinated SKU and variant metadata updates.
+			attributes: undefined,
 			updatedAt: nowIso,
 		},
 		nowIso,

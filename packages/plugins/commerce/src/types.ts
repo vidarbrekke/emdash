@@ -213,6 +213,7 @@ export type ProductStatus = "draft" | "active" | "archived";
 export type ProductVisibility = "public" | "hidden";
 export type ProductSkuStatus = "active" | "inactive";
 export type BundleDiscountType = "none" | "fixed_amount" | "percentage";
+export type ProductSkuLifecycleState = "valid" | "requires_review" | "auto_paused" | "reconciled";
 
 export interface StoredProduct {
 	id: string;
@@ -220,6 +221,8 @@ export interface StoredProduct {
 	status: ProductStatus;
 	visibility: ProductVisibility;
 	slug: string;
+	/** Canonical storefront slug (kept on the main product row for fast reads). */
+	currentSlug?: string;
 	title: string;
 	shortDescription: string;
 	longDescription: string;
@@ -239,11 +242,22 @@ export interface StoredProduct {
 	archivedAt?: string;
 }
 
+export interface StoredProductSlugHistory {
+	productId: string;
+	/** Historical slug that is no longer the product's active `slug/currentSlug`. */
+	slug: string;
+	createdAt: string;
+	replacedBy?: string;
+}
+
 export interface StoredProductSku {
 	id: string;
 	productId: string;
 	skuCode: string;
 	status: ProductSkuStatus;
+	lifecycleState?: ProductSkuLifecycleState;
+	lifecycleStateUpdatedAt?: string;
+	lifecycleStateReason?: string;
 	unitPriceMinor: number;
 	compareAtPriceMinor?: number;
 	inventoryQuantity: number;
