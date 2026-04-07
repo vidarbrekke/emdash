@@ -156,7 +156,7 @@ Additional root-level references for the next phase:
 
 ### Yellow (in-progress / verified as scaffold)
 - host API contract for module registration and hooks is still expected to be validated against final runtime (`CommerceHost` shape in scaffold is placeholder for actual host API),
-- module lifecycle/jobb/migration registration is present as scaffold and must be reified into a production package,
+- module lifecycle/job migration registration is present as scaffold and must be reified into a production package,
 - P0/P1 regression assertions are not yet re-verified in this final repository state.
 
 ### Red (hard blockers before external delivery)
@@ -171,3 +171,28 @@ Additional root-level references for the next phase:
 - route + hook + migration registration is exercised with concrete tests before external agent start.
 
 If any `Red` item persists, do not hand off to external implementation.
+
+## 7) Devil's-advocate review of the extension split (fact-based)
+
+The concern is not “this is bad” versus “this is fine”; it is whether the separation improves long-term velocity and risk posture.
+
+### Concern 1: “This looks like fear-based over-splitting.”
+- Evidence: split follows explicit boundary lines (`packages/plugins/*`, plugin-level feature folders, payment adapters, plugin marketplace worker), not arbitrary code.
+- Mitigation: keep only non-kernel modules in the external directory, and preserve `packages/plugins/commerce` + core packages as the executable platform kernel.
+- Verification marker: external path now only contains `ai-moderation`, `api-test`, `atproto`, `audit-log`, `color`, `embeds`, `forms`, `marketplace`, `marketplace-test`, `sandboxed-test`, `webhook-notifier`, `x402`, and `gdpr-plugin-starter`; no `@emdash-cms/plugin-dashing-commerce` kernel dependency exists there.
+
+### Concern 2: “Docs and CI are now lying.”
+- Evidence: stale references still exist to moved modules in docs, package manifests, and CI configuration.
+- Mitigation:
+  - Updated handoff documents (`gdpr-plugin-implementation-spec.md`, `HANDOVER.md`) to point to `../Dashing commerce PLANS/emdash-extensions`.
+  - Updated `preview-releases.yml` publish list to remove deleted package paths.
+  - Next immediate cleanup task: update demo/test manifests that still reference moved plugin paths as `workspace:*`.
+- Decision: this is a legitimate technical debt item, not a blocker to extension architecture validity.
+
+### Concern 3: “This will hurt onboarding due path assumptions.”
+- Evidence: the external directory name contains spaces (`Dashing commerce PLANS`), which can break poorly-quoted scripts.
+- Mitigation: use shell-quoted paths in docs and automation, and prefer path variables in new automation over inline string concatenation.
+
+### Concern 4: “Will this reduce external review clarity?”
+- Evidence: external reviewer can now inspect plugin experiments independently of core PR noise.
+- Mitigation: provide a single top-level index (required to be created in `../Dashing commerce PLANS/emdash-extensions`) listing module ownership and publish plans before public release.

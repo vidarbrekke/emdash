@@ -23,4 +23,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm dlx pkg-pr-new publish --pnpm './packages/core' './packages/admin' './packages/auth' './packages/blocks' './packages/cloudflare' './packages/create-emdash' './packages/gutenberg-to-portable-text' './packages/x402' './packages/plugins/ai-moderation' './packages/plugins/atproto' './packages/plugins/audit-log' './packages/plugins/color' './packages/plugins/embeds' './packages/plugins/forms' './packages/plugins/webhook-notifier'
+      - run: pnpm dlx pkg-pr-new publish --pnpm './packages/core' './packages/admin' './packages/auth' './packages/blocks' './packages/cloudflare' './packages/create-emdash' './packages/gutenberg-to-portable-text'
