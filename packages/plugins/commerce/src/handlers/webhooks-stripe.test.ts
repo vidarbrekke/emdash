@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { STRIPE_WEBHOOK_SIGNATURE } from "../services/commerce-provider-contracts.js";
+import { stripeWebhookEventFixture, stripeWebhookEventMetadataAliasFixture } from "./webhooks-stripe.fixtures.js";
 import {
 	clampStripeTolerance,
 	extractStripeFinalizeMetadata,
@@ -36,19 +37,7 @@ vi.mock("../lib/rate-limit-kv.js", () => ({
 describe("stripe webhook signature helpers", () => {
 	const secret = "whsec_test_secret";
 	const rawBody = JSON.stringify({ orderId: "o1", externalEventId: "evt_1" });
-	const rawStripeEventBody = JSON.stringify({
-		id: "evt_live_test",
-		type: "payment_intent.succeeded",
-		data: {
-			object: {
-				id: "pi_live_test",
-				metadata: {
-					orderId: "order_1",
-					finalizeToken: "token_12345678901234",
-				},
-			},
-		},
-	});
+	const rawStripeEventBody = JSON.stringify(stripeWebhookEventFixture);
 	const timestamp = 1_760_000_000;
 
 	beforeEach(() => {
@@ -189,19 +178,28 @@ describe("stripe webhook signature helpers", () => {
 		expect(metadata).toBeNull();
 	});
 
-	it("rejects legacy metadata alias keys", () => {
+	it("rejects payloads missing canonical metadata keys despite extra non-canonical keys", () => {
 		const metadata = extractStripeFinalizeMetadata({
-			id: "evt_legacy_aliases",
+			id: "evt_missing_canonical",
 			type: "payment_intent.succeeded",
 			data: {
 				object: {
 					id: "pi_1",
 					metadata: {
-						emdashOrderId: "order_1",
-						emdashFinalizeToken: "token_12345678901234",
+						orderIdAlias: "order_1",
+						finalizeTokenAlias: "token_12345678901234",
+						notes: "legacy event with extra keys",
 					},
 				},
 			},
+		});
+
+		expect(metadata).toBeNull();
+	});
+
+	it("rejects legacy metadata alias keys", () => {
+		const metadata = extractStripeFinalizeMetadata({
+			...stripeWebhookEventMetadataAliasFixture,
 		});
 
 		expect(metadata).toBeNull();

@@ -199,3 +199,17 @@ adapters.
   come from kernel services.
 - Extension errors should be observable but must not degrade kernel invariants.
 - Read-only seams are the only extension path for payment-state inspection.
+
+## Recommended quality gates for this package
+
+For local and CI validation in the commerce package:
+
+- `pnpm run check` (typecheck + type-aware lint)
+- `pnpm run test` for regression coverage
+- `pnpm run lint` to run `oxlint --type-aware` on `src/**`
+- `pnpm run format` at the workspace root when changing broad code blocks
+
+Prefer these in this order before opening a PR:
+
+1. `pnpm run check`
+2. `pnpm run test`

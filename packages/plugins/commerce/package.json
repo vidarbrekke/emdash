@@ -16,8 +16,10 @@
 	},
 	"files": ["src"],
 	"scripts": {
+		"check": "pnpm run typecheck && pnpm run lint",
 		"test": "vitest run",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"lint": "oxlint --type-aware"
 	},
 	"dependencies": {
 		"ulidx": "^2.4.1"

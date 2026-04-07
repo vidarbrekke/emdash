@@ -20,7 +20,14 @@ const STRIPE_SIGNATURE_TOLERANCE_MAX_SECONDS = STRIPE_WEBHOOK_SIGNATURE.maxToler
 const STRIPE_SIGNATURE_TIMESTAMP_RE = /^\d+$/;
 const STRIPE_PROVIDER_ID = "stripe";
 
-function readRequiredMetadataField(metadata: Record<string, unknown>, key: string): string | undefined {
+const STRIPE_WEBHOOK_METADATA_KEYS = {
+	orderId: "orderId",
+	finalizeToken: "finalizeToken",
+} as const;
+
+type StripeWebhookMetadataKey = keyof typeof STRIPE_WEBHOOK_METADATA_KEYS;
+
+function readRequiredMetadataField(metadata: Record<string, unknown>, key: StripeWebhookMetadataKey): string | undefined {
 	const raw = metadata[key];
 	if (typeof raw !== "string") return undefined;
 	const normalized = raw.trim();
