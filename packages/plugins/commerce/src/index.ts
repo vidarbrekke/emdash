@@ -57,11 +57,14 @@ import {
 	createProductHandler,
 	updateProductHandler,
 	setProductStateHandler,
+	getProductHandler,
 	getStorefrontProductHandler,
 	createProductSkuHandler,
 	updateProductSkuHandler,
 	setSkuStatusHandler,
+	listProductsHandler,
 	listStorefrontProductsHandler,
+	listProductSkusHandler,
 	listStorefrontProductSkusHandler,
 } from "./handlers/catalog.js";
 import {
@@ -250,6 +253,7 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 			"webhooks/stripe": publicRoute(stripeWebhookInputSchema, stripeWebhookHandler),
 
 			// Admin/auth-required catalog and commerce-admin mutation routes.
+			"admin/catalog/product/get": adminRoute(productGetInputSchema, getProductHandler),
 			"product-assets/register": adminRoute(productAssetRegisterInputSchema, registerProductAssetHandler),
 			"catalog/asset/link": adminRoute(productAssetLinkInputSchema, linkCatalogAssetHandler),
 			"catalog/asset/unlink": adminRoute(productAssetUnlinkInputSchema, unlinkCatalogAssetHandler),
@@ -281,9 +285,11 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 			"catalog/tag/create": adminRoute(tagCreateInputSchema, createTagHandler),
 			"catalog/tag/link": adminRoute(productTagLinkInputSchema, createProductTagLinkHandler),
 			"catalog/tag/unlink": adminRoute(productTagUnlinkInputSchema, removeProductTagLinkHandler),
+			"admin/catalog/products": adminRoute(productListInputSchema, listProductsHandler),
 			"catalog/sku/create": adminRoute(productSkuCreateInputSchema, createProductSkuHandler),
 			"catalog/sku/update": adminRoute(productSkuUpdateInputSchema, updateProductSkuHandler),
 			"catalog/sku/state": adminRoute(productSkuStateInputSchema, setSkuStatusHandler),
+			"admin/catalog/sku/list": adminRoute(productSkuListInputSchema, listProductSkusHandler),
 		},
 	};
 	return definePlugin(pluginDefinition);

@@ -126,6 +126,9 @@ reliability-support-catalog extension backlog.
 | `catalog/products`       | List products by type/status/visibility                                                            |
 | `catalog/sku/create`     | Create a SKU for an existing product                                                               |
 | `catalog/sku/list`       | List SKUs for one product                                                                         |
+| `admin/catalog/product/get` | Retrieve one product by id for admin (full admin visibility)                                      |
+| `admin/catalog/products`    | List products for admin UI (includes non-public status/visibility combinations)                    |
+| `admin/catalog/sku/list`    | List SKUs for one product for admin workflows                                                     |
 
 ## Diagnostics and runbook surfaces
 
