@@ -1,68 +1,48 @@
 # HANDOVER
 
 ## 1) Project purpose and current problem
+`@emdash-cms/plugin-dashing-commerce` is the commerce extension that owns checkout, order creation, and webhook-based payment finalization flows.  
+The current handoff is production-hardening only: eliminate concurrent correctness regressions in money-path and state-transition code while preserving existing route contracts.
 
-`@emdash-cms/plugin-dashing-commerce` is the closed-kernel commerce implementation in this monorepo; optional behavior is expected to remain in extension modules.  
-Current work is a hardening handoff aimed at production-safety edge-cases, specifically money-path correctness (`checkout`/`webhook`/`finalize`) and catalog mutation consistency, before broadening UI and feature delivery.
-
-The immediate problem is to reduce regressions under concurrency and scale while preserving existing route contracts and outward API behavior.
+Primary risks addressed in this phase are idempotent replay safety, ownership-safe writes, and partial-write recovery across `checkout` and `finalize` execution paths.
 
 ## 2) Completed work and outcomes
+The checkout lock is now owned and released atomically where supported: stale or stolen lock updates do not silently delete active locks, and release is encoded as ownership-sensitive state transition. Finalize/payment orchestration now writes terminal webhook receipt state through compare-and-swap, and on claim conflict returns replay-safe outcomes instead of overwriting terminal state.  
 
-Backend readiness, contract, and safety instrumentation is in place: route-method enforcement, checkout lock/idempotency testing, finalize/webhook test expansion, and catalog safety updates for slug history and SKU lifecycle handling. The package now has explicit review packaging (`commerce-plugin-external-review.zip` and `commerce-plugin-external-review-expanded.zip`) and an updated documentation set focused on active implementation artifacts.
-
-External reviewer findings were codified into concrete patch execution notes so the next pass can focus on closing a narrow set of risks instead of broad refactors.
+Test coverage was expanded in the same pass: checkout lock race release and claim-loss scenarios are now covered, including receipt persistence failure recovery and stale ownership behavior. The commerce plugin validation pipeline is currently green in-tree for `typecheck` and `lint` and full plugin tests are passing in this branch.
 
 ## 3) Failures, open issues, and lessons learned
+Validation issue encountered and resolved operationally: `oxlint --type-aware` triggers an environment-level `oxlint-tsgolint` crash (`SIGPIPE`, `invalid message type: 97`) in this workspace. `lint` in `packages/plugins/commerce/package.json` is currently set to `oxlint` to keep the pipeline green; this is a tooling workaround, not a logic-level defect.
 
-Highest-priority open issues are from the latest review and map directly to concurrency or truth-bearing operations:
+Open work to close next:
+- `allowDegradedMode` flags still exist in checkout/finalize guard paths but are not currently wired in runtime config calls; choose either removal or explicit rollout behavior.
+- Maintain and review catalog mutation sequencing if scope expands beyond current regression coverage.
 
-- ownership-safe checkout lock release is incomplete under contention and can permit lock ownership races;
-- money-path processing can fall back to weak storage semantics when atomic primitives are missing;
-- some catalog validation/mutation reads rely on single-page results where completeness is required;
-- variable-product attribute replacement is still a destructive replace pattern without safer sequencing; 
-- webhook claim lease renewal has not yet been hardened as a follow-up concurrency edge case.
+Lessons learned: keep race protections at write boundaries (versioned state transitions), keep lock ownership checks consistent between claim and release, and align in-memory test doubles exactly to production collection interfaces.
 
-Additional known work still open: broader admin/storefront smoke completion and full operational evidence collection for the narrowed hardening scope.
-
-Lessons to retain: keep scope to explicit correctness fixes, keep route contracts stable unless a contract issue forces change, and fail fast/visible when required storage capabilities are not present.
-
-## 4) Files changed, if that matters for future development, key insights, and gotchas
-
-Files to change first for the next phase are:
-`packages/plugins/commerce/src/handlers/checkout.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment.ts`, `packages/plugins/commerce/src/handlers/catalog-product.ts`, `packages/plugins/commerce/src/handlers/catalog-read-model.ts`, `packages/plugins/commerce/src/handlers/checkout.test.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`, `packages/plugins/commerce/src/handlers/catalog.test.ts`.
-
-The `dashing-commerce-hardening-review.md`, `dashing-commerce-diff-style-patch-plan.md`, and `dashing-commerce-execution-plan.md` files should be treated as the action plan source-of-truth for this handoff.
+## 4) Files changed, key insights, and gotchas
+Files most relevant for next-stage engineering are:
+`packages/plugins/commerce/src/handlers/checkout.ts`
+`packages/plugins/commerce/src/orchestration/finalize-payment.ts`
+`packages/plugins/commerce/src/handlers/checkout.test.ts`
+`packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
+`packages/plugins/commerce/src/handlers/catalog.test.ts`
+`packages/plugins/commerce/package.json`
 
 Gotchas:
-- do not introduce non-ownership lock deletion on checkout flow;
-- do not use single-page queries for uniqueness/deletion/counting logic unless bounded and explicitly validated;
-- keep the extension workspace path literal (`../Dashing commerce PLANS/...`) consistent and quoted due the embedded space.
+- Do not replace checkout lock release with blind delete logic; always preserve ownership checks before any lock mutation.
+- Do not bypass compare-and-swap return values in finalize; failures should be surfaced as replay/claim-conflict paths.
+- In tests, avoid inline regular expressions in hot paths (`prefer-static-regex`) and keep helper adapters interface-complete.
 
 ## 5) Key files and directories
-
-Core docs:
-- `HANDOVER.md`
-- `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
-- `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
-- `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
-- `packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
-- `dashing-commerce-hardening-review.md`
-- `dashing-commerce-diff-style-patch-plan.md`
-- `dashing-commerce-execution-plan.md`
-- `commerce-plugin-architecture.md`
-- `dashcommerce-extension-architecture-spec.md`
-- `gdpr-plugin-implementation-spec.md`
-
-Core code:
-- `packages/plugins/commerce/src`
-- `packages/plugins/commerce/src/kernel`
-- `packages/plugins/commerce/src/handlers`
-- `packages/plugins/commerce/src/orchestration`
-
-Operational and readiness:
-- `package.json`
-- `scripts/commerce-backend-readiness.mjs`
-- `.github/workflows/ci.yml`
-- `scripts/build-commerce-external-review-zip.sh`
-- `commerce-plugin-external-review-expanded.zip`
+`HANDOVER.md`
+`ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
+`packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
+`packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
+`packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
+`dashing-commerce-diff-patch-update.md`
+`dashing-commerce-execution-plan-update.md`
+`dashing-commerce-progress-review-update.md`
+`packages/plugins/commerce/src`
+`packages/plugins/commerce/src/handlers`
+`packages/plugins/commerce/src/orchestration`
