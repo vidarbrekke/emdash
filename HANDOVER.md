@@ -40,6 +40,9 @@ Gotchas:
 `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
 `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
 `packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
+`dashing-commerce-diff-patch-update.md`
+`dashing-commerce-execution-plan-update.md`
+`dashing-commerce-progress-review-update.md`
 `commerce-plugin-architecture.md`
 `dashing-commerce-diff-style-patch-plan.md`
 `dashing-commerce-execution-plan.md`
