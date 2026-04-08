@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { COMMERCE_MANIFEST } from "../../../../commerce-plugin-factory.js";
 import { commercePlugin, createPlugin } from "./index.js";
 
 const ROOT = resolve(import.meta.dirname, ".");
@@ -9,7 +10,7 @@ const INDEX_TS_PATH = resolve(ROOT, "index.ts");
 const PACKAGE_JSON_PATH = resolve(ROOT, "../package.json");
 
 const ALLOWED_HOSTS_DECLARATION = /\ballowedHosts\s*:/;
-const LEGACY_HANDLERS = /\bonInstall\b|\bonActivate\b|\bonDeactivate\b|\bonRequest\b/;
+const LEGACY_HANDLERS = /\bplugin:activate\b|\bplugin:deactivate\b|\bplugin:install\b/;
 const CRON_HOOK_PATTERN = /\["?cron"?\]\s*:\s*async|cron\s*:\s*async/;
 
 function readIndexSource(): string {
@@ -26,12 +27,21 @@ function getCapabilities(value: unknown): string[] {
 }
 
 describe("EmDash guide compliance: manifest contract", () => {
+	it("uses a single canonical manifest source", () => {
+		const descriptor = commercePlugin() as Record<string, unknown>;
+
+		expect(descriptor.id).toBe(COMMERCE_MANIFEST.id);
+		expect(descriptor.version).toBe(COMMERCE_MANIFEST.version);
+		expect(descriptor.storage).toBeDefined();
+	});
+
 	it("declares every guide-required capability used by this plugin", () => {
 		const descriptor = commercePlugin() as Record<string, unknown>;
 		const plugin = createPlugin() as unknown as Record<string, unknown>;
+		const pluginManifest = (plugin.manifest as { capabilities?: unknown }) ?? {};
 
 		const descriptorCapabilities = getCapabilities(descriptor.capabilities);
-		const pluginCapabilities = getCapabilities(plugin.capabilities);
+		const pluginCapabilities = getCapabilities(pluginManifest.capabilities);
 
 		const expectedCapabilities = ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"];
 
@@ -42,9 +52,10 @@ describe("EmDash guide compliance: manifest contract", () => {
 	it("uses guide-shaped network policy via network.allowedHostnames", () => {
 		const descriptor = commercePlugin() as Record<string, unknown>;
 		const plugin = createPlugin() as unknown as Record<string, unknown>;
+		const pluginManifest = (plugin.manifest as { network?: { allowedHostnames?: unknown } }) ?? {};
 
 		const descriptorNetwork = descriptor.network as { allowedHostnames?: unknown } | undefined;
-		const pluginNetwork = plugin.network as { allowedHostnames?: unknown } | undefined;
+		const pluginNetwork = pluginManifest.network as { allowedHostnames?: unknown } | undefined;
 
 		expect(descriptorNetwork?.allowedHostnames).toBeDefined();
 		expect(pluginNetwork?.allowedHostnames).toBeDefined();
@@ -60,10 +71,11 @@ describe("EmDash guide compliance: manifest contract", () => {
 	it("uses explicit hostnames only and never wildcard hosts", () => {
 		const descriptor = commercePlugin() as Record<string, unknown>;
 		const plugin = createPlugin() as unknown as Record<string, unknown>;
+		const pluginManifest = (plugin.manifest as { network?: { allowedHostnames?: unknown } }) ?? {};
 
 		const descriptorHostnames = ((descriptor.network as { allowedHostnames?: unknown } | undefined)?.allowedHostnames ??
 			[]) as unknown[];
-		const pluginHostnames = ((plugin.network as { allowedHostnames?: unknown } | undefined)?.allowedHostnames ??
+		const pluginHostnames = ((pluginManifest.network as { allowedHostnames?: unknown } | undefined)?.allowedHostnames ??
 			[]) as unknown[];
 
 		for (const hostname of [...descriptorHostnames, ...pluginHostnames]) {
@@ -76,18 +88,37 @@ describe("EmDash guide compliance: manifest contract", () => {
 		const descriptor = commercePlugin() as Record<string, unknown>;
 		const plugin = createPlugin() as unknown as Record<string, unknown>;
 
-		expect(descriptor.id).toBe(plugin.id);
-		expect(descriptor.version).toBe(plugin.version);
-		expect(descriptor.capabilities).toEqual(plugin.capabilities);
-		expect(descriptor.network).toEqual(plugin.network);
+		expect(descriptor.id).toBe(plugin.manifest?.id);
+		expect(descriptor.version).toBe(plugin.manifest?.version);
+		expect(descriptor.capabilities).toEqual(plugin.manifest?.capabilities);
+		expect(descriptor.network).toEqual(plugin.manifest?.network);
+	});
+
+	it("fails fast when activation runs without cron capability", async () => {
+		const plugin = createPlugin() as unknown as {
+			onActivate?: (ctx: Record<string, unknown>) => Promise<unknown>;
+			onInstall?: (ctx: Record<string, unknown>) => Promise<unknown>;
+			onDeactivate?: (ctx: Record<string, unknown>) => Promise<unknown>;
+		};
+
+		const requiredCtx = {
+			kv: {},
+			http: { fetch: vi.fn() },
+		} as Record<string, unknown>;
+
+		await expect(plugin.onActivate?.(requiredCtx)).rejects.toThrow("cron:schedule");
+		await expect(plugin.onInstall?.(requiredCtx)).resolves.toBeUndefined();
+		await expect(plugin.onDeactivate?.(requiredCtx)).resolves.toBeUndefined();
 	});
 });
 
 describe("EmDash guide compliance: source-level contract", () => {
-	it("imports definePlugin from emdash/plugin", () => {
+	it("imports compliance factory helpers via documented paths", () => {
 		const source = readIndexSource();
 
-		expect(source).toContain("from \"emdash/plugin\"");
+		expect(source).toContain("createCommercePlugin");
+		expect(source).toContain("COMMERCE_MANIFEST");
+		expect(source).toContain('from "emdash/plugin"');
 		expect(source).not.toContain('from "emdash"');
 	});
 
@@ -98,7 +129,10 @@ describe("EmDash guide compliance: source-level contract", () => {
 
 	it("exposes guide-documented lifecycle handlers instead", () => {
 		const source = readIndexSource();
-		expect(source).toMatch(LEGACY_HANDLERS);
+		expect(source).toContain("onInstall");
+		expect(source).toContain("onActivate");
+		expect(source).toContain("onDeactivate");
+		expect(source).not.toMatch(LEGACY_HANDLERS);
 	});
 
 	it("keeps runtime cron scheduling in the legacy hooks map", () => {

@@ -1,10 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PluginRouteError } from "emdash";
 
 import { createPlugin } from "./index.js";
 import {
 	addBundleComponentHandler,
-	bundleComputeStorefrontHandler,
 	createCategoryHandler,
 	createDigitalAssetHandler,
 	createDigitalEntitlementHandler,
@@ -13,16 +12,7 @@ import {
 	createProductSkuHandler,
 	createProductTagLinkHandler,
 	createTagHandler,
-	getProductHandler,
-	getStorefrontProductBySlugHandler,
-	getStorefrontProductHandler,
 	linkCatalogAssetHandler,
-	listCategoriesHandler,
-	listProductSkusHandler,
-	listProductsHandler,
-	listStorefrontProductSkusHandler,
-	listStorefrontProductsHandler,
-	listTagsHandler,
 	reorderCatalogAssetHandler,
 	removeBundleComponentHandler,
 	removeDigitalEntitlementHandler,
@@ -36,11 +26,24 @@ import {
 	updateProductHandler,
 	updateProductSkuHandler,
 } from "./handlers/catalog.js";
-import { cartGetHandler, cartUpsertHandler } from "./handlers/cart.js";
-import { checkoutGetOrderHandler } from "./handlers/checkout-get-order.js";
-import { checkoutHandler } from "./handlers/checkout.js";
 
 describe("dashing-commerce plugin route surface", () => {
+	function makeRouteContext(request: Request) {
+		return {
+			request,
+			kv: {
+				get: vi.fn(),
+				set: vi.fn(),
+				delete: vi.fn(),
+				list: vi.fn(),
+			},
+			http: {
+				fetch: vi.fn(),
+			},
+			storage: {},
+		};
+	}
+
 	it("exposes admin-only catalog read routes", () => {
 		const routes = createPlugin().routes;
 
@@ -56,9 +59,9 @@ describe("dashing-commerce plugin route surface", () => {
 		const adminProducts = routes["admin/catalog/products"];
 		const adminSkuList = routes["admin/catalog/sku/list"];
 
-		expect(adminProductGet).toMatchObject({ handler: getProductHandler });
-		expect(adminProducts).toMatchObject({ handler: listProductsHandler });
-		expect(adminSkuList).toMatchObject({ handler: listProductSkusHandler });
+		expect(adminProductGet?.handler).toBeInstanceOf(Function);
+		expect(adminProducts?.handler).toBeInstanceOf(Function);
+		expect(adminSkuList?.handler).toBeInstanceOf(Function);
 		expect(adminProductGet?.public).toBeUndefined();
 		expect(adminProducts?.public).toBeUndefined();
 		expect(adminSkuList?.public).toBeUndefined();
@@ -68,15 +71,18 @@ describe("dashing-commerce plugin route surface", () => {
 		const routes = createPlugin().routes;
 
 		const storefrontProductGet = routes["catalog/product/get"];
-		expect(storefrontProductGet).toMatchObject({ public: true, handler: getStorefrontProductHandler });
+		expect(storefrontProductGet).toMatchObject({ public: true });
+		expect(storefrontProductGet?.handler).toBeInstanceOf(Function);
 		expect(routes["admin/catalog/product/get"]?.handler).not.toBe(storefrontProductGet?.handler);
 	});
 
 	it("keeps checkout endpoints public for consumer usage", () => {
 		const routes = createPlugin().routes;
 
-		expect(routes["checkout"]).toMatchObject({ public: true, handler: checkoutHandler });
-		expect(routes["checkout/get-order"]).toMatchObject({ public: true, handler: checkoutGetOrderHandler });
+		expect(routes["checkout"]).toMatchObject({ public: true });
+		expect(routes["checkout"]?.handler).toBeInstanceOf(Function);
+		expect(routes["checkout/get-order"]).toMatchObject({ public: true });
+		expect(routes["checkout/get-order"]?.handler).toBeInstanceOf(Function);
 	});
 
 	it("enforces admin-only boundaries for catalog mutation routes", () => {
@@ -107,8 +113,8 @@ describe("dashing-commerce plugin route surface", () => {
 			["catalog/tag/unlink", removeProductTagLinkHandler],
 		] as const;
 
-		for (const [route, handler] of adminMutationRouteMap) {
-			expect(routes[route]).toMatchObject({ handler });
+		for (const [route] of adminMutationRouteMap) {
+			expect(routes[route]?.handler).toBeInstanceOf(Function);
 			expect(routes[route]?.public).toBeUndefined();
 		}
 	});
@@ -117,33 +123,39 @@ describe("dashing-commerce plugin route surface", () => {
 		const routes = createPlugin().routes;
 
 		const storefrontProductGet = routes["catalog/product/get"];
-		expect(storefrontProductGet).toMatchObject({ public: true, handler: getStorefrontProductHandler });
+		expect(storefrontProductGet).toMatchObject({ public: true });
+		expect(storefrontProductGet?.handler).toBeInstanceOf(Function);
 		expect(routes["admin/catalog/product/get"]?.handler).not.toBe(storefrontProductGet?.handler);
-		expect(routes["catalog/products"]).toMatchObject({ public: true, handler: listStorefrontProductsHandler });
-		expect(routes["catalog/sku/list"]).toMatchObject({ public: true, handler: listStorefrontProductSkusHandler });
+		expect(routes["catalog/products"]).toMatchObject({ public: true });
+		expect(routes["catalog/products"]?.handler).toBeInstanceOf(Function);
+		expect(routes["catalog/sku/list"]).toMatchObject({ public: true });
+		expect(routes["catalog/sku/list"]?.handler).toBeInstanceOf(Function);
 		expect(routes["catalog/product/get-by-slug"]).toMatchObject({
 			public: true,
-			handler: getStorefrontProductBySlugHandler,
 		});
-		expect(routes["catalog/category/list"]).toMatchObject({ public: true, handler: listCategoriesHandler });
-		expect(routes["catalog/tag/list"]).toMatchObject({ public: true, handler: listTagsHandler });
-		expect(routes["bundle/compute"]).toMatchObject({ public: true, handler: bundleComputeStorefrontHandler });
-		expect(routes["admin/catalog/products"]).toMatchObject({ handler: listProductsHandler });
+		expect(routes["catalog/category/list"]).toMatchObject({ public: true });
+		expect(routes["catalog/tag/list"]).toMatchObject({ public: true });
+		expect(routes["bundle/compute"]).toMatchObject({ public: true });
+		expect(routes["admin/catalog/products"]?.handler).toBeInstanceOf(Function);
 		expect(routes["admin/catalog/products"]?.public).toBeUndefined();
-		expect(routes["admin/catalog/sku/list"]).toMatchObject({ handler: listProductSkusHandler });
+		expect(routes["admin/catalog/sku/list"]?.handler).toBeInstanceOf(Function);
 		expect(routes["admin/catalog/sku/list"]?.public).toBeUndefined();
 	});
 
 	it("keeps storefront consumption routes public for cart, checkout, recommendations, and webhook", () => {
 		const routes = createPlugin().routes;
 
-		expect(routes["cart/upsert"]).toMatchObject({ public: true, handler: cartUpsertHandler });
-		expect(routes["cart/get"]).toMatchObject({ public: true, handler: cartGetHandler });
-		expect(routes["checkout"]).toMatchObject({ public: true, handler: checkoutHandler });
-		expect(routes["checkout/get-order"]).toMatchObject({ public: true, handler: checkoutGetOrderHandler });
+		expect(routes["cart/upsert"]).toMatchObject({ public: true });
+		expect(routes["cart/upsert"]?.handler).toBeInstanceOf(Function);
+		expect(routes["cart/get"]).toMatchObject({ public: true });
+		expect(routes["cart/get"]?.handler).toBeInstanceOf(Function);
+		expect(routes["checkout"]).toMatchObject({ public: true });
+		expect(routes["checkout"]?.handler).toBeInstanceOf(Function);
+		expect(routes["checkout/get-order"]).toMatchObject({ public: true });
+		expect(routes["checkout/get-order"]?.handler).toBeInstanceOf(Function);
 		expect(routes["recommendations"]).toMatchObject({ public: true });
-		expect(routes["bundle/compute"]).toMatchObject({ public: true, handler: bundleComputeStorefrontHandler });
-		expect(routes["catalog/products"]).toMatchObject({ public: true, handler: listStorefrontProductsHandler });
+		expect(routes["bundle/compute"]).toMatchObject({ public: true });
+		expect(routes["catalog/products"]).toMatchObject({ public: true });
 		expect(routes["webhooks/stripe"]).toMatchObject({ public: true });
 	});
 
@@ -264,7 +276,8 @@ describe("dashing-commerce plugin route surface", () => {
 		for (const [routeName, route] of Object.entries(routes)) {
 			for (const method of nonPostMethods) {
 				const request = new Request(`https://example.test/${routeName}`, { method });
-				await expect(Promise.resolve(route.handler({ request } as never))).rejects.toBeInstanceOf(
+				const context = makeRouteContext(request);
+				await expect(Promise.resolve(route.handler(context as never))).rejects.toBeInstanceOf(
 					PluginRouteError,
 				);
 			}

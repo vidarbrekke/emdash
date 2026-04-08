@@ -15,13 +15,12 @@
 
 import type {
 	PluginContext,
-	PluginDefinition,
 	PluginStorageConfig,
 	PluginRoute,
 	ResolvedPlugin,
 	RouteContext,
 } from "emdash/plugin";
-import { definePlugin } from "emdash/plugin";
+import { COMMERCE_MANIFEST, createCommercePlugin, optionalCron, requireFetch, requireKV } from "../../../../commerce-plugin-factory.js";
 
 import {
 	COMMERCE_EXTENSION_HOOKS,
@@ -150,20 +149,13 @@ function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteCont
 	};
 }
 
-/** Outbound Stripe API hosts. */
-const STRIPE_ALLOWED_HOSTS = ["api.stripe.com", "connect.stripe.com"] as const;
-
 /**
  * Manifest-style descriptor; uses the same storage declaration as {@link createPlugin}.
  * Composite indexes match runtime config.
  */
 export function commercePlugin() {
 	return {
-		id: "dashing-commerce",
-		version: "0.1.0",
-		entrypoint: "@emdash-cms/plugin-dashing-commerce",
-		capabilities: ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"],
-		network: { allowedHostnames: [...STRIPE_ALLOWED_HOSTS] },
+		...COMMERCE_MANIFEST,
 		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginStorageConfig,
 	};
 }
@@ -187,14 +179,33 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 		resolver: options.extensions?.recommendationResolver,
 		providerId: options.extensions?.recommendationProviderId,
 	});
-	const pluginDefinition: PluginDefinition<CommerceStorage> = {
-		id: "dashing-commerce",
-		version: "0.1.0",
-		capabilities: ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"],
-		network: { allowedHostnames: [...STRIPE_ALLOWED_HOSTS] },
-
-		storage: COMMERCE_STORAGE_CONFIG,
-
+	const pluginDefinition = createCommercePlugin({
+		manifest: COMMERCE_MANIFEST,
+		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginStorageConfig,
+		onInstall: async (ctx) => {
+			requireKV(ctx);
+			requireFetch(ctx);
+		},
+		onActivate: async (ctx) => {
+			requireKV(ctx);
+			requireFetch(ctx);
+			const cron = optionalCron(ctx);
+			if (!cron) {
+				throw new Error("[CommercePlugin] cron:schedule capability is required");
+			}
+			await cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
+		},
+		onDeactivate: async (ctx) => {
+			requireKV(ctx);
+			requireFetch(ctx);
+		},
+		hooks: {
+			cron: async (event: { name?: string }, ctx: PluginContext) => {
+				if (event.name === "idempotency-cleanup") {
+					await handleIdempotencyCleanup(ctx);
+				}
+			},
+		},
 		admin: {
 			settingsSchema: {
 				stripePublishableKey: {
@@ -219,19 +230,6 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 					description: "Fallback when cart currency is absent (e.g. USD).",
 					default: "USD",
 				},
-			},
-		},
-
-		onActivate: async (_event: unknown, ctx: PluginContext) => {
-			if (ctx.cron) {
-				await ctx.cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
-			}
-		},
-		hooks: {
-			cron: async (event: { name?: string }, ctx: PluginContext) => {
-				if (event.name === "idempotency-cleanup") {
-					await handleIdempotencyCleanup(ctx);
-				}
 			},
 		},
 
@@ -290,8 +288,8 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 			"catalog/sku/state": adminRoute(productSkuStateInputSchema, setSkuStatusHandler),
 			"admin/catalog/sku/list": adminRoute(productSkuListInputSchema, listProductSkusHandler),
 		},
-	};
-	return definePlugin(pluginDefinition);
+	}) as ResolvedPlugin<CommerceStorage>;
+	return pluginDefinition;
 }
 
 export default createPlugin;
