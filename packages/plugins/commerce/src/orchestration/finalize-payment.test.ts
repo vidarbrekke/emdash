@@ -24,6 +24,20 @@ const FINALIZE_RAW = "unit_test_finalize_secret_ok____________";
 let FINALIZE_HASH = "";
 const WEBHOOK_RECEIPT_REASON_RE = /webhook_receipt_/;
 
+type FinalizeTestLogEntry = { message: string; data?: unknown };
+type LogReasonPayload = { reason?: unknown };
+
+function hasReason(data: unknown): data is LogReasonPayload {
+	return typeof data === "object" && data !== null && "reason" in data;
+}
+
+function getLogReason(logs: readonly FinalizeTestLogEntry[], message: string): string | undefined {
+	const data = logs.find((entry) => entry.message === message)?.data;
+	if (!hasReason(data)) return undefined;
+	const reason = data.reason;
+	return typeof reason === "string" ? reason : undefined;
+}
+
 function asMemCollection<T extends object>(collection: MemColl<T>): MemColl<T> {
 	return collection;
 }
@@ -439,7 +453,7 @@ describe("finalizePaymentFromWebhook", () => {
 			]),
 		};
 		const ports = portsFromState(state);
-		const logs: Array<{ message: string; data?: unknown }> = [];
+		const logs: FinalizeTestLogEntry[] = [];
 		const portsWithLogs = {
 			...ports,
 			log: {
@@ -456,8 +470,8 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: freshNow,
 		});
 		expect(inFlightRes).toMatchObject({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
-		const noop = logs.find((entry) => entry.message === "commerce.finalize.noop");
-		expect((noop?.data as { reason?: string } | undefined)?.reason).toBe(WEBHOOK_RECEIPT_REASONS.IN_FLIGHT);
+		const noopReason = getLogReason(logs, "commerce.finalize.noop");
+		expect(noopReason).toBe(WEBHOOK_RECEIPT_REASONS.IN_FLIGHT);
 
 		const afterLease = new Date(Date.parse(freshNow) + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS + 1).toISOString();
 		const completedRes = await finalizePaymentFromWebhook(portsWithLogs, {

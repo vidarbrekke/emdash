@@ -33,6 +33,7 @@ export const WEBHOOK_RECEIPT_REASONS = {
 	DUPLICATE: "webhook_receipt_duplicate",
 	IN_FLIGHT: "webhook_receipt_in_flight",
 	CLAIM_RETRY_FAILED: "webhook_receipt_claim_retry_failed",
+	ERROR: "webhook_error",
 } as const;
 export type WebhookReceiptReason = (typeof WEBHOOK_RECEIPT_REASONS)[keyof typeof WEBHOOK_RECEIPT_REASONS];
 
@@ -60,7 +61,6 @@ export type FinalizeNoopCode = "WEBHOOK_REPLAY_DETECTED" | "ORDER_STATE_CONFLICT
 export type FinalizeNoopReason =
 	| "order_already_paid"
 	| WebhookReceiptReason
-	| "webhook_error"
 	| "webhook_pending"
 	| "order_not_finalizable";
 

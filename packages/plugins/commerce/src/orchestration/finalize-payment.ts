@@ -118,6 +118,8 @@ export type FinalizeWebhookResult =
 	| { kind: "replay"; reason: string }
 	| { kind: "api_error"; error: CommerceApiErrorInput };
 
+type FinalizeWebhookReplayResult = Extract<FinalizeWebhookResult, { kind: "replay" }>;
+
 type FinalizeFlowDecision =
 	| { kind: "noop"; result: FinalizeWebhookResult; reason: string }
 	| { kind: "invalid_token"; result: FinalizeWebhookResult }
@@ -274,7 +276,7 @@ function createPendingReceipt(
 
 type ClaimWebhookReceiptResult =
 	| { kind: "acquired"; persisted: boolean; receipt: StoredWebhookReceipt }
-	| { kind: "replay"; result: FinalizeWebhookResult };
+	| { kind: "replay"; result: FinalizeWebhookReplayResult };
 
 function createClaimContext(nowIso: string, claimLeaseWindowMs: number): {
 	claimOwner: string;
@@ -308,7 +310,7 @@ function isClaimLeaseExpired(claimExpiresAt: string | undefined, nowIso: string)
 	return nowMs > expiresMs;
 }
 
-function canTakeClaim(existing: StoredWebhookReceipt, nowIso: string): { canTake: boolean; reason: FinalizeWebhookResult } {
+function canTakeClaim(existing: StoredWebhookReceipt, nowIso: string): { canTake: boolean; reason: FinalizeWebhookReplayResult } {
 	switch (existing.claimState) {
 		case "claimed": {
 			const nowMs = parseClaimTimestampMs(nowIso);
@@ -406,7 +408,7 @@ async function claimWebhookReceipt({
 		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE } };
 	}
 	if (existing.status === "error") {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_error" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.ERROR } };
 	}
 
 	const { canTake, reason } = canTakeClaim(existing, nowIso);
@@ -600,7 +602,7 @@ async function assertClaimStillActive(
 		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE };
 	}
 	if (liveReceipt.status === "error") {
-		return { kind: "replay", reason: "webhook_error" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.ERROR };
 	}
 
 	if (liveReceipt.claimState !== "claimed") {
