@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { sha256HexAsync } from "../lib/crypto-adapter.js";
-import { WEBHOOK_RECEIPT_REASONS } from "../kernel/finalize-decision.js";
+import { WEBHOOK_RECEIPT_REASONS, type WebhookReceiptReason } from "../kernel/finalize-decision.js";
 import type {
 	StoredInventoryLedgerEntry,
 	StoredInventoryStock,
@@ -22,7 +22,13 @@ import {
 /** Raw finalize token matching `FINALIZE_HASH` on test orders. */
 const FINALIZE_RAW = "unit_test_finalize_secret_ok____________";
 let FINALIZE_HASH = "";
-const WEBHOOK_RECEIPT_REASON_RE = /webhook_receipt_/;
+const WEBHOOK_RECEIPT_REASON_VALUES: Array<WebhookReceiptReason> = Object.values(
+	WEBHOOK_RECEIPT_REASONS,
+) as Array<WebhookReceiptReason>;
+const WEBHOOK_RECEIPT_REASON_SET = new Set(WEBHOOK_RECEIPT_REASON_VALUES);
+function isWebhookReceiptReason(reason: unknown): reason is WebhookReceiptReason {
+	return typeof reason === "string" && WEBHOOK_RECEIPT_REASON_SET.has(reason as WebhookReceiptReason);
+}
 
 type FinalizeTestLogEntry = { message: string; data?: unknown };
 type LogReasonPayload = { reason?: unknown };
@@ -867,7 +873,7 @@ describe("finalizePaymentFromWebhook", () => {
 		});
 		expect(second).toMatchObject({ kind: "replay" });
 		if (second.kind === "replay") {
-			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+			expect(isWebhookReceiptReason(second.reason)).toBe(true);
 		}
 
 		const paidOrder = await basePorts.orders.get(orderId);
@@ -946,7 +952,7 @@ describe("finalizePaymentFromWebhook", () => {
 		});
 		expect(second).toMatchObject({ kind: "replay" });
 		if (second.kind === "replay") {
-			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+			expect(isWebhookReceiptReason(second.reason)).toBe(true);
 		}
 
 		const succeededAttempt = await ports.paymentAttempts.query({
@@ -1601,7 +1607,7 @@ describe("finalizePaymentFromWebhook", () => {
 		});
 		expect(second).toMatchObject({ kind: "replay" });
 		if (second.kind === "replay") {
-			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+			expect(isWebhookReceiptReason(second.reason)).toBe(true);
 		}
 
 		const stockAfterRetry = await basePorts.inventoryStock.get(stockDocId);
@@ -1712,7 +1718,7 @@ describe("finalizePaymentFromWebhook", () => {
 		});
 		expect(second).toMatchObject({ kind: "replay" });
 		if (second.kind === "replay") {
-			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+			expect(isWebhookReceiptReason(second.reason)).toBe(true);
 		}
 
 		const attemptAfterRetry = await basePorts.paymentAttempts.get("pa_retry_attempt");
@@ -1815,7 +1821,7 @@ describe("finalizePaymentFromWebhook", () => {
 		});
 		expect(second).toMatchObject({ kind: "replay" });
 		if (second.kind === "replay") {
-			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+			expect(isWebhookReceiptReason(second.reason)).toBe(true);
 		}
 
 		const finalStatus = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
@@ -2016,7 +2022,9 @@ describe("finalizePaymentFromWebhook", () => {
 			expect.arrayContaining([
 				expect.objectContaining({
 					kind: "replay",
-					reason: expect.stringContaining("webhook_receipt_"),
+					reason: expect.stringMatching(
+						new RegExp(`^(?:${WEBHOOK_RECEIPT_REASON_VALUES.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`),
+					),
 				}),
 			]),
 		);

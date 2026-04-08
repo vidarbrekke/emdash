@@ -102,7 +102,7 @@ describe("decidePaymentFinalize", () => {
 		});
 		expect(d).toMatchObject({
 			action: "noop",
-			reason: "webhook_error",
+			reason: WEBHOOK_RECEIPT_REASONS.ERROR,
 			httpStatus: 409,
 			code: "ORDER_STATE_CONFLICT",
 		});
