@@ -21,6 +21,7 @@ import {
 /** Raw finalize token matching `FINALIZE_HASH` on test orders. */
 const FINALIZE_RAW = "unit_test_finalize_secret_ok____________";
 let FINALIZE_HASH = "";
+const WEBHOOK_RECEIPT_REASON_RE = /webhook_receipt_/;
 
 function asMemCollection<T extends object>(collection: MemColl<T>): MemColl<T> {
 	return collection;
@@ -101,12 +102,8 @@ class MemColl<T extends object> {
 function withOneTimePutFailure<T extends object>(collection: MemColl<T>): MemColl<T> {
 	let shouldFail = true;
 	return {
-		...(collection as Record<string, unknown>),
-		get rows() {
-			return collection.rows;
-		},
-		get: (id: string) => collection.get(id),
-		query: (options?: MemQueryOptions) => collection.query(options),
+		rows: collection.rows,
+		get: collection.get.bind(collection),
 		put: async (id: string, data: T): Promise<void> => {
 			if (shouldFail) {
 				shouldFail = false;
@@ -114,6 +111,8 @@ function withOneTimePutFailure<T extends object>(collection: MemColl<T>): MemCol
 			}
 			await collection.put(id, data);
 		},
+		query: (options?: MemQueryOptions) => collection.query(options),
+		delete: async (id: string) => collection.rows.delete(id),
 	} as MemColl<T>;
 }
 
@@ -125,12 +124,8 @@ function withNthPutFailure<T extends object>(
 	let callCount = 0;
 	let hasFailed = false;
 	return {
-		...(collection as Record<string, unknown>),
-		get rows() {
-			return collection.rows;
-		},
-		get: (id: string) => collection.get(id),
-		query: (options?: MemQueryOptions) => collection.query(options),
+		rows: collection.rows,
+		get: collection.get.bind(collection),
 		put: async (id: string, data: T): Promise<void> => {
 			callCount++;
 			if (callCount === failOnNth && !hasFailed) {
@@ -139,16 +134,48 @@ function withNthPutFailure<T extends object>(
 			}
 			await collection.put(id, data);
 		},
+		query: (options?: MemQueryOptions) => collection.query(options),
+		delete: async (id: string) => collection.rows.delete(id),
 	} as MemColl<T>;
+}
+
+function withNthCompareAndSwapFailure<T extends object>(
+	collection: MemCollWithClaiming<T>,
+	failOnNth: number,
+	shouldFail?: (data: T) => boolean,
+): MemCollWithClaiming<T> {
+	let callCount = 0;
+	let hasFailed = false;
+	return {
+		rows: collection.rows,
+		get: collection.get.bind(collection),
+		put: collection.put.bind(collection),
+		query: (options?: MemQueryOptions) => collection.query(options),
+		putIfAbsent: collection.putIfAbsent.bind(collection),
+		delete: async (id: string) => collection.rows.delete(id),
+		compareAndSwap: async (id: string, expectedVersion: string, data: T): Promise<boolean> => {
+			const shouldFailNow = shouldFail ? shouldFail(data) : true;
+			if (shouldFailNow) {
+				callCount += 1;
+			}
+			if (shouldFailNow && callCount === failOnNth && !hasFailed) {
+				hasFailed = true;
+				throw new Error("simulated compareAndSwap storage failure");
+			}
+			return collection.compareAndSwap(id, expectedVersion, data);
+		},
+	} as MemCollWithClaiming<T>;
 }
 
 function withDeterministicClock(ticks: string[]): () => string {
 	let index = 0;
 	return () => {
-		const safeIndex = Math.min(index, Math.max(0, ticks.length - 1));
-		const nowIso = ticks[safeIndex];
+		if (ticks.length === 0) {
+			return "1970-01-01T00:00:00.000Z";
+		}
+		const safeIndex = Math.min(index, ticks.length - 1);
 		index += 1;
-		return nowIso;
+		return ticks[safeIndex] ?? "1970-01-01T00:00:00.000Z";
 	};
 }
 
@@ -814,7 +841,9 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 		expect(second).toMatchObject({ kind: "replay" });
-		expect(second.reason).toMatch(/webhook_receipt_/);
+		if (second.kind === "replay") {
+			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+		}
 
 		const paidOrder = await basePorts.orders.get(orderId);
 		expect(paidOrder?.paymentPhase).toBe("payment_pending");
@@ -891,7 +920,9 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 		expect(second).toMatchObject({ kind: "replay" });
-		expect(second.reason).toMatch(/webhook_receipt_/);
+		if (second.kind === "replay") {
+			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+		}
 
 		const succeededAttempt = await ports.paymentAttempts.query({
 			where: { orderId: orderId, providerId: "stripe", status: "succeeded" },
@@ -1515,7 +1546,7 @@ describe("finalizePaymentFromWebhook", () => {
 				finalizeToken: FINALIZE_RAW,
 				nowIso: now,
 			}),
-		).rejects.toThrow("simulated storage write failure");
+	).rejects.toThrow("simulated storage write failure");
 		const interrupted = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
 		expect(interrupted).toMatchObject({
 			receiptStatus: "pending",
@@ -1544,7 +1575,9 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 		expect(second).toMatchObject({ kind: "replay" });
-		expect(second.reason).toMatch(/webhook_receipt_/);
+		if (second.kind === "replay") {
+			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+		}
 
 		const stockAfterRetry = await basePorts.inventoryStock.get(stockDocId);
 		expect(stockAfterRetry?.version).toBe(3); // unchanged while claim remains in-flight
@@ -1653,7 +1686,9 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 		expect(second).toMatchObject({ kind: "replay" });
-		expect(second.reason).toMatch(/webhook_receipt_/);
+		if (second.kind === "replay") {
+			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+		}
 
 		const attemptAfterRetry = await basePorts.paymentAttempts.get("pa_retry_attempt");
 		expect(attemptAfterRetry?.status).toBe("pending");
@@ -1701,16 +1736,19 @@ describe("finalizePaymentFromWebhook", () => {
 		};
 
 		const basePorts = portsFromState(state);
-		// The second webhookReceipts.put (status→processed) fails; the first
-		// (status→pending) must succeed so the receipt is left in pending state.
-	const webhookReceipts = memCollWithPutIfAbsent(basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>);
+		// The first webhookReceipts.compareAndSwap with status→processed fails; the
+		// status→pending write must succeed so the receipt remains pending.
+		const webhookReceipts = memCollWithPutIfAbsent(
+			basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>,
+		);
+		const failingWebhookReceipts = withNthCompareAndSwapFailure(
+			webhookReceipts,
+			1,
+			(data) => (data as StoredWebhookReceipt).status === "processed",
+		);
 		const ports = {
 			...basePorts,
-		webhookReceipts: {
-			...(withNthPutFailure(webhookReceipts, 1) as MemColl<StoredWebhookReceipt>),
-			putIfAbsent: webhookReceipts.putIfAbsent,
-			compareAndSwap: webhookReceipts.compareAndSwap,
-		},
+			webhookReceipts: failingWebhookReceipts,
 		};
 
 		// First attempt: throws when writing status→processed.
@@ -1723,7 +1761,7 @@ describe("finalizePaymentFromWebhook", () => {
 				finalizeToken: FINALIZE_RAW,
 				nowIso: now,
 			}),
-		).rejects.toThrow("simulated storage write failure");
+		).rejects.toThrow("simulated compareAndSwap storage failure");
 
 		// After first attempt: all side effects must be done except receipt→processed.
 		const status = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
@@ -1751,7 +1789,9 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 		expect(second).toMatchObject({ kind: "replay" });
-		expect(second.reason).toMatch(/webhook_receipt_/);
+		if (second.kind === "replay") {
+			expect(second.reason).toMatch(WEBHOOK_RECEIPT_REASON_RE);
+		}
 
 		const finalStatus = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
 		expect(finalStatus).toMatchObject({
@@ -1762,6 +1802,85 @@ describe("finalizePaymentFromWebhook", () => {
 			receiptStatus: "pending",
 			resumeState: "pending_receipt",
 		});
+	});
+
+	it("does not overwrite webhook receipt terminal state if claim ownership is lost before final write", async () => {
+		const orderId = "order_receipt_overwrite_race";
+		const extId = "evt_receipt_overwrite_race";
+		const stockId = inventoryStockDocId("p1", "");
+		const state = {
+			orders: new Map([[orderId, baseOrder()]]),
+			webhookReceipts: new Map<string, StoredWebhookReceipt>(),
+			paymentAttempts: new Map<string, StoredPaymentAttempt>([
+				[
+					"pa_race",
+					{ orderId, providerId: "stripe", status: "pending", createdAt: now, updatedAt: now },
+				],
+			]),
+			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
+			inventoryStock: new Map<string, StoredInventoryStock>([
+				[
+					stockId,
+					{ productId: "p1", variantId: "", version: 3, quantity: 10, updatedAt: now },
+				],
+			]),
+		};
+
+		const basePorts = portsFromState(state);
+		const webhookReceipts = memCollWithPutIfAbsent(basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>);
+		const receiptId = webhookReceiptDocId("stripe", extId);
+		const raceReceipts = {
+			rows: webhookReceipts.rows,
+			get: webhookReceipts.get.bind(webhookReceipts),
+			put: webhookReceipts.put.bind(webhookReceipts),
+			query: webhookReceipts.query.bind(webhookReceipts),
+			putIfAbsent: webhookReceipts.putIfAbsent.bind(webhookReceipts),
+			delete: async (id: string) => webhookReceipts.rows.delete(id),
+			compareAndSwap: async (
+				id: string,
+				expectedVersion: string,
+				data: StoredWebhookReceipt,
+			): Promise<boolean> => {
+				if (id === receiptId && data.status === "processed") {
+					const current = webhookReceipts.rows.get(id);
+					if (current) {
+						webhookReceipts.rows.set(id, {
+							...current,
+							claimState: "claimed",
+							claimOwner: "other-worker",
+							claimToken: "stolen-token",
+							claimVersion: "2026-04-02T12:00:30.000Z",
+							claimExpiresAt: "2026-04-02T12:00:30.000Z",
+						});
+					}
+					return false;
+				}
+				return webhookReceipts.compareAndSwap(id, expectedVersion, data);
+			},
+		} as MemCollWithClaiming<StoredWebhookReceipt>;
+		const ports = {
+			...basePorts,
+			webhookReceipts: raceReceipts,
+		};
+
+		const result = await finalizePaymentFromWebhook(ports, {
+			orderId,
+			providerId: "stripe",
+			externalEventId: extId,
+			correlationId: "cid",
+			finalizeToken: FINALIZE_RAW,
+			nowIso: now,
+		});
+		expect(result).toMatchObject({ kind: "replay", reason: "webhook_receipt_claim_retry_failed" });
+
+		const finalReceipt = await basePorts.webhookReceipts.get(receiptId);
+		expect(finalReceipt).not.toBeNull();
+		expect(finalReceipt).toMatchObject({
+			status: "pending",
+			claimState: "claimed",
+			claimOwner: "other-worker",
+		});
+		expect(finalReceipt?.claimToken).toBe("stolen-token");
 	});
 
 	it("reports event_unknown when order is fully settled but receipt row is missing", async () => {

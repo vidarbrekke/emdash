@@ -174,6 +174,52 @@ class MemCollWithAtomicOpsAndStealableLock extends MemCollWithAtomicOps<StoredId
 	}
 }
 
+class MemCollWithAtomicOpsAndRacingRelease extends MemCollWithAtomicOps<StoredIdempotencyKey> {
+	constructor(
+		rows: Map<string, StoredIdempotencyKey>,
+		private readonly lockId: string,
+		private readonly stolenRequestId: string,
+	) {
+		super(rows);
+	}
+
+	private compareAndSwapCalls = 0;
+
+	override async compareAndSwap(
+		id: string,
+		expectedVersion: string,
+		data: StoredIdempotencyKey,
+	): Promise<boolean> {
+		const current = await super.compareAndSwap(id, expectedVersion, data);
+		this.compareAndSwapCalls += 1;
+		if (id !== this.lockId || this.compareAndSwapCalls !== 2) {
+			return current;
+		}
+
+		const currentRow = this.rows.get(id);
+		if (!currentRow) return current;
+		const payload = currentRow.responseBody;
+		if (
+			typeof payload === "object" &&
+			payload !== null &&
+			typeof (payload as Record<string, unknown>).kind === "string" &&
+			(payload as Record<string, unknown>).kind === "checkout_cart_lock" &&
+			typeof (payload as Record<string, unknown>).cartId === "string"
+		) {
+			this.rows.set(id, {
+				...currentRow,
+				responseBody: {
+					kind: "checkout_cart_lock",
+					cartId: (payload as Record<string, unknown>).cartId as string,
+					requestId: this.stolenRequestId,
+					expiresAt: "2026-04-07T12:00:30.000Z",
+				},
+			});
+		}
+		return false;
+	}
+}
+
 /** Default catalog product for checkout tests that do not seed `products`. */
 class DefaultProductsColl extends MemColl<StoredProduct> {
 	override async get(id: string): Promise<StoredProduct | null> {
@@ -217,11 +263,8 @@ function oneTimePutFailure<T extends object>(
 ): MemColl<T> {
 	let callCount = 0;
 	return {
-		...(collection as Record<string, unknown>),
-		get rows() {
-			return collection.rows;
-		},
-		get: (id: string) => collection.get(id),
+		rows: collection.rows,
+		get: collection.get.bind(collection),
 		put: async (id: string, data: T): Promise<void> => {
 			callCount += 1;
 			if (callCount === failCallNumber) {
@@ -229,7 +272,8 @@ function oneTimePutFailure<T extends object>(
 			}
 			await collection.put(id, data);
 		},
-		delete: async (id: string) => collection.rows.delete(id),
+		delete: collection.delete.bind(collection),
+		query: collection.query.bind(collection),
 	} as MemColl<T>;
 }
 
@@ -1060,12 +1104,17 @@ describe("checkout route guardrails", () => {
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
 
-		await expect(idempotencyKeys.get(lockId)).resolves.toBeNull();
+		await expect(idempotencyKeys.get(lockId)).resolves.toMatchObject({
+			responseBody: {
+				kind: "checkout_cart_lock",
+				expiresAt: "1970-01-01T00:00:00.000Z",
+			},
+		});
 	});
 
 	it("requires atomic lock ops for checkout under hardened mode", async () => {
 		const cartId = "cart_atomic_required_checkout";
-		const now = "2026-04-07T12:00:00.000Z";
+		const now = new Date().toISOString();
 		const ownerToken = "owner-token-atomic-required-checkout";
 		const idempotencyKey = "idem-key-atomic-req-16";
 		const cart: StoredCart = {
@@ -1325,6 +1374,85 @@ describe("checkout route guardrails", () => {
 		});
 	});
 
+	it("prevents deleting a lock when ownership changes before release", async () => {
+		const cartId = "cart_racey_checkout_lock";
+		const now = "2026-04-07T12:00:00.000Z";
+		const ownerToken = "owner-token-racey-checkout-lock";
+		const idempotencyKey = "idem-key-racey-lock-16";
+		const cart: StoredCart = {
+			currency: "USD",
+			lineItems: [{ productId: "p1", quantity: 1, inventoryVersion: 1, unitPriceMinor: 100 }],
+			ownerTokenHash: await sha256HexAsync(ownerToken),
+			createdAt: now,
+			updatedAt: now,
+		};
+
+		const idempotencyRows = new Map<string, StoredIdempotencyKey>();
+		const lockFingerprint = await sha256HexAsync(`checkout-cart-lock|${cartId}`);
+		const lockId = `checkout-lock:${lockFingerprint}`;
+		idempotencyRows.set(lockId, {
+			route: "checkout-cart-lock",
+			keyHash: lockFingerprint,
+			httpStatus: 409,
+			responseBody: {
+				kind: "checkout_cart_lock",
+				cartId,
+				requestId: "stale-racey-owner",
+				expiresAt: "2026-04-07T11:00:00.000Z",
+			},
+			createdAt: "2026-04-07T11:00:00.000Z",
+		});
+		const idempotencyKeys = new MemCollWithAtomicOpsAndRacingRelease(
+			idempotencyRows,
+			lockId,
+			"stolen-by-other-worker",
+		);
+
+		const orders = new MemColl<StoredOrder>();
+		const paymentAttempts = new MemColl<StoredPaymentAttempt>();
+		const inventoryStock = new MemColl(
+			new Map([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 1,
+						quantity: 20,
+						updatedAt: now,
+					},
+				],
+			]),
+		);
+		const kv = new MemKv();
+
+		const result = await checkoutHandler(
+			contextFor({
+				idempotencyKeys,
+				orders,
+				paymentAttempts,
+				carts: new MemColl(new Map([[cartId, cart]])),
+				inventoryStock,
+				kv,
+				idempotencyKey,
+				cartId,
+				ownerToken,
+			}),
+		);
+
+		expect(result).toMatchObject({
+			paymentPhase: "payment_pending",
+			totalMinor: 100,
+			currency: "USD",
+		});
+		const afterLock = await idempotencyKeys.get(lockId);
+		expect(afterLock).not.toBeNull();
+		expect(afterLock?.responseBody).toMatchObject({
+			kind: "checkout_cart_lock",
+			requestId: "stolen-by-other-worker",
+		});
+	});
+
 	it("does not block when the current checkout lock payload is malformed", async () => {
 		const cartId = "cart_malformed_checkout_lock";
 		const now = "2026-04-07T12:00:00.000Z";
@@ -1392,12 +1520,17 @@ describe("checkout route guardrails", () => {
 		});
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
-		expect(await idempotencyKeys.get(lockId)).toBeNull();
+		expect(await idempotencyKeys.get(lockId)).toMatchObject({
+			responseBody: {
+				kind: "checkout_cart_lock",
+				expiresAt: "1970-01-01T00:00:00.000Z",
+			},
+		});
 	});
 
 	it("returns cached completed checkout before open-checkout conflict check", async () => {
 		const cartId = "cart_replay_before_open_checkout";
-		const now = "2026-04-07T12:00:00.000Z";
+		const now = new Date().toISOString();
 		const ownerToken = "owner-token-replay-before-open";
 		const idempotencyKey = "idem-key-replay-open-16";
 		const finalizeToken = "cached-replay-token";
@@ -1503,7 +1636,12 @@ describe("checkout route guardrails", () => {
 		});
 		const lockFingerprint = await sha256HexAsync(`checkout-cart-lock|${cartId}`);
 		const lockId = `checkout-lock:${lockFingerprint}`;
-		await expect(idempotencyKeys.get(lockId)).resolves.toBeNull();
+		await expect(idempotencyKeys.get(lockId)).resolves.toMatchObject({
+			responseBody: {
+				kind: "checkout_cart_lock",
+				expiresAt: "1970-01-01T00:00:00.000Z",
+			},
+		});
 	});
 
 	it("rejects checkout when simple-item product-level stock row is missing", async () => {

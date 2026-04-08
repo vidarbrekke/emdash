@@ -477,9 +477,9 @@ async function persistReceiptStatus(
 	nowIso: string,
 	errorCode?: StoredWebhookReceipt["errorCode"],
 	errorDetails?: Record<string, unknown>,
-): Promise<void> {
+): Promise<boolean> {
 	const isTerminal = status === "processed" || status === "duplicate" || status === "error";
-	await ports.webhookReceipts.put(receiptId, {
+	const persisted = {
 		...receipt,
 		status,
 		errorCode: status === "error" ? errorCode : undefined,
@@ -490,7 +490,14 @@ async function persistReceiptStatus(
 		claimExpiresAt: isTerminal ? undefined : receipt.claimExpiresAt,
 		claimVersion: isTerminal ? undefined : receipt.claimVersion,
 		updatedAt: nowIso,
-	});
+	};
+
+	if (ports.webhookReceipts.compareAndSwap) {
+		return await ports.webhookReceipts.compareAndSwap(receiptId, receipt.updatedAt, persisted);
+	}
+
+	await ports.webhookReceipts.put(receiptId, persisted);
+	return true;
 }
 
 function getActiveClaim(receipt: StoredWebhookReceipt):
@@ -745,7 +752,13 @@ export async function finalizePaymentFromWebhook(
 
 	let pendingReceipt = claim.receipt;
 	if (!claim.persisted) {
-		await ports.webhookReceipts.put(receiptId, pendingReceipt);
+		const persistedPending = await persistReceiptStatus(ports, receiptId, pendingReceipt, "pending", nowIso);
+		if (!persistedPending) {
+			return {
+				kind: "replay",
+				reason: "webhook_receipt_claim_retry_failed",
+			};
+		}
 	}
 	const refreshClaim = async (): Promise<FinalizeWebhookResult | null> => {
 		const claimNow = now();
@@ -783,7 +796,7 @@ export async function finalizePaymentFromWebhook(
 			if (claimCheck) return claimCheck;
 		}
 		const orderNotFoundNow = now();
-		await persistReceiptStatus(
+		const persistedOrderMissing = await persistReceiptStatus(
 			ports,
 			receiptId,
 			pendingReceipt,
@@ -792,6 +805,9 @@ export async function finalizePaymentFromWebhook(
 			"ORDER_NOT_FOUND",
 			{ orderId: input.orderId, correlationId: input.correlationId },
 		);
+		if (!persistedOrderMissing) {
+			return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+		}
 		return {
 			kind: "api_error",
 			error: { code: "ORDER_NOT_FOUND", message: "Order not found" },
@@ -816,7 +832,7 @@ export async function finalizePaymentFromWebhook(
 				if (claimCheck) return claimCheck;
 			}
 			const conflictNow = now();
-			await persistReceiptStatus(
+			const persistedConflict = await persistReceiptStatus(
 				ports,
 				receiptId,
 				pendingReceipt,
@@ -825,6 +841,9 @@ export async function finalizePaymentFromWebhook(
 				"ORDER_STATE_CONFLICT",
 				{ paymentPhase: freshOrder.paymentPhase },
 			);
+			if (!persistedConflict) {
+				return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+			}
 			return {
 				kind: "api_error",
 				error: {
@@ -868,7 +887,7 @@ export async function finalizePaymentFromWebhook(
 						if (claimCheck) return claimCheck;
 					}
 					const inventoryErrorNow = now();
-					await persistReceiptStatus(
+					const persistedInventoryError = await persistReceiptStatus(
 						ports,
 						receiptId,
 						pendingReceipt,
@@ -881,6 +900,9 @@ export async function finalizePaymentFromWebhook(
 							commerceErrorCode: apiCode,
 						},
 					);
+					if (!persistedInventoryError) {
+						return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+					}
 				} else {
 					ports.log?.warn("commerce.finalize.inventory_failed", {
 						...logContext,
@@ -981,7 +1003,10 @@ export async function finalizePaymentFromWebhook(
 			stage: "finalize",
 		});
 		const processedNow = now();
-		await persistReceiptStatus(ports, receiptId, pendingReceipt, "processed", processedNow);
+		const persistedProcessed = await persistReceiptStatus(ports, receiptId, pendingReceipt, "processed", processedNow);
+		if (!persistedProcessed) {
+			return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+		}
 	} catch (err) {
 		ports.log?.warn("commerce.finalize.receipt_processed_write_failed", {
 			...logContext,

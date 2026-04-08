@@ -229,6 +229,22 @@ async function releaseCheckoutCartLock(args: {
 	const parsed = parseCheckoutCartLock(existing.responseBody);
 	if (!parsed || parsed.requestId !== args.requestId) return;
 
+	const releasedLockRecord: StoredIdempotencyKey = {
+		...existing,
+		responseBody: {
+			kind: CHECKOUT_CART_LOCK_KIND,
+			cartId: parsed.cartId,
+			requestId: parsed.requestId,
+			expiresAt: "1970-01-01T00:00:00.000Z",
+		},
+	};
+
+	const compareAndSwapLock = (args.locks as CheckoutLockCollection & { compareAndSwap?: (id: string, expectedVersion: string, data: StoredIdempotencyKey) => Promise<boolean> }).compareAndSwap;
+	if (compareAndSwapLock) {
+		await compareAndSwapLock.call(args.locks, args.lockId, existing.createdAt, releasedLockRecord);
+		return;
+	}
+
 	const deleteLock = (args.locks as CheckoutLockCollection & { delete?: (id: string) => Promise<boolean> }).delete;
 	if (deleteLock) {
 		await deleteLock.call(args.locks, args.lockId);

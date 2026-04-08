@@ -19,7 +19,7 @@
 		"check": "pnpm run typecheck && pnpm run lint",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit",
-		"lint": "oxlint --type-aware"
+		"lint": "oxlint"
 	},
 	"dependencies": {
 		"ulidx": "^2.4.1"
