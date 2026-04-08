@@ -742,7 +742,7 @@ export async function finalizePaymentFromWebhook(
 	if (claim.kind === "replay") {
 		ports.log?.info("commerce.finalize.noop", {
 			...logContext,
-			reason: "webhook_receipt_claim_in_flight",
+			reason: claim.result.reason,
 		});
 		return claim.result;
 	}

@@ -438,7 +438,15 @@ describe("finalizePaymentFromWebhook", () => {
 			]),
 		};
 		const ports = portsFromState(state);
-		const inFlightRes = await finalizePaymentFromWebhook(ports, {
+		const logs: Array<{ message: string; data?: unknown }> = [];
+		const portsWithLogs = {
+			...ports,
+			log: {
+				info: (message: string, data?: unknown) => logs.push({ message, data }),
+				warn: () => undefined,
+			},
+		};
+		const inFlightRes = await finalizePaymentFromWebhook(portsWithLogs, {
 			orderId,
 			providerId: "stripe",
 			externalEventId: extId,
@@ -447,9 +455,11 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: freshNow,
 		});
 		expect(inFlightRes).toMatchObject({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		const noop = logs.find((entry) => entry.message === "commerce.finalize.noop");
+		expect((noop?.data as { reason?: string } | undefined)?.reason).toBe("webhook_receipt_in_flight");
 
 		const afterLease = new Date(Date.parse(freshNow) + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS + 1).toISOString();
-		const completedRes = await finalizePaymentFromWebhook(ports, {
+		const completedRes = await finalizePaymentFromWebhook(portsWithLogs, {
 			orderId,
 			providerId: "stripe",
 			externalEventId: extId,
