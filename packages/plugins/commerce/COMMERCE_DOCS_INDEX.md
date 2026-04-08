@@ -30,10 +30,15 @@ For current execution context, use `HANDOVER.md` plus `README.md`/`AGENTS.md` as
 - `COMMERCE_EXTENSION_SURFACE.md` — architecture contracts and extension rules
 - `FINALIZATION_REVIEW_AUDIT.md` — pending receipt state transitions and replay safety audit
 - `CI_REGRESSION_CHECKLIST.md` — regression gates for follow-on tickets
+- `../docs/compliance.md` — guide compliance workflow and active artifacts
+- `../guide-compliance-diff-patch-plan.md` — patch plan for guide compliance
+- `../guide-compliance-ci-checklist.md` — CI gate and enforcement checklist
+- `../commerce-guide-compliance.test.ts` — executable guide-compliance tests
 - `../dashcommerce-extension-architecture-spec.md` — authoritative module/extensibility contract (root)
 - `../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
 - `../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
 - `../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
+- `../docs/archive/2026-04-commerce-hardening/README.md` — historical hardening planning references
 
 ### Strategy A (Contract Drift Hardening) status
 

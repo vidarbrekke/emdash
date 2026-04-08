@@ -190,6 +190,18 @@ pnpm lint:quick    # fast lint (< 1s)
 pnpm format        # format with oxfmt
 ```
 
+Create a reviewer package for the commerce plugin (source, tests, and handoff docs):
+
+```bash
+./scripts/build-commerce-external-review-zip.sh
+```
+
+The generated zip lands at repo root with a timestamped filename, e.g.:
+
+```text
+commerce-plugin-external-review-YYYYMMDD-HHMMSS.zip
+```
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide.
 
 ## Repository Structure

@@ -1,4 +1,5 @@
 # DashingCommerce — Execution Plan Update
+> historical reference for Strategy A hardening
 
 ## Priority
 

@@ -1,4 +1,5 @@
 # DashingCommerce — Hardening Execution Plan
+> historical reference for Strategy A hardening
 
 ## Purpose
 

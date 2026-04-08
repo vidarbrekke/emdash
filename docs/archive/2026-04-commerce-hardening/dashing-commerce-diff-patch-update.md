@@ -1,4 +1,5 @@
 # DashingCommerce — Diff Patch Plan Update
+> historical reference for Strategy A hardening
 
 ## Patch 1 — Atomic Lock Release
 

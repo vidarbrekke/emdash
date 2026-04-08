@@ -1,4 +1,5 @@
 # DashingCommerce — Diff-Style Patch Plan
+> historical reference for Strategy A hardening
 
 ## Purpose
 
