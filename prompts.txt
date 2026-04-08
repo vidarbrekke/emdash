@@ -27,3 +27,11 @@ Just as a sanity check, Let us take a step back and look at all the code changes
 - **Recommendation:** Compare, select, and recommend the best refactoring in code like a 10x engineer (do not implement)
 - **Validate:** Make sure all your recommendations are supported by validated problems and fixes, and not assumptions.
 - **IMPORTANT:** Don't over-engineer, and don't fix what is not broken
+
+## Let's do a Typescript audit
+- **Review Area:** Type safety, syntax/style, modularity, architecture, performance.
+- **Deliverables:**
+  1. **Findings:** Gaps and inconsistencies per module.
+  2. **Code Fixes:** `diff` or snippet updates with rationale.
+  3. **Action Plan:** Prioritized list of improvements.
+  4. **Tooling Suggestions:** ESLint/Prettier or extensions.

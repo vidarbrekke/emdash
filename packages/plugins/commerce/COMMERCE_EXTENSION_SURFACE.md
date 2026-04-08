@@ -20,6 +20,26 @@ The money path is intentionally closed:
 
 These rules are captured in `COMMERCE_KERNEL_RULES` in `src/catalog-extensibility.ts`.
 
+## Money-path storage capability requirements
+
+For concurrency-safe operation in production:
+
+- Hardened mode (default): `checkout` and webhook finalization must run with atomic claim primitives available.
+- Degraded mode: not supported by this package version for money-path writes.
+
+- `checkout` requires `ctx.storage.idempotencyKeys.putIfAbsent` and
+  `ctx.storage.idempotencyKeys.compareAndSwap`.
+- `webhookReceipt` finalization (`finalizePaymentFromWebhook`) requires
+  `ctx.storage.webhookReceipts.putIfAbsent` and
+  `ctx.storage.webhookReceipts.compareAndSwap`.
+- Checkout also uses `ctx.storage.idempotencyKeys.delete` to release stale/own
+  cart locks; adapters without delete support should not be promoted to production.
+- If either primitive is missing in either path, the request fails fast with
+  `ATOMIC_STORAGE_REQUIRED` and no money-side writes are performed.
+- Operators should treat this as a hard requirement for this package version.
+- If atomic support cannot be guaranteed for checkout lock storage, keep checkout/finalize
+  money writes disabled until atomic storage is available.
+
 ## Approved extension seams
 
 ### Recommendation seam (read-only)
@@ -77,6 +97,10 @@ must pass through `finalizePaymentFromWebhook`.
 - `COMMERCE_USE_LEASED_FINALIZE` is retained only for temporary parity checks and
   for re-running command families during verification when needed.
 - `COMMERCE_USE_LEASED_FINALIZE` does **not** represent an alternative runtime mode in this branch; strict lease behavior remains canonical and should stay in production.
+- The default webhook finalize claim lease is `WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS` and can be overridden via
+  `finalizePaymentFromWebhook` options (`claimLeaseWindowMs`) for deterministic testing.
+- The finalize path refreshes claim metadata at multiple guarded checkpoints so a single long-running
+  invocation can retain ownership instead of dropping into duplicate processing when it spans the initial lease window.
 - Historical rollout steps and rollback criteria are retained for context in current
   operational runbooks, but operational controls should treat strict behavior as baseline.
 

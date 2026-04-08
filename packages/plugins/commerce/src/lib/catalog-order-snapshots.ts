@@ -22,12 +22,27 @@ import type {
 type QueryResult<T> = {
 	items: Array<{ id: string; data: T }>;
 	hasMore: boolean;
+	cursor?: string;
 };
 
 type QueryCollection<T> = {
 	get(id: string): Promise<T | null>;
-	query(options?: { where?: Record<string, unknown>; limit?: number }): Promise<QueryResult<T>>;
+	query(options?: { where?: Record<string, unknown>; cursor?: string; limit?: number }): Promise<QueryResult<T>>;
 };
+
+async function queryAllPages<T>(queryPage: (cursor?: string) => Promise<QueryResult<T>>): Promise<Array<{ id: string; data: T }>> {
+	const all: Array<{ id: string; data: T }> = [];
+	let cursor: string | undefined;
+	while (true) {
+		const page = await queryPage(cursor);
+		all.push(...page.items);
+		if (!page.hasMore || !page.cursor) {
+			break;
+		}
+		cursor = page.cursor;
+	}
+	return all;
+}
 
 export type CatalogSnapshotCollections = {
 	products: QueryCollection<StoredProduct>;
@@ -183,7 +198,7 @@ async function resolveSkuForSnapshot(
 		return null;
 	}
 
-	const rows = await productSkus.query({ where: { productId: line.productId }, limit: 5 });
+	const rows = await productSkus.query({ where: { productId: line.productId }, limit: 2 });
 	if (rows.items.length !== 1) {
 		return null;
 	}
@@ -196,11 +211,13 @@ async function buildBundleSummary(
 	productId: string,
 	catalog: CatalogSnapshotCollections,
 ): Promise<{ summary: OrderLineItemBundleSummary; requiresShipping: boolean } | undefined> {
-	const componentRows = await catalog.bundleComponents.query({ where: { bundleProductId: productId } });
-	if (componentRows.items.length === 0) return undefined;
+	const componentRows = await queryAllPages((queryCursor) =>
+		catalog.bundleComponents.query({ where: { bundleProductId: productId }, cursor: queryCursor, limit: 100 }),
+	);
+	if (componentRows.length === 0) return undefined;
 
 	const componentLines: { component: StoredBundleComponent; sku: StoredProductSku }[] = [];
-	for (const row of componentRows.items) {
+	for (const row of componentRows) {
 		const component = row.data;
 		const sku = await catalog.productSkus.get(component.componentSkuId);
 		if (!sku) continue;
@@ -258,9 +275,11 @@ async function collectDigitalEntitlements(
 	skuId: string,
 	catalog: CatalogSnapshotCollections,
 ): Promise<OrderLineItemDigitalEntitlementSnapshot[]> {
-	const entitlements = await catalog.productDigitalEntitlements.query({ where: { skuId }, limit: 200 });
+	const entitlements = await queryAllPages((queryCursor) =>
+		catalog.productDigitalEntitlements.query({ where: { skuId }, cursor: queryCursor, limit: 100 }),
+	);
 	const out: OrderLineItemDigitalEntitlementSnapshot[] = [];
-	for (const row of entitlements.items) {
+	for (const row of entitlements) {
 		const entitlement = row.data;
 		const asset = await catalog.productDigitalAssets.get(entitlement.digitalAssetId);
 		if (!asset) continue;
@@ -282,9 +301,11 @@ async function querySkuOptionSelections(
 	skuId: string,
 	productSkuOptionValues: QueryCollection<StoredProductSkuOptionValue>,
 ): Promise<OrderLineItemOptionSelection[]> {
-	const options = await productSkuOptionValues.query({ where: { skuId } });
+	const options = await queryAllPages((queryCursor) =>
+		productSkuOptionValues.query({ where: { skuId }, cursor: queryCursor, limit: 100 }),
+	);
 	const ordered = sortedImmutable(
-		options.items.map((row) => ({
+		options.map((row) => ({
 			attributeId: row.data.attributeId,
 			attributeValueId: row.data.attributeValueId,
 		})),
@@ -302,11 +323,15 @@ async function queryRepresentativeImage(input: {
 	targetId: string;
 	roles: readonly StoredProductAssetLink["role"][];
 }): Promise<OrderLineItemImageSnapshot | undefined> {
-		const links = await input.productAssetLinks.query({
+	const links = await queryAllPages((queryCursor) =>
+		input.productAssetLinks.query({
 			where: { targetType: input.targetType, targetId: input.targetId },
-		});
+			cursor: queryCursor,
+			limit: 100,
+		}),
+	);
 	const sorted = sortedImmutable(
-		links.items.map((row) => row.data),
+		links.map((row) => row.data),
 		(left, right) => left.position - right.position || left.id.localeCompare(right.id),
 	);
 	const acceptedRoles = new Set(input.roles);

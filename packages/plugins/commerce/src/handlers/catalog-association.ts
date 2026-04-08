@@ -33,6 +33,7 @@ import type {
 	ProductTagLinkUnlinkResponse,
 } from "./catalog.js";
 import { asCollection, getNowIso, putWithConflictHandling } from "./catalog-conflict.js";
+import { queryAllPages } from "./catalog-read-model.js";
 
 export async function handleCreateCategory(ctx: RouteContext<CategoryCreateInput>): Promise<CategoryResponse> {
 	requirePost(ctx);
@@ -72,14 +73,18 @@ export async function handleListCategories(ctx: RouteContext<CategoryListInput>)
 		where.parentId = ctx.input.parentId;
 	}
 
-	const result = await categories.query({
-		where,
-		limit: ctx.input.limit,
-	});
-	const items = sortedImmutable(
-		result.items.map((row) => row.data),
+	const rows = await queryAllPages((cursor) =>
+		categories.query({
+			where,
+			cursor,
+			limit: 100,
+		}),
+	);
+	const sorted = sortedImmutable(
+		rows.map((row) => row.data),
 		(left, right) => left.position - right.position || left.slug.localeCompare(right.slug),
 	);
+	const items = sorted.slice(0, ctx.input.limit);
 	return { items };
 }
 
@@ -156,10 +161,14 @@ export async function handleCreateTag(ctx: RouteContext<TagCreateInput>): Promis
 export async function handleListTags(ctx: RouteContext<TagListInput>): Promise<TagListResponse> {
 	requirePost(ctx);
 	const tags = asCollection<StoredProductTag>(ctx.storage.productTags);
-	const result = await tags.query({
-		limit: ctx.input.limit,
-	});
-	const items = sortedImmutable(result.items.map((row) => row.data), (left, right) => left.slug.localeCompare(right.slug));
+	const rows = await queryAllPages((cursor) =>
+		tags.query({
+			cursor,
+			limit: 100,
+		}),
+	);
+	const sorted = sortedImmutable(rows.map((row) => row.data), (left, right) => left.slug.localeCompare(right.slug));
+	const items = sorted.slice(0, ctx.input.limit);
 	return { items };
 }
 

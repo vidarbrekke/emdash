@@ -96,6 +96,47 @@ type ProductAttributeInput = {
 	}>;
 };
 
+type PlannedAttributeGraph = {
+	attributes: StoredProductAttribute[];
+	values: StoredProductAttributeValue[];
+};
+
+async function buildPlannedAttributeGraph(args: {
+	product: StoredProduct;
+	attributes: ProductAttributeInput[];
+	nowIso: string;
+}): Promise<PlannedAttributeGraph> {
+	const plannedAttributes: StoredProductAttribute[] = [];
+	const plannedValues: StoredProductAttributeValue[] = [];
+	for (const attributeInput of args.attributes) {
+		const attributeId = `${args.product.id}_attr_${await randomHex(6)}`;
+		plannedAttributes.push({
+			id: attributeId,
+			productId: args.product.id,
+			name: attributeInput.name,
+			code: attributeInput.code,
+			kind: attributeInput.kind,
+			position: attributeInput.position,
+			createdAt: args.nowIso,
+			updatedAt: args.nowIso,
+		});
+
+		for (const valueInput of attributeInput.values) {
+			const valueId = `${attributeId}_val_${await randomHex(6)}`;
+			plannedValues.push({
+				id: valueId,
+				attributeId,
+				value: valueInput.value,
+				code: valueInput.code,
+				position: valueInput.position,
+				createdAt: args.nowIso,
+				updatedAt: args.nowIso,
+			});
+		}
+	}
+	return { attributes: plannedAttributes, values: plannedValues };
+}
+
 type SlugResolutionHint = {
 	requestedSlug: string;
 	canonicalSlug: string;
@@ -216,54 +257,68 @@ async function replaceVariableProductAttributes(args: {
 		productSkuOptionValues,
 	} = args;
 
-	const existingAttributes = (await productAttributes.query({ where: { productId: product.id } })).items.map((row) => row.data);
+	const existingAttributes = (await queryAllPages((cursor) =>
+		productAttributes.query({ where: { productId: product.id }, cursor, limit: 100 }),
+	)).map((row) => row.data);
 	const existingAttributeIds = existingAttributes.map((attribute) => attribute.id);
 
-	const productSkusResult = await productSkus.query({ where: { productId: product.id } });
-	const productSkuIds = productSkusResult.items.map((row) => row.data.id);
+	const existingSkus = await queryAllPages((cursor) => productSkus.query({ where: { productId: product.id }, cursor, limit: 100 }));
+	const productSkuIds = existingSkus.map((row) => row.data.id);
 
-	if (productSkuIds.length > 0) {
-		const existingOptionRows = await productSkuOptionValues.query({ where: { skuId: { in: productSkuIds } } });
-		for (const optionRow of existingOptionRows.items) {
+	const existingOptionRows = productSkuIds.length === 0
+		? []
+		: await queryAllPages((cursor) =>
+			productSkuOptionValues.query({ where: { skuId: { in: productSkuIds } }, cursor, limit: 100 }),
+		);
+	const existingValueRows = (
+		await Promise.all(
+			existingAttributeIds.map((attributeId) =>
+				queryAllPages((cursor) =>
+					productAttributeValues.query({ where: { attributeId }, cursor, limit: 100 }),
+				),
+			),
+		)
+	).flat();
+	const plan = await buildPlannedAttributeGraph({ product, attributes, nowIso });
+	const plannedAttributeRows = plan.attributes;
+	const plannedValueRows = plan.values;
+	const existingOptionSnapshot = existingOptionRows.map((row) => ({ id: row.id, data: row.data }));
+	const existingValueSnapshot = existingValueRows.map((row) => ({ id: row.id, data: row.data }));
+	const existingAttributeSnapshot = existingAttributes.map((attribute) => ({ id: attribute.id, data: attribute }));
+
+	try {
+		for (const plannedAttribute of plannedAttributeRows) {
+			await productAttributes.put(plannedAttribute.id, plannedAttribute);
+		}
+		for (const plannedValue of plannedValueRows) {
+			await productAttributeValues.put(plannedValue.id, plannedValue);
+		}
+		for (const optionRow of existingOptionRows) {
 			await productSkuOptionValues.delete(optionRow.id);
 		}
-	}
-
-	for (const attributeId of existingAttributeIds) {
-		const existingValues = await productAttributeValues.query({ where: { attributeId } });
-		for (const valueRow of existingValues.items) {
+		for (const valueRow of existingValueRows) {
 			await productAttributeValues.delete(valueRow.id);
 		}
-	}
-	for (const attribute of existingAttributes) {
-		await productAttributes.delete(attribute.id);
-	}
-
-	for (const attributeInput of attributes) {
-		const attributeId = `${product.id}_attr_${await randomHex(6)}`;
-		await productAttributes.put(attributeId, {
-			id: attributeId,
-			productId: product.id,
-			name: attributeInput.name,
-			code: attributeInput.code,
-			kind: attributeInput.kind,
-			position: attributeInput.position,
-			createdAt: nowIso,
-			updatedAt: nowIso,
-		});
-
-		for (const valueInput of attributeInput.values) {
-			const valueId = `${attributeId}_val_${await randomHex(6)}`;
-			await productAttributeValues.put(valueId, {
-				id: valueId,
-				attributeId,
-				value: valueInput.value,
-				code: valueInput.code,
-				position: valueInput.position,
-				createdAt: nowIso,
-				updatedAt: nowIso,
-			});
+		for (const attribute of existingAttributeSnapshot) {
+			await productAttributes.delete(attribute.id);
 		}
+	} catch (error) {
+		for (const plannedValue of plannedValueRows) {
+			await productAttributeValues.delete(plannedValue.id);
+		}
+		for (const plannedAttribute of plannedAttributeRows) {
+			await productAttributes.delete(plannedAttribute.id);
+		}
+		for (const optionRow of existingOptionSnapshot) {
+			await productSkuOptionValues.put(optionRow.id, optionRow.data);
+		}
+		for (const valueRow of existingValueSnapshot) {
+			await productAttributeValues.put(valueRow.id, valueRow.data);
+		}
+		for (const attributeRow of existingAttributeSnapshot) {
+			await productAttributes.put(attributeRow.id, attributeRow.data);
+		}
+		throw error;
 	}
 }
 
@@ -273,8 +328,8 @@ async function pauseVariableSkusForAttributeChange(args: {
 	nowIso: string;
 }): Promise<void> {
 	const { productSkus, productId, nowIso } = args;
-	const result = await productSkus.query({ where: { productId } });
-	for (const row of result.items) {
+	const result = await queryAllPages((cursor) => productSkus.query({ where: { productId }, cursor, limit: 100 }));
+	for (const row of result) {
 		const sku = row.data;
 		if (sku.status === "inactive") {
 			continue;
@@ -372,8 +427,10 @@ async function resolveProductForStorefrontSlug(args: {
 	const maxDepth = 5;
 
 	while (depth < maxDepth) {
-		const match = await products.query({ where: { slug: cursor }, limit: 1 });
-		const matchData = match.items[0]?.data;
+		const match = await queryAllPages((queryCursor) =>
+			products.query({ where: { slug: cursor }, cursor: queryCursor, limit: 100 }),
+		);
+		const matchData = match[0]?.data;
 		if (matchData) {
 			return matchData;
 		}
@@ -382,7 +439,9 @@ async function resolveProductForStorefrontSlug(args: {
 			return null;
 		}
 
-		const legacyRows = (await productSlugHistory.query({ where: { slug: cursor }, limit: 1 })).items;
+		const legacyRows = await queryAllPages((queryCursor) =>
+			productSlugHistory.query({ where: { slug: cursor }, cursor: queryCursor, limit: 100 }),
+		);
 		if (legacyRows.length === 0) {
 			return null;
 		}
@@ -404,7 +463,11 @@ async function loadSlugResolutionHint(args: {
 	requestedSlug: string;
 }): Promise<SlugResolutionHint> {
 	const { products, productSlugHistory, requestedSlug } = args;
-	const directMatch = (await products.query({ where: { slug: requestedSlug }, limit: 1 })).items[0]?.data;
+	const directMatch = (
+		await queryAllPages((pageCursor) =>
+			products.query({ where: { slug: requestedSlug }, cursor: pageCursor, limit: 100 }),
+		)
+	)[0]?.data;
 	if (directMatch) {
 		return {
 			requestedSlug,
@@ -420,7 +483,9 @@ async function loadSlugResolutionHint(args: {
 
 	if (productSlugHistory) {
 		while (depth < maxDepth) {
-			const legacyRows = (await productSlugHistory.query({ where: { slug: cursor }, limit: 1 })).items;
+			const legacyRows = await queryAllPages((queryCursor) =>
+				productSlugHistory.query({ where: { slug: cursor }, cursor: queryCursor, limit: 100 }),
+			);
 			if (legacyRows.length === 0) {
 				break;
 			}
@@ -429,7 +494,11 @@ async function loadSlugResolutionHint(args: {
 				break;
 			}
 			canonicalSlug = legacyData.replacedBy;
-			const canonicalProduct = (await products.query({ where: { slug: canonicalSlug }, limit: 1 })).items[0]?.data;
+			const canonicalProduct = (
+				await queryAllPages((queryCursor) =>
+					products.query({ where: { slug: canonicalSlug }, cursor: queryCursor, limit: 100 }),
+				)
+			)[0]?.data;
 			if (canonicalProduct) {
 				return {
 					requestedSlug,
@@ -816,9 +885,9 @@ export async function handleGetProduct(ctx: RouteContext<ProductGetInput>): Prom
 	if (galleryImages.length > 0) response.galleryImages = galleryImages;
 
 	if (product.type === "variable") {
-		const attributes = (await productAttributes.query({ where: { productId: product.id } })).items.map(
-			(row) => row.data,
-		);
+		const attributes = (await queryAllPages((cursor) =>
+			productAttributes.query({ where: { productId: product.id }, cursor, limit: 100 }),
+		)).map((row) => row.data);
 		const skuOptionValuesBySku = await querySkuOptionValuesBySkuIds(productSkuOptionValues, skuRows.map((sku) => sku.id));
 		const variantImageBySku = await queryProductImagesByRoleForTargets(
 			productAssetLinks,
@@ -1024,7 +1093,8 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 		throw PluginRouteError.badRequest("Cannot add SKUs to an archived product");
 	}
 
-	const existingSkuCount = (await productSkus.query({ where: { productId: product.id } })).items.length;
+	const existingSkus = await queryAllPages((cursor) => productSkus.query({ where: { productId: product.id }, cursor, limit: 100 }));
+	const existingSkuCount = existingSkus.length;
 	assertSimpleProductSkuCapacity(product, existingSkuCount);
 
 	if (product.type !== "variable" && inputOptionValues.length > 0) {
@@ -1032,9 +1102,9 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 	}
 
 	if (product.type === "variable") {
-		const attributesResult = await productAttributes.query({ where: { productId: product.id } });
+		const attributesResult = await queryAllPages((cursor) => productAttributes.query({ where: { productId: product.id }, cursor, limit: 100 }));
 		const variantAttributes = collectVariantDefiningAttributes(
-			attributesResult.items.map((row) => row.data),
+			attributesResult.map((row) => row.data),
 		);
 		if (variantAttributes.length === 0) {
 			throw PluginRouteError.badRequest(`Product ${product.id} has no variant-defining attributes`);
@@ -1043,17 +1113,31 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 		const attributeIds = variantAttributes.map((attribute) => attribute.id);
 		const attributeValueRows = attributeIds.length === 0
 			? []
-			: (await productAttributeValues.query({
-				where: { attributeId: { in: attributeIds } },
-			})).items.map((row) => row.data);
+			: (
+				await queryAllPages((cursor) =>
+					productAttributeValues.query({
+						where: { attributeId: { in: attributeIds } },
+						cursor,
+						limit: 100,
+					}),
+				)
+			).map((row) => row.data);
 
-		const existingSkuResult = await productSkus.query({ where: { productId: product.id } });
-		const existingSkuIds = existingSkuResult.items.map((row) => row.data.id);
+		const existingSkuResult = await queryAllPages((cursor) =>
+			productSkus.query({ where: { productId: product.id }, cursor, limit: 100 }),
+		);
+		const existingSkuIds = existingSkuResult.map((row) => row.data.id);
 		const optionValueRows = existingSkuIds.length === 0
 			? []
-			: (await productSkuOptionValues.query({
-				where: { skuId: { in: existingSkuIds } },
-			})).items.map((row) => row.data);
+			: (
+				await queryAllPages((cursor) =>
+					productSkuOptionValues.query({
+						where: { skuId: { in: existingSkuIds } },
+						cursor,
+						limit: 100,
+					}),
+				)
+			).map((row) => row.data);
 		const optionValuesBySku = new Map<string, Array<{ attributeId: string; attributeValueId: string }>>();
 		for (const option of optionValueRows) {
 			const current = optionValuesBySku.get(option.skuId) ?? [];
@@ -1062,7 +1146,7 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 		}
 
 		const existingSignatures = new Set<string>();
-		for (const row of existingSkuResult.items) {
+		for (const row of existingSkuResult) {
 			const options = optionValuesBySku.get(row.data.id) ?? [];
 			const signature = normalizeSkuOptionSignature(options);
 			if (options.length > 0) {
@@ -1160,8 +1244,10 @@ export async function handleUpdateProductSku(ctx: RouteContext<ProductSkuUpdateI
 		if (!product) {
 			throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not found" });
 		}
-		const productSkusForProduct = await productSkus.query({ where: { productId: product.id } });
-		const includeProductLevelStock = product.type !== "variable" && productSkusForProduct.items.length === 1;
+		const productSkusForProduct = await queryAllPages((queryCursor) =>
+			productSkus.query({ where: { productId: product.id }, cursor: queryCursor, limit: 100 }),
+		);
+		const includeProductLevelStock = product.type !== "variable" && productSkusForProduct.length === 1;
 		await syncInventoryStockForSku(
 			inventoryStock,
 			product,
@@ -1202,11 +1288,15 @@ export async function handleListProductSkus(ctx: RouteContext<ProductSkuListInpu
 	requirePost(ctx);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 
-	const result = await productSkus.query({
-		where: { productId: ctx.input.productId },
-		limit: ctx.input.limit,
-	});
-	const items = result.items.map((row) => row.data);
+	const skus = await queryAllPages((cursor) =>
+		productSkus.query({
+			where: { productId: ctx.input.productId },
+			cursor,
+			limit: 100,
+		}),
+	);
+	const result = skus.slice(0, ctx.input.limit);
+	const items = result.map((row) => row.data);
 
 	return { items };
 }

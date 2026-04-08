@@ -232,16 +232,14 @@ export async function collectLinkedProductIds(
 	where: Record<string, string>,
 ): Promise<Set<string>> {
 	const ids = new Set<string>();
-	let cursor: string | undefined;
-	while (true) {
-		const result = await links.query({ where, cursor, limit: 100 });
-		for (const row of result.items) {
-			ids.add(row.data.productId);
-		}
-		if (!result.hasMore || !result.cursor) {
-			break;
-		}
-		cursor = result.cursor;
+	for (const row of await queryAllPages((cursor) =>
+		links.query({
+			where,
+			cursor,
+			limit: 100,
+		}),
+	)) {
+		ids.add(row.data.productId);
 	}
 	return ids;
 }

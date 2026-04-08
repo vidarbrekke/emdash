@@ -232,6 +232,78 @@ class QueryCountingMemColl<T extends object> extends MemColl<T> {
 	}
 }
 
+class PagedQueryMemColl<T extends object> extends MemColl<T> {
+	constructor(rows = new Map<string, T>(), private readonly pageSize = 100) {
+		super(rows);
+	}
+
+	override async query(options?: {
+		where?: Record<string, unknown>;
+		cursor?: string;
+		limit?: number;
+	}): Promise<{ items: Array<{ id: string; data: T }>; hasMore: boolean; cursor?: string }> {
+		const where = options?.where ?? {};
+		const start = Number.parseInt(options?.cursor ?? "0", 10) || 0;
+		const limit = options?.limit ?? this.pageSize;
+		const rows = [...this.rows.entries()].filter(([, row]) =>
+			Object.entries(where).every(([field, expected]) => {
+				const rowValue = (row as Record<string, unknown>)[field];
+				if (expected && typeof expected === "object" && !Array.isArray(expected)) {
+					const maybeInFilter = expected as { in?: unknown[] };
+					if (Array.isArray(maybeInFilter.in)) {
+						return maybeInFilter.in.includes(rowValue);
+					}
+				}
+				return rowValue === expected;
+			}),
+		);
+		const nextStart = Math.min(start + limit, rows.length);
+		const items = rows
+			.slice(start, nextStart)
+			.map(([id, row]) => ({ id, data: structuredClone(row) }));
+		const hasMore = nextStart < rows.length;
+		return { items, hasMore, cursor: hasMore ? String(nextStart) : undefined };
+	}
+}
+
+function withFailingPutOnNth<T extends object>(collection: MemColl<T>, failOnCall: number, message = "mutation persistence failure"): MemColl<T> {
+	let putCalls = 0;
+	return {
+		get rows() {
+			return collection.rows;
+		},
+		get: collection.get.bind(collection),
+		query: collection.query.bind(collection),
+		put: async (id: string, data: T): Promise<void> => {
+			putCalls += 1;
+			if (putCalls === failOnCall) {
+				throw new Error(message);
+			}
+			await collection.put(id, data);
+		},
+		delete: collection.delete.bind(collection),
+	} as MemColl<T>;
+}
+
+function withFailingDeleteOnNth<T extends object>(collection: MemColl<T>, failOnCall: number, message = "mutation delete failure"): MemColl<T> {
+	let deleteCalls = 0;
+	return {
+		get rows() {
+			return collection.rows;
+		},
+		get: collection.get.bind(collection),
+		query: collection.query.bind(collection),
+		put: collection.put.bind(collection),
+		delete: async (id: string): Promise<boolean> => {
+			deleteCalls += 1;
+			if (deleteCalls === failOnCall) {
+				throw new Error(message);
+			}
+			return collection.delete(id);
+		},
+	} as MemColl<T>;
+}
+
 function catalogCtx<TInput>(
 	input: TInput,
 	products: MemColl<StoredProduct>,
@@ -709,6 +781,205 @@ describe("catalog product handlers", () => {
 		expect(remainingOptions).toHaveLength(0);
 		const currentAttributes = (await productAttributes.query({ where: { productId: "prod_var" } })).items;
 		expect(currentAttributes).toHaveLength(1);
+	});
+
+	it("preserves existing variable product attributes when replacement fails mid-write", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productSkus = new MemColl<StoredProductSku>();
+		const productAttributes = new MemColl<StoredProductAttribute>();
+		const productAttributeValues = new MemColl<StoredProductAttributeValue>();
+		const productSkuOptionValues = new MemColl<StoredProductSkuOptionValue>();
+
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "draft",
+			visibility: "private",
+			slug: "variable-product",
+			title: "Variable Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributes.put("attr_existing", {
+			id: "attr_existing",
+			productId: "prod_var",
+			name: "Size",
+			code: "size",
+			kind: "variant_defining",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributeValues.put("val_existing_s", {
+			id: "val_existing_s",
+			attributeId: "attr_existing",
+			value: "Small",
+			code: "s",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const failingProductAttributeValues = withFailingPutOnNth(productAttributeValues, 1);
+
+		await expect(
+			updateProductHandler(
+				catalogCtx(
+					{
+						productId: "prod_var",
+						attributes: [
+							{
+								name: "Color",
+								code: "color",
+								kind: "variant_defining",
+								position: 0,
+								values: [{ value: "Red", code: "red", position: 0 }],
+							},
+						],
+					},
+					products,
+					productSkus,
+					new MemColl(),
+					new MemColl(),
+					productAttributes,
+					failingProductAttributeValues,
+					productSkuOptionValues,
+				),
+			),
+		).rejects.toThrow("mutation persistence failure");
+
+		const existingAttributes = (await productAttributes.query({ where: { productId: "prod_var" } })).items;
+		expect(existingAttributes).toHaveLength(1);
+		expect(existingAttributes[0]?.data).toMatchObject({
+			id: "attr_existing",
+			code: "size",
+		});
+
+		const existingValues = (await productAttributeValues.query({ where: { attributeId: "attr_existing" } })).items;
+		expect(existingValues).toHaveLength(1);
+		expect(existingValues[0]?.data).toMatchObject({
+			id: "val_existing_s",
+			code: "s",
+			value: "Small",
+		});
+	});
+
+	it("does not lose existing attributes and SKU option mappings when attribute replacement cleanup fails", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productSkus = new MemColl<StoredProductSku>();
+		const productAttributes = new MemColl<StoredProductAttribute>();
+		const productAttributeValues = new MemColl<StoredProductAttributeValue>();
+		const productSkuOptionValues = new MemColl<StoredProductSkuOptionValue>();
+
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "draft",
+			visibility: "private",
+			slug: "variable-product-cleanup-fail",
+			title: "Variable Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributes.put("attr_existing", {
+			id: "attr_existing",
+			productId: "prod_var",
+			name: "Color",
+			code: "color",
+			kind: "variant_defining",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productAttributeValues.put("val_existing_red", {
+			id: "val_existing_red",
+			attributeId: "attr_existing",
+			value: "Red",
+			code: "red",
+			position: 0,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_var",
+			skuCode: "SKU-1",
+			status: "active",
+			unitPriceMinor: 1299,
+			inventoryQuantity: 5,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await productSkuOptionValues.put("sku_1_color_red", {
+			id: "sku_1_color_red",
+			skuId: "sku_1",
+			attributeId: "attr_existing",
+			attributeValueId: "val_existing_red",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const failingProductAttributeValues = withFailingDeleteOnNth(productAttributeValues, 1);
+
+		await expect(
+			updateProductHandler(
+				catalogCtx(
+					{
+						productId: "prod_var",
+						attributes: [
+							{
+								name: "Material",
+								code: "material",
+								kind: "variant_defining",
+								position: 0,
+								values: [{ value: "Wool", code: "wool", position: 0 }],
+							},
+						],
+					},
+					products,
+					productSkus,
+					new MemColl(),
+					new MemColl(),
+					productAttributes,
+					failingProductAttributeValues,
+					productSkuOptionValues,
+				),
+			),
+		).rejects.toThrow("mutation delete failure");
+
+		const existingAttributes = (await productAttributes.query({ where: { productId: "prod_var" } })).items;
+		expect(existingAttributes).toHaveLength(1);
+		expect(existingAttributes[0]?.data).toMatchObject({
+			id: "attr_existing",
+			code: "color",
+		});
+
+		const existingValues = (await failingProductAttributeValues.query({ where: { attributeId: "attr_existing" } })).items;
+		expect(existingValues).toHaveLength(1);
+		expect(existingValues[0]?.data).toMatchObject({
+			id: "val_existing_red",
+			code: "red",
+		});
+
+		const existingOptions = (await productSkuOptionValues.query({ where: { skuId: "sku_1" } })).items;
+		expect(existingOptions).toHaveLength(1);
+		expect(existingOptions[0]?.data).toMatchObject({
+			id: "sku_1_color_red",
+			attributeValueId: "val_existing_red",
+		});
 	});
 
 	it("updates mutable product fields and preserves immutable fields", async () => {
@@ -3226,6 +3497,126 @@ describe("catalog SKU handlers", () => {
 		expect(productSkuOptionValues.queryCount).toBe(1);
 	});
 
+	it("rejects duplicate variable SKU combinations that appear on paginated read pages", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new PagedQueryMemColl<StoredProductSku>();
+		const productAttributes = new MemColl<StoredProductAttribute>();
+		const productAttributeValues = new MemColl<StoredProductAttributeValue>();
+		const productSkuOptionValues = new PagedQueryMemColl<StoredProductSkuOptionValue>();
+		const batchValues = Array.from({ length: 101 }, (_, index) => ({
+			value: `Option ${index}`,
+			code: `option_${index}`,
+			position: index,
+		}));
+
+		const product = await createProductHandler(
+			catalogCtx<ProductCreateInput>({
+				type: "variable",
+				status: "active",
+				visibility: "public",
+				slug: "scalable-variable-duplicate",
+				title: "Scalable variable with duplicate on later page",
+				shortDescription: "",
+				longDescription: "",
+				featured: false,
+				sortOrder: 0,
+				requiresShippingDefault: true,
+				attributes: [
+					{
+						name: "Batch",
+						code: "batch",
+						kind: "variant_defining",
+						position: 0,
+						values: batchValues,
+					},
+				],
+			}, products, new MemColl(), new MemColl(), new MemColl(), productAttributes, productAttributeValues),
+		);
+
+		const sizeAttribute = [...productAttributes.rows.values()].find((attribute) => attribute.code === "batch");
+		const sizeValues = [...productAttributeValues.rows.values()].filter((value) =>
+			value.attributeId === sizeAttribute?.id,
+		);
+		if (!sizeAttribute || sizeValues.length < 2) {
+			throw new Error("Test fixture missing required attributes");
+		}
+		const duplicateCandidateValue = sizeValues[100];
+		if (!duplicateCandidateValue) {
+			throw new Error("Test fixture missing paged attribute value");
+		}
+
+		for (let index = 0; index < 100; index += 1) {
+			await createProductSkuHandler(
+				catalogCtx<ProductSkuCreateInput>(
+					{
+						productId: product.product.id,
+						skuCode: `V-${index + 1}`,
+						status: "active",
+						unitPriceMinor: 900 + index,
+						inventoryQuantity: 5,
+						inventoryVersion: 1,
+						requiresShipping: true,
+						isDigital: false,
+						optionValues: [{ attributeId: sizeAttribute.id, attributeValueId: sizeValues[index]!.id }],
+					},
+					products,
+					skus,
+					new MemColl(),
+					new MemColl(),
+					productAttributes,
+					productAttributeValues,
+					productSkuOptionValues,
+				),
+			);
+		}
+
+		await skus.put("sku_duplicate_late", {
+			id: "sku_duplicate_late",
+			productId: product.product.id,
+			skuCode: "V-DUP-PAGE",
+			status: "active",
+			unitPriceMinor: 999,
+			inventoryQuantity: 5,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-04-07T00:00:00.000Z",
+			updatedAt: "2026-04-07T00:00:00.000Z",
+		});
+		await productSkuOptionValues.put("sku_duplicate_late-size", {
+			id: "sku_duplicate_late-size",
+			skuId: "sku_duplicate_late",
+			attributeId: sizeAttribute.id,
+			attributeValueId: duplicateCandidateValue.id,
+			createdAt: "2026-04-07T00:00:00.000Z",
+			updatedAt: "2026-04-07T00:00:00.000Z",
+		});
+
+		const duplicateAttempt = createProductSkuHandler(
+			catalogCtx<ProductSkuCreateInput>(
+				{
+					productId: product.product.id,
+					skuCode: "V-DUPLICATE",
+					status: "active",
+					unitPriceMinor: 1500,
+					inventoryQuantity: 5,
+					inventoryVersion: 1,
+					requiresShipping: true,
+					isDigital: false,
+					optionValues: [{ attributeId: sizeAttribute.id, attributeValueId: duplicateCandidateValue.id }],
+				},
+				products,
+				skus,
+				new MemColl(),
+				new MemColl(),
+				productAttributes,
+				productAttributeValues,
+				productSkuOptionValues,
+			),
+		);
+		await expect(duplicateAttempt).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+
 	it("updates SKU fields without changing immutable identifiers", async () => {
 		const products = new MemColl<StoredProduct>();
 		const skus = new MemColl<StoredProductSku>();
@@ -5290,6 +5681,50 @@ describe("catalog organization", () => {
 		);
 
 		expect(filtered.items.map((item) => item.product.slug)).toEqual([tailProductSlug]);
+	});
+
+	it("applies global category sorting across paged reads before limiting", async () => {
+		const products = new MemColl<StoredProduct>();
+		const categories = new PagedQueryMemColl<StoredCategory>(new Map());
+		const now = "2026-04-07T12:00:00.000Z";
+
+		for (let index = 0; index < 120; index += 1) {
+			categories.rows.set(`cat_${String(index).padStart(3, "0")}`, {
+				id: `cat_${String(index).padStart(3, "0")}`,
+				name: `Category ${String(index).padStart(3, "0")}`,
+				slug: `zzz-${String(index).padStart(3, "0")}`,
+				position: 1,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		categories.rows.set("cat_top", {
+			id: "cat_top",
+			name: "Top priority",
+			slug: "a-top-priority",
+			position: 0,
+			createdAt: now,
+			updatedAt: now,
+		});
+
+		const listed = await listCategoriesHandler(
+			catalogCtx<CategoryListInput>(
+				{ limit: 1 },
+				products,
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				new MemColl(),
+				categories,
+			),
+		);
+
+		expect(listed.items).toHaveLength(1);
+		expect(listed.items[0]).toMatchObject({ id: "cat_top", slug: "a-top-priority" });
 	});
 
 	it("creates tags and filters listing by tag", async () => {

@@ -81,7 +81,14 @@ export type FinalizePaymentPorts = {
 	log?: FinalizeLogPort;
 };
 
-const WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS = 30_000;
+type FinalizeAtomicSupportArgs = {
+	path: "finalize";
+	hasPutIfAbsent: boolean;
+	hasCompareAndSwap: boolean;
+	allowDegradedMode?: boolean;
+};
+
+export const WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS = 30_000;
 /**
  * Canonical finalize control-flow now always uses strict lease semantics.
  * `COMMERCE_USE_LEASED_FINALIZE` is retained for rollout evidence and
@@ -97,6 +104,10 @@ export type FinalizeWebhookInput = {
 	finalizeToken: string;
 	/** Inject clock in tests. */
 	nowIso?: string;
+};
+export type FinalizePaymentFromWebhookOptions = {
+	now?: () => string;
+	claimLeaseWindowMs?: number;
 };
 
 export type FinalizeWebhookResult =
@@ -123,6 +134,49 @@ function buildFinalizeLogContext(input: FinalizeWebhookInput): FinalizeLogContex
 		externalEventId: input.externalEventId,
 		correlationId: input.correlationId,
 	};
+}
+
+function resolveNow(inputNowIso: string | undefined, now: FinalizePaymentFromWebhookOptions["now"]): () => string {
+	if (now) {
+		return now;
+	}
+	if (typeof inputNowIso === "string") {
+		return () => inputNowIso;
+	}
+	return () => new Date().toISOString();
+}
+
+function resolveClaimLeaseWindowMs(requested: FinalizePaymentFromWebhookOptions["claimLeaseWindowMs"]): number {
+	if (typeof requested !== "number" || !Number.isFinite(requested)) {
+		return WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS;
+	}
+	return Math.max(1, Math.floor(requested));
+}
+
+function claimLeaseState(nowIso: string, claimLeaseWindowMs: number): {
+	claimVersion: string;
+	claimExpiresAt: string;
+} {
+	const nowMs = Date.parse(nowIso);
+	const leaseWindowMs = resolveClaimLeaseWindowMs(claimLeaseWindowMs);
+	return {
+		claimVersion: nowIso,
+		claimExpiresAt: Number.isFinite(nowMs) ? new Date(nowMs + leaseWindowMs).toISOString() : nowIso,
+	};
+}
+
+function assertAtomicMoneyPathSupport(args: FinalizeAtomicSupportArgs): FinalizeWebhookResult | null {
+	if (args.allowDegradedMode) return null;
+	if (!args.hasPutIfAbsent || !args.hasCompareAndSwap) {
+		return {
+			kind: "api_error",
+			error: {
+				code: "ATOMIC_STORAGE_REQUIRED",
+				message: `[commerce:${args.path}] atomic claim support is required`,
+			},
+		};
+	}
+	return null;
 }
 
 /** Stable document id for a webhook receipt (primary-key dedupe per event). */
@@ -220,24 +274,22 @@ type ClaimWebhookReceiptResult =
 	| { kind: "acquired"; persisted: boolean; receipt: StoredWebhookReceipt }
 	| { kind: "replay"; result: FinalizeWebhookResult };
 
-function createClaimContext(nowIso: string): {
+function createClaimContext(nowIso: string, claimLeaseWindowMs: number): {
 	claimOwner: string;
 	claimToken: string;
 	claimVersion: string;
 	claimExpiresAt: string;
 } {
+	const { claimVersion, claimExpiresAt } = claimLeaseState(nowIso, claimLeaseWindowMs);
 	const claimToken =
 		typeof globalThis.crypto?.randomUUID === "function"
 			? globalThis.crypto.randomUUID()
 			: `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
-	const nowMs = Date.parse(nowIso);
-	const claimExpiresAt =
-		Number.isFinite(nowMs) ? new Date(nowMs + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS).toISOString() : nowIso;
 
 	return {
 		claimOwner: `worker:${claimToken}`,
 		claimToken,
-		claimVersion: nowIso,
+		claimVersion,
 		claimExpiresAt,
 	};
 }
@@ -297,17 +349,19 @@ async function claimWebhookReceipt({
 	receiptId,
 	receipt,
 	nowIso,
+	claimLeaseWindowMs,
 }: {
 	ports: FinalizePaymentPorts;
 	receiptId: string;
 	receipt: StoredWebhookReceipt;
 	nowIso: string;
+	claimLeaseWindowMs: number;
 }): Promise<ClaimWebhookReceiptResult> {
 	if (!ports.webhookReceipts.putIfAbsent) {
 		return { kind: "acquired", persisted: false, receipt };
 	}
 
-	const claimContext = createClaimContext(nowIso);
+	const claimContext = createClaimContext(nowIso, claimLeaseWindowMs);
 	const stagedReceipt = createPendingReceipt(
 		{
 			orderId: receipt.orderId,
@@ -454,6 +508,69 @@ function getActiveClaim(receipt: StoredWebhookReceipt):
 	};
 }
 
+function withClaimLeaseRefresh(
+	receipt: StoredWebhookReceipt,
+	nowIso: string,
+	claimOwner: string,
+	claimToken: string,
+	claimLeaseWindowMs: number,
+): StoredWebhookReceipt {
+	const { claimVersion, claimExpiresAt } = claimLeaseState(nowIso, claimLeaseWindowMs);
+	return {
+		...receipt,
+		claimState: "claimed",
+		claimOwner,
+		claimToken,
+		claimVersion,
+		claimExpiresAt,
+		updatedAt: nowIso,
+	};
+}
+
+type RefreshClaimResult =
+	| { kind: "replay"; result: FinalizeWebhookResult }
+	| { kind: "acquired"; receipt: StoredWebhookReceipt };
+
+async function assertAndRefreshClaim(
+	ports: FinalizePaymentPorts,
+	receiptId: string,
+	pendingReceipt: StoredWebhookReceipt,
+	nowIso: string,
+	claimLeaseWindowMs: number,
+): Promise<RefreshClaimResult> {
+	const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+	if (claimCheck) {
+		return { kind: "replay", result: claimCheck };
+	}
+
+	const activeClaim = getActiveClaim(pendingReceipt);
+	if (!activeClaim) {
+		return { kind: "acquired", receipt: pendingReceipt };
+	}
+
+	const refreshed = withClaimLeaseRefresh(
+		pendingReceipt,
+		nowIso,
+		activeClaim.claimOwner,
+		activeClaim.claimToken,
+		claimLeaseWindowMs,
+	);
+	if (!ports.webhookReceipts.compareAndSwap) {
+		return { kind: "acquired", receipt: pendingReceipt };
+	}
+
+	const refreshedReceipt = await ports.webhookReceipts.compareAndSwap(
+		receiptId,
+		pendingReceipt.updatedAt,
+		refreshed,
+	);
+	if (!refreshedReceipt) {
+		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+	}
+
+	return { kind: "acquired", receipt: refreshed };
+}
+
 async function assertClaimStillActive(
 	ports: FinalizePaymentPorts,
 	receiptId: string,
@@ -560,10 +677,19 @@ async function markPaymentAttemptSucceeded(
 export async function finalizePaymentFromWebhook(
 	ports: FinalizePaymentPorts,
 	input: FinalizeWebhookInput,
+	options: FinalizePaymentFromWebhookOptions = {},
 ): Promise<FinalizeWebhookResult> {
-	const nowIso = input.nowIso ?? new Date().toISOString();
+	const now = resolveNow(input.nowIso, options.now);
+	const claimLeaseWindowMs = resolveClaimLeaseWindowMs(options.claimLeaseWindowMs);
+	const nowIso = now();
 	const logContext = buildFinalizeLogContext(input);
 	const receiptId = webhookReceiptDocId(input.providerId, input.externalEventId);
+	const atomicSupport = assertAtomicMoneyPathSupport({
+		path: "finalize",
+		hasPutIfAbsent: typeof ports.webhookReceipts.putIfAbsent === "function",
+		hasCompareAndSwap: typeof ports.webhookReceipts.compareAndSwap === "function",
+	});
+	if (atomicSupport) return atomicSupport;
 
 	const order = await ports.orders.get(input.orderId);
 	if (!order) {
@@ -607,6 +733,7 @@ export async function finalizePaymentFromWebhook(
 		receiptId,
 		receipt: stagedReceipt,
 		nowIso,
+		claimLeaseWindowMs,
 	});
 	if (claim.kind === "replay") {
 		ports.log?.info("commerce.finalize.noop", {
@@ -616,17 +743,26 @@ export async function finalizePaymentFromWebhook(
 		return claim.result;
 	}
 
-	const pendingReceipt = claim.receipt;
+	let pendingReceipt = claim.receipt;
 	if (!claim.persisted) {
 		await ports.webhookReceipts.put(receiptId, pendingReceipt);
 	}
+	const refreshClaim = async (): Promise<FinalizeWebhookResult | null> => {
+		const claimNow = now();
+		const refreshedClaim = await assertAndRefreshClaim(ports, receiptId, pendingReceipt, claimNow, claimLeaseWindowMs);
+		if (refreshedClaim.kind === "replay") {
+			return refreshedClaim.result;
+		}
+		pendingReceipt = refreshedClaim.receipt;
+		return null;
+	};
 	ports.log?.info("commerce.finalize.receipt_pending", {
 		...logContext,
 		stage: "pending_receipt_written",
 		priorReceiptStatus: decision.existingReceipt?.status,
 	});
-		{
-			const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+	{
+		const claimCheck = await refreshClaim();
 		if (claimCheck) return claimCheck;
 	}
 
@@ -643,15 +779,16 @@ export async function finalizePaymentFromWebhook(
 		 * Treat as terminal and escalate rather than auto-retrying indefinitely.
 		 */
 		{
-			const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+			const claimCheck = await refreshClaim();
 			if (claimCheck) return claimCheck;
 		}
+		const orderNotFoundNow = now();
 		await persistReceiptStatus(
 			ports,
 			receiptId,
 			pendingReceipt,
 			"error",
-			nowIso,
+			orderNotFoundNow,
 			"ORDER_NOT_FOUND",
 			{ orderId: input.orderId, correlationId: input.correlationId },
 		);
@@ -675,15 +812,16 @@ export async function finalizePaymentFromWebhook(
 			 * and operators get a clear terminal signal.
 			 */
 			{
-				const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+				const claimCheck = await refreshClaim();
 				if (claimCheck) return claimCheck;
 			}
+			const conflictNow = now();
 			await persistReceiptStatus(
 				ports,
 				receiptId,
 				pendingReceipt,
 				"error",
-				nowIso,
+				conflictNow,
 				"ORDER_STATE_CONFLICT",
 				{ paymentPhase: freshOrder.paymentPhase },
 			);
@@ -699,16 +837,17 @@ export async function finalizePaymentFromWebhook(
 
 		try {
 			{
-				const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+				const claimCheck = await refreshClaim();
 				if (claimCheck) return claimCheck;
 			}
 			ports.log?.info("commerce.finalize.inventory_reconcile", {
 				...logContext,
 				paymentPhase: freshOrder.paymentPhase,
 			});
-			await applyInventoryForOrder(ports, freshOrder, input.orderId, nowIso);
+			const inventoryNow = now();
+			await applyInventoryForOrder(ports, freshOrder, input.orderId, inventoryNow);
 			{
-				const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+				const claimCheck = await refreshClaim();
 				if (claimCheck) return claimCheck;
 			}
 			ports.log?.info("commerce.finalize.inventory_applied", {
@@ -725,15 +864,16 @@ export async function finalizePaymentFromWebhook(
 						details: err.details,
 					});
 					{
-						const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+						const claimCheck = await refreshClaim();
 						if (claimCheck) return claimCheck;
 					}
+					const inventoryErrorNow = now();
 					await persistReceiptStatus(
 						ports,
 						receiptId,
 						pendingReceipt,
 						"error",
-						nowIso,
+						inventoryErrorNow,
 						mapInventoryFinalizeErrorToReceiptCode(err.code),
 						{
 							...err.details,
@@ -767,14 +907,15 @@ export async function finalizePaymentFromWebhook(
 			orderId: input.orderId,
 			paymentPhase: freshOrder.paymentPhase,
 		});
+		const paidNow = now();
 		const paidOrder: StoredOrder = {
 			...freshOrder,
 			paymentPhase: "paid",
-			updatedAt: nowIso,
+			updatedAt: paidNow,
 		};
 		try {
 			{
-				const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+				const claimCheck = await refreshClaim();
 				if (claimCheck) return claimCheck;
 			}
 			await ports.orders.put(input.orderId, paidOrder);
@@ -796,7 +937,7 @@ export async function finalizePaymentFromWebhook(
 
 	try {
 		{
-			const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+			const claimCheck = await refreshClaim();
 			if (claimCheck) return claimCheck;
 		}
 		ports.log?.info("commerce.finalize.payment_attempt_update_attempt", {
@@ -804,9 +945,10 @@ export async function finalizePaymentFromWebhook(
 			orderId: input.orderId,
 			providerId: input.providerId,
 		});
-		await markPaymentAttemptSucceeded(ports, input.orderId, input.providerId, nowIso);
+		const attemptNow = now();
+		await markPaymentAttemptSucceeded(ports, input.orderId, input.providerId, attemptNow);
 		{
-			const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+			const claimCheck = await refreshClaim();
 			if (claimCheck) return claimCheck;
 		}
 	} catch (err) {
@@ -831,14 +973,15 @@ export async function finalizePaymentFromWebhook(
 	 */
 	try {
 		{
-			const claimCheck = await assertClaimStillActive(ports, receiptId, pendingReceipt, nowIso);
+			const claimCheck = await refreshClaim();
 			if (claimCheck) return claimCheck;
 		}
 		ports.log?.info("commerce.finalize.receipt_processed", {
 			...logContext,
 			stage: "finalize",
 		});
-		await persistReceiptStatus(ports, receiptId, pendingReceipt, "processed", nowIso);
+		const processedNow = now();
+		await persistReceiptStatus(ports, receiptId, pendingReceipt, "processed", processedNow);
 	} catch (err) {
 		ports.log?.warn("commerce.finalize.receipt_processed_write_failed", {
 			...logContext,

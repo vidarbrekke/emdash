@@ -9,6 +9,7 @@ import type {
 	StoredWebhookReceipt,
 } from "../types.js";
 import {
+	WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS,
 	finalizePaymentFromWebhook,
 	type FinalizePaymentPorts,
 	inventoryStockDocId,
@@ -100,6 +101,7 @@ class MemColl<T extends object> {
 function withOneTimePutFailure<T extends object>(collection: MemColl<T>): MemColl<T> {
 	let shouldFail = true;
 	return {
+		...(collection as Record<string, unknown>),
 		get rows() {
 			return collection.rows;
 		},
@@ -123,6 +125,7 @@ function withNthPutFailure<T extends object>(
 	let callCount = 0;
 	let hasFailed = false;
 	return {
+		...(collection as Record<string, unknown>),
 		get rows() {
 			return collection.rows;
 		},
@@ -137,6 +140,16 @@ function withNthPutFailure<T extends object>(
 			await collection.put(id, data);
 		},
 	} as MemColl<T>;
+}
+
+function withDeterministicClock(ticks: string[]): () => string {
+	let index = 0;
+	return () => {
+		const safeIndex = Math.min(index, Math.max(0, ticks.length - 1));
+		const nowIso = ticks[safeIndex];
+		index += 1;
+		return nowIso;
+	};
 }
 
 type MemCollWithPutIfAbsent<T extends object> = MemColl<T> & {
@@ -190,9 +203,10 @@ function portsFromState(state: {
 	inventoryLedger: Map<string, StoredInventoryLedgerEntry>;
 	inventoryStock: Map<string, StoredInventoryStock>;
 }): TestFinalizePaymentPorts {
+	const webhookReceipts = memCollWithPutIfAbsent(new MemColl(state.webhookReceipts));
 	return {
 		orders: new MemColl(state.orders),
-		webhookReceipts: new MemColl(state.webhookReceipts),
+		webhookReceipts,
 		paymentAttempts: new MemColl(state.paymentAttempts),
 		inventoryLedger: new MemColl(state.inventoryLedger),
 		inventoryStock: new MemColl(state.inventoryStock),
@@ -287,6 +301,231 @@ describe("finalizePaymentFromWebhook", () => {
 
 		const pa = await ports.paymentAttempts.get("pa_1");
 		expect(pa?.status).toBe("succeeded");
+	});
+
+	it("rejects finalize when atomic claim primitives are unavailable", async () => {
+		const orderId = "order_atomic_required_finalize";
+		const state = {
+			orders: new Map<string, StoredOrder>([[orderId, baseOrder()]]),
+			webhookReceipts: new Map<string, StoredWebhookReceipt>(),
+			paymentAttempts: new Map<string, StoredPaymentAttempt>([
+				[
+					"pa_atomic_required",
+					{
+						orderId,
+						providerId: "stripe",
+						status: "pending",
+						createdAt: now,
+						updatedAt: now,
+					},
+				],
+			]),
+			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
+			inventoryStock: new Map<string, StoredInventoryStock>([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 3,
+						quantity: 10,
+						updatedAt: now,
+					},
+				],
+			]),
+		};
+		const ports = portsFromState(state);
+		const nonAtomicPorts = {
+			...ports,
+			webhookReceipts: asMemCollection(new MemColl(state.webhookReceipts)),
+		} as TestFinalizePaymentPorts;
+
+		const res = await finalizePaymentFromWebhook(nonAtomicPorts, {
+			orderId,
+			providerId: "stripe",
+			externalEventId: "evt_atomic_required_finalize",
+			correlationId: "cid-atomic-required",
+			finalizeToken: FINALIZE_RAW,
+			nowIso: now,
+		});
+
+		expect(res).toMatchObject({
+			kind: "api_error",
+			error: {
+				code: "ATOMIC_STORAGE_REQUIRED",
+			},
+		});
+	});
+
+	it("replays while a fresh claim lease is active and reclaims after lease expiry", async () => {
+		const orderId = "order_lease_expiration_window";
+		const claimId = "evt_lease_expiration_window";
+		const extId = `evt_${claimId}`;
+		const freshNow = now;
+		const expiresAt = new Date(Date.parse(freshNow) + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS).toISOString();
+		const state = {
+			orders: new Map<string, StoredOrder>([[orderId, baseOrder()]]),
+			webhookReceipts: new Map<string, StoredWebhookReceipt>([
+				[
+					webhookReceiptDocId("stripe", extId),
+					{
+						providerId: "stripe",
+						externalEventId: extId,
+						orderId,
+						status: "pending",
+						correlationId: "cid-lease-window",
+						createdAt: freshNow,
+						updatedAt: freshNow,
+						claimState: "claimed",
+						claimOwner: "worker:stale",
+						claimToken: "stale-token",
+						claimVersion: freshNow,
+						claimExpiresAt: expiresAt,
+					},
+				],
+			]),
+			paymentAttempts: new Map<string, StoredPaymentAttempt>([
+				[
+					"pa_lease_window",
+					{
+						orderId,
+						providerId: "stripe",
+						status: "pending",
+						createdAt: now,
+						updatedAt: now,
+					},
+				],
+			]),
+			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
+			inventoryStock: new Map<string, StoredInventoryStock>([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 3,
+						quantity: 10,
+						updatedAt: now,
+					},
+				],
+			]),
+		};
+		const ports = portsFromState(state);
+		const inFlightRes = await finalizePaymentFromWebhook(ports, {
+			orderId,
+			providerId: "stripe",
+			externalEventId: extId,
+			correlationId: "cid-lease-window",
+			finalizeToken: FINALIZE_RAW,
+			nowIso: freshNow,
+		});
+		expect(inFlightRes).toMatchObject({ kind: "replay", reason: "webhook_receipt_in_flight" });
+
+		const afterLease = new Date(Date.parse(freshNow) + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS + 1).toISOString();
+		const completedRes = await finalizePaymentFromWebhook(ports, {
+			orderId,
+			providerId: "stripe",
+			externalEventId: extId,
+			correlationId: "cid-lease-window",
+			finalizeToken: FINALIZE_RAW,
+			nowIso: afterLease,
+		});
+		expect(completedRes).toMatchObject({ kind: "completed", orderId });
+	});
+
+	it("extends a claim during a long finalize path when a shorter lease window is configured", async () => {
+		const orderId = "order_lease_extension";
+		const extId = "evt_lease_extension";
+		const start = "2026-04-02T12:00:00.000Z";
+		const customLeaseMs = 10_000;
+		const firstAttemptClocks = withDeterministicClock([
+			start,
+			"2026-04-02T12:00:05.000Z",
+			"2026-04-02T12:00:08.000Z",
+			"2026-04-02T12:00:08.000Z",
+			"2026-04-02T12:00:12.000Z",
+			"2026-04-02T12:00:18.000Z",
+			"2026-04-02T12:00:18.000Z",
+		]);
+		const state = {
+			orders: new Map<string, StoredOrder>([[orderId, baseOrder()]]),
+			webhookReceipts: new Map<string, StoredWebhookReceipt>(),
+			paymentAttempts: new Map<string, StoredPaymentAttempt>([
+				[
+					"pa_lease_extension",
+					{
+						orderId,
+						providerId: "stripe",
+						status: "pending",
+						createdAt: now,
+						updatedAt: now,
+					},
+				],
+			]),
+			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
+			inventoryStock: new Map<string, StoredInventoryStock>([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 3,
+						quantity: 10,
+						updatedAt: now,
+					},
+				],
+			]),
+		};
+		const ports = portsFromState(state);
+		const failOnOrderPut = {
+			...ports,
+			orders: withOneTimePutFailure(asMemCollection(ports.orders)),
+		} as TestFinalizePaymentPorts;
+
+		const firstAttempt = await finalizePaymentFromWebhook(
+			failOnOrderPut,
+			{
+				orderId,
+				providerId: "stripe",
+				externalEventId: extId,
+				correlationId: "cid-lease-extension",
+				finalizeToken: FINALIZE_RAW,
+				nowIso: start,
+			},
+			{
+				now: firstAttemptClocks,
+				claimLeaseWindowMs: customLeaseMs,
+			},
+		);
+		expect(firstAttempt).toMatchObject({
+			kind: "api_error",
+			error: { code: "ORDER_STATE_CONFLICT" },
+		});
+
+		const receipt = await ports.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
+		expect(receipt?.status).toBe("pending");
+		expect(receipt?.claimState).toBe("claimed");
+		expect(receipt?.claimExpiresAt).toBe(new Date(Date.parse("2026-04-02T12:00:18.000Z") + customLeaseMs).toISOString());
+
+		const secondAttemptClocks = withDeterministicClock(["2026-04-02T12:00:30.000Z", "2026-04-02T12:00:30.000Z"]);
+		const secondAttempt = await finalizePaymentFromWebhook(
+			ports,
+			{
+				orderId,
+				providerId: "stripe",
+				externalEventId: extId,
+				correlationId: "cid-lease-extension",
+				finalizeToken: FINALIZE_RAW,
+				nowIso: now,
+			},
+			{
+				now: secondAttemptClocks,
+				claimLeaseWindowMs: customLeaseMs,
+			},
+		);
+		expect(secondAttempt).toMatchObject({ kind: "completed", orderId });
+		const processedReceipt = await ports.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
+		expect(processedReceipt?.status).toBe("processed");
 	});
 
 	it("merges duplicate SKU lines into one inventory movement", async () => {
@@ -574,12 +813,13 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(second).toEqual({ kind: "completed", orderId });
+		expect(second).toMatchObject({ kind: "replay" });
+		expect(second.reason).toMatch(/webhook_receipt_/);
 
 		const paidOrder = await basePorts.orders.get(orderId);
-		expect(paidOrder?.paymentPhase).toBe("paid");
+		expect(paidOrder?.paymentPhase).toBe("payment_pending");
 		const receipt = await basePorts.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
-		expect(receipt?.status).toBe("processed");
+		expect(receipt?.status).toBe("pending");
 	});
 
 	it("retries safely when payment-attempt finalization fails", async () => {
@@ -650,15 +890,16 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(second).toEqual({ kind: "completed", orderId });
+		expect(second).toMatchObject({ kind: "replay" });
+		expect(second.reason).toMatch(/webhook_receipt_/);
 
 		const succeededAttempt = await ports.paymentAttempts.query({
 			where: { orderId: orderId, providerId: "stripe", status: "succeeded" },
 			limit: 5,
 		});
-		expect(succeededAttempt.items).toHaveLength(1);
+		expect(succeededAttempt.items).toHaveLength(0);
 		const retryReceipt = await ports.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
-		expect(retryReceipt?.status).toBe("processed");
+		expect(retryReceipt?.status).toBe("pending");
 	});
 
 	it("rejects finalize when token is missing but order requires one", async () => {
@@ -1302,11 +1543,12 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(second).toEqual({ kind: "completed", orderId });
+		expect(second).toMatchObject({ kind: "replay" });
+		expect(second.reason).toMatch(/webhook_receipt_/);
 
 		const stockAfterRetry = await basePorts.inventoryStock.get(stockDocId);
-		expect(stockAfterRetry?.version).toBe(4); // stock updated
-		expect(stockAfterRetry?.quantity).toBe(8); // 10 - 2
+		expect(stockAfterRetry?.version).toBe(3); // unchanged while claim remains in-flight
+		expect(stockAfterRetry?.quantity).toBe(10); // unchanged while claim remains in-flight
 
 		const ledgerAfterRetry = await basePorts.inventoryLedger.query({ limit: 10 });
 		expect(ledgerAfterRetry.items).toHaveLength(1); // no duplicate ledger row
@@ -1314,11 +1556,11 @@ describe("finalizePaymentFromWebhook", () => {
 		const status = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
 		expect(status).toMatchObject({
 			isInventoryApplied: true,
-			isOrderPaid: true,
-			isPaymentAttemptSucceeded: true,
-			isReceiptProcessed: true,
-			receiptStatus: "processed",
-			resumeState: "replay_processed",
+			isOrderPaid: false,
+			isPaymentAttemptSucceeded: false,
+			isReceiptProcessed: false,
+			receiptStatus: "pending",
+			resumeState: "pending_order",
 		});
 	});
 
@@ -1410,18 +1652,19 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(second).toEqual({ kind: "completed", orderId });
+		expect(second).toMatchObject({ kind: "replay" });
+		expect(second.reason).toMatch(/webhook_receipt_/);
 
 		const attemptAfterRetry = await basePorts.paymentAttempts.get("pa_retry_attempt");
-		expect(attemptAfterRetry?.status).toBe("succeeded");
+		expect(attemptAfterRetry?.status).toBe("pending");
 		const status = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
 		expect(status).toMatchObject({
-			receiptStatus: "processed",
+			receiptStatus: "pending",
 			isInventoryApplied: true,
 			isOrderPaid: true,
-			isPaymentAttemptSucceeded: true,
-			isReceiptProcessed: true,
-			resumeState: "replay_processed",
+			isPaymentAttemptSucceeded: false,
+			isReceiptProcessed: false,
+			resumeState: "pending_attempt",
 		});
 
 		const ledger = await basePorts.inventoryLedger.query({ limit: 10 });
@@ -1460,12 +1703,14 @@ describe("finalizePaymentFromWebhook", () => {
 		const basePorts = portsFromState(state);
 		// The second webhookReceipts.put (status→processed) fails; the first
 		// (status→pending) must succeed so the receipt is left in pending state.
+	const webhookReceipts = memCollWithPutIfAbsent(basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>);
 		const ports = {
 			...basePorts,
-			webhookReceipts: withNthPutFailure(
-			asMemCollection(basePorts.webhookReceipts),
-			2,
-			),
+		webhookReceipts: {
+			...(withNthPutFailure(webhookReceipts, 1) as MemColl<StoredWebhookReceipt>),
+			putIfAbsent: webhookReceipts.putIfAbsent,
+			compareAndSwap: webhookReceipts.compareAndSwap,
+		},
 		};
 
 		// First attempt: throws when writing status→processed.
@@ -1505,16 +1750,17 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(second).toEqual({ kind: "completed", orderId });
+		expect(second).toMatchObject({ kind: "replay" });
+		expect(second.reason).toMatch(/webhook_receipt_/);
 
 		const finalStatus = await queryFinalizationStatus(basePorts, orderId, "stripe", extId);
 		expect(finalStatus).toMatchObject({
 			isInventoryApplied: true,
 			isOrderPaid: true,
 			isPaymentAttemptSucceeded: true,
-			isReceiptProcessed: true,
-			receiptStatus: "processed",
-			resumeState: "replay_processed",
+			isReceiptProcessed: false,
+			receiptStatus: "pending",
+			resumeState: "pending_receipt",
 		});
 	});
 
@@ -1618,10 +1864,18 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizePaymentFromWebhook(portsWithLogs, input),
 		]);
 
-		// In-process race windows may drive both through `proceed`; idempotent writes
-		// should still converge on one terminal state.
-		expect(r1).toEqual({ kind: "completed", orderId });
-		expect(r2).toEqual({ kind: "completed", orderId });
+		// In-process race windows may drive one through completion while another returns replay.
+		expect([r1, r2]).toEqual(
+			expect.arrayContaining([expect.objectContaining({ kind: "completed", orderId })]),
+		);
+		expect([r1, r2]).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					kind: "replay",
+					reason: expect.stringContaining("webhook_receipt_"),
+				}),
+			]),
+		);
 
 		// Stock is decremented exactly once (idempotent overwrites, same values).
 		const finalStock = await ports.inventoryStock.get(stockDocId);
@@ -1738,20 +1992,7 @@ describe("finalizePaymentFromWebhook", () => {
 		};
 
 		const basePorts = portsFromState(state);
-		const claimableReceipts = basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>;
-		const ports = {
-			...basePorts,
-			webhookReceipts: {
-				get: claimableReceipts.get.bind(claimableReceipts),
-				query: claimableReceipts.query.bind(claimableReceipts),
-				put: claimableReceipts.put.bind(claimableReceipts),
-				putIfAbsent: async (id: string, data: StoredWebhookReceipt): Promise<boolean> => {
-					if (claimableReceipts.rows.has(id)) return false;
-					await claimableReceipts.put(id, data);
-					return true;
-				},
-			} as FinalizePaymentPorts["webhookReceipts"],
-		} as FinalizePaymentPorts;
+	const ports = basePorts as FinalizePaymentPorts;
 		const input = {
 			orderId,
 			providerId: "stripe",
@@ -1827,18 +2068,26 @@ describe("finalizePaymentFromWebhook", () => {
 
 		const basePorts = portsFromState(state);
 		const claimableReceipts = basePorts.webhookReceipts as MemColl<StoredWebhookReceipt>;
+	const compareAndSwap = async (id: string, expectedVersion: string, data: StoredWebhookReceipt): Promise<boolean> => {
+		const existing = claimableReceipts.rows.get(id);
+		if (!existing) return false;
+		if (existing.updatedAt !== expectedVersion) return false;
+		claimableReceipts.rows.set(id, data);
+		return true;
+	};
 		const ports = {
 			...basePorts,
 			webhookReceipts: {
 				get: claimableReceipts.get.bind(claimableReceipts),
 				query: claimableReceipts.query.bind(claimableReceipts),
 				put: claimableReceipts.put.bind(claimableReceipts),
+			compareAndSwap,
 				putIfAbsent: async (id: string, data: StoredWebhookReceipt): Promise<boolean> => {
 					if (claimableReceipts.rows.has(id)) return false;
 					await claimableReceipts.put(id, data);
 					return true;
 				},
-			} as FinalizePaymentPorts["webhookReceipts"],
+		} as FinalizePaymentPorts["webhookReceipts"],
 		} as FinalizePaymentPorts;
 		const res = await finalizePaymentFromWebhook(ports, {
 			orderId,
@@ -2464,7 +2713,12 @@ describe("finalizePaymentFromWebhook", () => {
 		);
 		expect(results).toHaveLength(8);
 		for (const result of results) {
-			expect(result).toEqual({ kind: "completed", orderId });
+			expect(["completed", "replay"]).toContain(result.kind);
+			if (result.kind === "replay") {
+				expect(result).toHaveProperty("reason");
+			} else {
+				expect(result).toMatchObject({ orderId });
+			}
 		}
 
 		const finalStock = await ports.inventoryStock.get(stockDocId);

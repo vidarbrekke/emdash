@@ -46,6 +46,7 @@ export const COMMERCE_ERRORS = {
 	PAYMENT_CONFIRMATION_FAILED: { httpStatus: 502, retryable: false },
 	PAYMENT_ALREADY_PROCESSED: { httpStatus: 409, retryable: false },
 	PROVIDER_UNAVAILABLE: { httpStatus: 503, retryable: true },
+	ATOMIC_STORAGE_REQUIRED: { httpStatus: 500, retryable: false },
 
 	// Webhooks
 	WEBHOOK_SIGNATURE_INVALID: { httpStatus: 401, retryable: false },
@@ -94,6 +95,7 @@ export const COMMERCE_ERROR_WIRE_CODES = {
 	PAYMENT_CONFIRMATION_FAILED: "payment_confirmation_failed",
 	PAYMENT_ALREADY_PROCESSED: "payment_already_processed",
 	PROVIDER_UNAVAILABLE: "provider_unavailable",
+	ATOMIC_STORAGE_REQUIRED: "atomic_storage_required",
 	WEBHOOK_SIGNATURE_INVALID: "webhook_signature_invalid",
 	WEBHOOK_REPLAY_DETECTED: "webhook_replay_detected",
 	INVALID_DISCOUNT: "invalid_discount",

@@ -45,9 +45,21 @@ Preferred operational events:
 - malformed or missing `claimExpiresAt` is treated as replay-safe (`claim_retry_failed`) instead of silently continuing side-effect writes,
 - finalization remains bounded by live claim validation before each mutable write stage (`inventory`, `order`, `attempt`, `receipt`),
 - strict mode still allows reclaim of valid stale claims (`now > claimExpiresAt`) and preserves in-flight lock semantics.
+- claim lease width is `WEBHOOK_RECEIPT_CLAIM_WINDOW_MS` by default, and `claimLeaseWindowMs` is available on
+  `finalizePaymentFromWebhook(...)` for deterministic testing.
+- in-progress claims are proactively refreshed at guarded checkpoints so a long finalize path can retain ownership across
+  the full write sequence when the initial lease would otherwise expire.
 
 Operational evidence for this stage is recorded in the current strategy and regression
 checklists as active proof trails.
+
+## 1d) Atomic claim capability prerequisites
+
+- `webhookReceipts` must expose `putIfAbsent` and `compareAndSwap` for finalized webhook calls.
+- If either capability is unavailable, `finalizePaymentFromWebhook()` returns
+  `api_error: ATOMIC_STORAGE_REQUIRED` and does not start side effects.
+- `src/orchestration/finalize-payment.test.ts` includes dedicated coverage to assert that
+  missing atomic support is rejected before receipt claim attempts.
 
 ## 2) Duplicate delivery & partial-failure replay matrix
 

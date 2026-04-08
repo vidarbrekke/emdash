@@ -70,6 +70,41 @@ class MemColl<T extends object> {
 	}
 }
 
+type MemCollectionWithAtomicOps<T extends object> = MemColl<T> & {
+	putIfAbsent(id: string, data: T): Promise<boolean>;
+	compareAndSwap(id: string, expectedVersion: string, data: T): Promise<boolean>;
+};
+
+function withAtomicIdempotencyKeys<T extends object>(collection: MemColl<T>): MemCollectionWithAtomicOps<T> {
+	const atomic = collection as MemCollectionWithAtomicOps<T>;
+	if (
+		typeof atomic.putIfAbsent === "function" &&
+		typeof atomic.compareAndSwap === "function"
+	) {
+		return atomic;
+	}
+	return {
+		rows: collection.rows,
+		get: collection.get.bind(collection),
+		put: collection.put.bind(collection),
+		delete: collection.delete.bind(collection),
+		query: collection.query.bind(collection),
+		putIfAbsent: async (id: string, data: T): Promise<boolean> => {
+			if (collection.rows.has(id)) return false;
+			await collection.put(id, data);
+			return true;
+		},
+		compareAndSwap: async (id: string, expectedVersion: string, data: T): Promise<boolean> => {
+			const current = collection.rows.get(id);
+			if (!current) return false;
+			const version = (current as Record<string, unknown>).createdAt;
+			if (typeof version !== "string" || version !== expectedVersion) return false;
+			await collection.put(id, data);
+			return true;
+		},
+	} as MemCollectionWithAtomicOps<T>;
+}
+
 function decodeStockDocId(id: string): { productId: string; variantId: string } | null {
 	const prefix = "stock:";
 	if (!id.startsWith(prefix)) return null;
@@ -193,6 +228,8 @@ function checkoutCtx(
 	inventoryStock: MemColl<StoredInventoryStock>,
 	kv: MemKv,
 ): RouteContext<CheckoutInput> {
+	const idempotencyCollection = withAtomicIdempotencyKeys(idempotencyKeys);
+
 	return asRouteContext<CheckoutInput>({
 		request: new Request("https://example.test/checkout", {
 			method: "POST",
@@ -207,7 +244,7 @@ function checkoutCtx(
 			carts,
 			orders,
 			paymentAttempts,
-			idempotencyKeys,
+			idempotencyKeys: idempotencyCollection,
 			inventoryStock,
 			products: new DefaultProductsColl(),
 			bundleComponents: new MemColl<StoredBundleComponent>(),

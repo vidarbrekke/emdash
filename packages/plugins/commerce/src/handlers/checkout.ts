@@ -61,6 +61,13 @@ type CheckoutLockCollection = StorageCollection<StoredIdempotencyKey> & {
 	compareAndSwap?: (id: string, expectedVersion: string, data: StoredIdempotencyKey) => Promise<boolean>;
 };
 
+type CheckoutAtomicSupportArgs = {
+	path: "checkout";
+	hasPutIfAbsent: boolean;
+	hasCompareAndSwap: boolean;
+	allowDegradedMode?: boolean;
+};
+
 type CheckoutCartLock = {
 	kind: "checkout_cart_lock";
 	cartId: string;
@@ -71,6 +78,16 @@ type CheckoutCartLock = {
 const CHECKOUT_CART_LOCK_ROUTE = "checkout-cart-lock";
 const CHECKOUT_CART_LOCK_KIND = "checkout_cart_lock";
 const CHECKOUT_CART_LOCK_TTL_MS = 30_000;
+
+function assertAtomicMoneyPathSupport(args: CheckoutAtomicSupportArgs): void {
+	if (args.allowDegradedMode) return;
+	if (!args.hasPutIfAbsent || !args.hasCompareAndSwap) {
+		throwCommerceApiError({
+			code: "ATOMIC_STORAGE_REQUIRED",
+			message: `[commerce:${args.path}] atomic claim support is required`,
+		});
+	}
+}
 
 /**
  * Cart checkout guards two race windows:
@@ -201,6 +218,23 @@ async function claimCheckoutCartLock(args: {
 	return lockId;
 }
 
+async function releaseCheckoutCartLock(args: {
+	locks: CheckoutLockCollection;
+	lockId: string;
+	requestId: string;
+}): Promise<void> {
+	const existing = await args.locks.get(args.lockId);
+	if (!existing) return;
+
+	const parsed = parseCheckoutCartLock(existing.responseBody);
+	if (!parsed || parsed.requestId !== args.requestId) return;
+
+	const deleteLock = (args.locks as CheckoutLockCollection & { delete?: (id: string) => Promise<boolean> }).delete;
+	if (deleteLock) {
+		await deleteLock.call(args.locks, args.lockId);
+	}
+}
+
 function buildCheckoutLockRequestId(idempotencyKey: string, nowIso: string): string {
 	return `${idempotencyKey}|${nowIso}`;
 }
@@ -300,6 +334,11 @@ export async function checkoutHandler(
 
 	const idempotencyKeys = asCollection<StoredIdempotencyKey>(ctx.storage.idempotencyKeys);
 	const lockCollection = asCollection<StoredIdempotencyKey>(ctx.storage.idempotencyKeys) as CheckoutLockCollection;
+	assertAtomicMoneyPathSupport({
+		path: "checkout",
+		hasPutIfAbsent: typeof lockCollection.putIfAbsent === "function",
+		hasCompareAndSwap: typeof lockCollection.compareAndSwap === "function",
+	});
 	const lockRequestId = buildCheckoutLockRequestId(idempotencyKey, nowIso);
 	const lockDocId = await claimCheckoutCartLock({
 		locks: lockCollection,
@@ -313,14 +352,12 @@ export async function checkoutHandler(
 	let replayResponse:
 		| ReturnType<typeof toCheckoutClientResponse>
 		| null = null;
-	const releaseLock = async () => {
-		const deleteResponse = (lockCollection as CheckoutLockCollection & {
-			delete?: (id: string) => Promise<boolean>;
-		}).delete;
-		if (deleteResponse) {
-			await deleteResponse.call(lockCollection, lockDocId);
-		}
-	};
+	const releaseLock = () =>
+		releaseCheckoutCartLock({
+			locks: lockCollection,
+			lockId: lockDocId,
+			requestId: lockRequestId,
+		});
 	try {
 		// Return cached responses before creating new work so replay remains stable
 		// if the cart already has a pending order from a partially complete attempt.

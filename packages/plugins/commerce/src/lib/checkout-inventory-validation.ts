@@ -6,6 +6,7 @@
 
 import { inventoryStockDocId } from "./inventory-stock.js";
 import { throwCommerceApiError } from "../route-errors.js";
+import { queryAllPages } from "../handlers/catalog-read-model.js";
 import type { StoredBundleComponent, StoredInventoryStock, StoredProduct, StoredProductSku } from "../types.js";
 
 type GetCollection<T> = { get(id: string): Promise<T | null> };
@@ -13,6 +14,7 @@ type GetCollection<T> = { get(id: string): Promise<T | null> };
 type QueryBundleComponents = {
 	query(options?: {
 		where?: Record<string, unknown>;
+		cursor?: string;
 		limit?: number;
 	}): Promise<{ items: Array<{ id: string; data: StoredBundleComponent }>; hasMore: boolean }>;
 };
@@ -44,16 +46,20 @@ export async function validateLineItemsStockForCheckout(
 		}
 
 		if (product.type === "bundle") {
-			const componentRows = await ports.bundleComponents.query({
-				where: { bundleProductId: line.productId },
-			});
-			if (componentRows.items.length === 0) {
+			const componentRows = await queryAllPages((cursor) =>
+				ports.bundleComponents.query({
+					where: { bundleProductId: line.productId },
+					cursor,
+					limit: 100,
+				}),
+			);
+			if (componentRows.length === 0) {
 				throwCommerceApiError({
 					code: "PRODUCT_UNAVAILABLE",
 					message: `Bundle has no components: ${line.productId}`,
 				});
 			}
-			for (const row of componentRows.items) {
+			for (const row of componentRows) {
 				const component = row.data;
 				const sku = await ports.productSkus.get(component.componentSkuId);
 				if (!sku) {
