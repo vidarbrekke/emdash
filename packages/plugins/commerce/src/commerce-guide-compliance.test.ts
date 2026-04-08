@@ -106,7 +106,7 @@ describe("EmDash guide compliance: manifest contract", () => {
 			http: { fetch: vi.fn() },
 		} as Record<string, unknown>;
 
-		await expect(plugin.onActivate?.(requiredCtx)).rejects.toThrow("cron:schedule");
+		await expect(plugin.onActivate?.(requiredCtx)).rejects.toThrow("Cron capability missing");
 		await expect(plugin.onInstall?.(requiredCtx)).resolves.toBeUndefined();
 		await expect(plugin.onDeactivate?.(requiredCtx)).resolves.toBeUndefined();
 	});

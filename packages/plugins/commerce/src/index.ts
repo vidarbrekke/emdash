@@ -20,7 +20,7 @@ import type {
 	ResolvedPlugin,
 	RouteContext,
 } from "emdash/plugin";
-import { COMMERCE_MANIFEST, createCommercePlugin, optionalCron, requireFetch, requireKV } from "../../../../commerce-plugin-factory.js";
+import { COMMERCE_MANIFEST, createCommercePlugin, requireCron, requireKV } from "../../../../commerce-plugin-factory.js";
 
 import {
 	COMMERCE_EXTENSION_HOOKS,
@@ -184,20 +184,13 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginStorageConfig,
 		onInstall: async (ctx) => {
 			requireKV(ctx);
-			requireFetch(ctx);
 		},
 		onActivate: async (ctx) => {
-			requireKV(ctx);
-			requireFetch(ctx);
-			const cron = optionalCron(ctx);
-			if (!cron) {
-				throw new Error("[CommercePlugin] cron:schedule capability is required");
-			}
+			const cron = requireCron(ctx);
 			await cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
 		},
 		onDeactivate: async (ctx) => {
 			requireKV(ctx);
-			requireFetch(ctx);
 		},
 		hooks: {
 			cron: async (event: { name?: string }, ctx: PluginContext) => {

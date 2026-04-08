@@ -128,6 +128,12 @@ export function optionalCron(ctx: CommercePluginContext): CommercePluginContext[
 	return ctx.cron ?? null;
 }
 
+export function requireCron(ctx: CommercePluginContext): NonNullable<CommercePluginContext["cron"]> {
+	const cron = optionalCron(ctx);
+	assert(cron, "Cron capability missing");
+	return cron;
+}
+
 export function requireFetch(ctx: CommercePluginContext): typeof fetch {
 	const maybeFetch = ctx.http?.fetch;
 	assert(typeof maybeFetch === "function", "Fetch capability missing");
@@ -136,11 +142,13 @@ export function requireFetch(ctx: CommercePluginContext): typeof fetch {
 
 function wrapLifecycle(
 	handler: CommerceLifecycleHandler | undefined,
-	options: { requireKV?: boolean } = {},
+	options: { requireKV?: boolean; requireFetch?: boolean; requireCron?: boolean } = {},
 ): CommerceLifecycleHandler | undefined {
 	if (!handler) return undefined;
 	return async (ctx) => {
 		if (options.requireKV) requireKV(ctx);
+		if (options.requireFetch) requireFetch(ctx);
+		if (options.requireCron) requireCron(ctx);
 		return handler(ctx);
 	};
 }
@@ -173,9 +181,19 @@ export function createCommercePlugin(definition: CommercePluginDefinition) {
 
 	return Object.freeze({
 		manifest,
-		onInstall: wrapLifecycle(definition.onInstall, { requireKV: true }),
-		onActivate: wrapLifecycle(definition.onActivate, { requireKV: true }),
-		onDeactivate: wrapLifecycle(definition.onDeactivate, { requireKV: true }),
+		onInstall: wrapLifecycle(definition.onInstall, {
+			requireKV: true,
+			requireFetch: true,
+		}),
+		onActivate: wrapLifecycle(definition.onActivate, {
+			requireKV: true,
+			requireFetch: true,
+			requireCron: true,
+		}),
+		onDeactivate: wrapLifecycle(definition.onDeactivate, {
+			requireKV: true,
+			requireFetch: true,
+		}),
 		hooks: definition.hooks,
 		storage: definition.storage,
 		routes: wrappedRoutes,
