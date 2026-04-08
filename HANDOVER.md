@@ -1,53 +1,44 @@
 # HANDOVER
 
-## 1) Project purpose and current problem
-`@emdash-cms/plugin-dashing-commerce` is the commerce extension that owns checkout, order creation, and webhook-based payment finalization flows.  
-The current handoff is production-hardening only: eliminate concurrent correctness regressions in money-path and state-transition code while preserving existing route contracts.
-
-Primary risks addressed in this phase are idempotent replay safety, ownership-safe writes, and partial-write recovery across `checkout` and `finalize` execution paths.
+## 1) Big-picture purpose and current problem
+`@emdash-cms/plugin-dashing-commerce` is the commerce plugin for EmDash. It owns checkout, order creation, payment-attempt persistence, and webhook-based payment finalization.
+Current scope is production-hardening for money-path correctness under concurrency: replay safety, ownership-safe lock and receipt transitions, and partial-write recovery without changing API contracts.
 
 ## 2) Completed work and outcomes
-The checkout lock is now owned and released atomically where supported: stale or stolen lock updates do not silently delete active locks, and release is encoded as ownership-sensitive state transition. On successful release, checkout lock rows now tombstone then attempt best-effort deletion to reduce lock-table growth while preserving crash-safe semantics if cleanup is unavailable. Finalize/payment orchestration now writes terminal webhook receipt state through compare-and-swap, and on claim conflict returns replay-safe outcomes instead of overwriting terminal state. `allowDegradedMode` is intentionally not supported on money-path operations; atomic storage is mandatory. Catalog variable-attribute replacement now uses paginated truth-bearing reads consistently, restores existing rows in dependency order (attributes -> values -> SKU option links) on rollback, and includes new regression coverage for multi-page reads and partial-write recovery in `src/handlers/catalog.test.ts`.
-
-Test coverage was expanded in the same pass: checkout lock race release and claim-loss scenarios are now covered, including receipt persistence failure recovery and stale ownership behavior. The commerce plugin validation pipeline is currently green in-tree for `typecheck` and `lint` and full plugin tests are passing in this branch.
+Checkout now requires atomic lock primitives for money-path execution. Stale and stolen locks are handled with ownership checks and compare-and-swap semantics. Release now writes a released marker first, then attempts best-effort deletion to reduce lock-table growth where collection deletion is supported.
+Webhook finalization now enforces claim transitions through compare-and-swap and terminal-state guardrails. Receipt state can only move forward via CAS-guarded transitions, so stale workers cannot overwrite terminal results.
+`allowDegradedMode` is not supported for money-path operations. Catalog variable-attribute replacement now uses paginated truth-bearing reads (`queryAllPages`) and rollback writes follow dependency order to avoid partial-write corruption.
+Validation status for this branch is clean for `@emdash-cms/plugin-dashing-commerce`: `pnpm --filter @emdash-cms/plugin-dashing-commerce test`, `pnpm --filter @emdash-cms/plugin-dashing-commerce check`, and targeted regression tests all pass.
 
 ## 3) Failures, open issues, and lessons learned
-Validation issue encountered and resolved operationally: `oxlint --type-aware` triggers an environment-level `oxlint-tsgolint` crash (`SIGPIPE`, `invalid message type: 97`) in this workspace. `lint` in `packages/plugins/commerce/package.json` is currently set to `oxlint` to keep the pipeline green; this is a tooling workaround, not a logic-level defect.
-
-Open work to close next:
-- `allowDegradedMode` support has been removed for money-path operations. Do not add degraded fallback paths for checkout/finalization writes.
-- `checkout_cart_lock` rows now transition through a released tombstone and then best-effort delete to prevent unbounded tombstone buildup.
-- Continue periodic verification of catalog mutation sequencing under production-like load; no known open regression gaps remain in the current scope.
-
-Lessons learned: keep race protections at write boundaries (versioned state transitions), keep lock ownership checks consistent between claim and release, and align in-memory test doubles exactly to production collection interfaces.
+Failures resolved in this phase were stale-lock cleanup behavior under release races, optional `compareAndSwap` typing in claim refresh, and test-double mismatches in in-memory storage adapters.
+Open issues are operational: lock rows can remain as tombstones if deletion is not implemented by the underlying storage provider; this is an expected best-effort cleanup boundary.
+Lessons are strict: keep concurrency control at write boundaries, keep ownership checks symmetric across lock claim and release, and treat claim-state transitions as versioned state machines.
 
 ## 4) Files changed, key insights, and gotchas
-Files most relevant for next-stage engineering are:
+Primary changed files:
 `packages/plugins/commerce/src/handlers/checkout.ts`
 `packages/plugins/commerce/src/orchestration/finalize-payment.ts`
 `packages/plugins/commerce/src/handlers/checkout.test.ts`
 `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
 `packages/plugins/commerce/src/handlers/catalog-product.ts`
 `packages/plugins/commerce/src/handlers/catalog.test.ts`
-`packages/plugins/commerce/package.json`
 
-Gotchas:
-- Do not replace checkout lock release with blind delete logic; always preserve ownership checks before any lock mutation.
-- Do not bypass compare-and-swap return values in finalize; failures should be surfaced as replay/claim-conflict paths.
-- In tests, avoid inline regular expressions in hot paths (`prefer-static-regex`) and keep helper adapters interface-complete.
+Use these constraints:
+Do not replace ownership-checked lock release with blind delete logic.
+Do not ignore compare-and-swap return values in finalize claim state transitions.
+Do not reintroduce degraded fallback for checkout/finalization money-path writes.
 
 ## 5) Key files and directories
 `HANDOVER.md`
+`DAY_1_CHECKLIST.md`
 `ADMIN_CONSUMER_UI_SMOKE_READINESS.md`
 `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
 `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
-`packages/plugins/commerce/FINALIZATION_REVIEW_AUDIT.md`
-`dashing-commerce-diff-patch-update.md`
-`dashing-commerce-execution-plan-update.md`
-`dashing-commerce-progress-review-update.md`
 `commerce-plugin-architecture.md`
 `dashing-commerce-diff-style-patch-plan.md`
 `dashing-commerce-execution-plan.md`
 `packages/plugins/commerce/src`
 `packages/plugins/commerce/src/handlers`
 `packages/plugins/commerce/src/orchestration`
+`packages/plugins/commerce/src/lib`
