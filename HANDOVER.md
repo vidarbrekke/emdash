@@ -7,7 +7,7 @@ The current handoff is production-hardening only: eliminate concurrent correctne
 Primary risks addressed in this phase are idempotent replay safety, ownership-safe writes, and partial-write recovery across `checkout` and `finalize` execution paths.
 
 ## 2) Completed work and outcomes
-The checkout lock is now owned and released atomically where supported: stale or stolen lock updates do not silently delete active locks, and release is encoded as ownership-sensitive state transition. Finalize/payment orchestration now writes terminal webhook receipt state through compare-and-swap, and on claim conflict returns replay-safe outcomes instead of overwriting terminal state. `allowDegradedMode` is intentionally not supported on money-path operations; atomic storage is mandatory. Catalog variable-attribute replacement now uses paginated truth-bearing reads consistently, restores existing rows in dependency order (attributes -> values -> SKU option links) on rollback, and includes new regression coverage for multi-page reads and partial-write recovery in `src/handlers/catalog.test.ts`.
+The checkout lock is now owned and released atomically where supported: stale or stolen lock updates do not silently delete active locks, and release is encoded as ownership-sensitive state transition. On successful release, checkout lock rows now tombstone then attempt best-effort deletion to reduce lock-table growth while preserving crash-safe semantics if cleanup is unavailable. Finalize/payment orchestration now writes terminal webhook receipt state through compare-and-swap, and on claim conflict returns replay-safe outcomes instead of overwriting terminal state. `allowDegradedMode` is intentionally not supported on money-path operations; atomic storage is mandatory. Catalog variable-attribute replacement now uses paginated truth-bearing reads consistently, restores existing rows in dependency order (attributes -> values -> SKU option links) on rollback, and includes new regression coverage for multi-page reads and partial-write recovery in `src/handlers/catalog.test.ts`.
 
 Test coverage was expanded in the same pass: checkout lock race release and claim-loss scenarios are now covered, including receipt persistence failure recovery and stale ownership behavior. The commerce plugin validation pipeline is currently green in-tree for `typecheck` and `lint` and full plugin tests are passing in this branch.
 
@@ -16,6 +16,7 @@ Validation issue encountered and resolved operationally: `oxlint --type-aware` t
 
 Open work to close next:
 - `allowDegradedMode` support has been removed for money-path operations. Do not add degraded fallback paths for checkout/finalization writes.
+- `checkout_cart_lock` rows now transition through a released tombstone and then best-effort delete to prevent unbounded tombstone buildup.
 - Continue periodic verification of catalog mutation sequencing under production-like load; no known open regression gaps remain in the current scope.
 
 Lessons learned: keep race protections at write boundaries (versioned state transitions), keep lock ownership checks consistent between claim and release, and align in-memory test doubles exactly to production collection interfaces.

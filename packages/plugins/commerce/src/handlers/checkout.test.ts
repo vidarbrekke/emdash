@@ -55,6 +55,18 @@ vi.mock("../lib/rate-limit-kv.js", () => ({
 }));
 const CHECKOUT_ORDER_ID_PREFIX_RE = /^checkout-order:/;
 const CHECKOUT_ATTEMPT_ID_PREFIX_RE = /^checkout-attempt:/;
+const RELEASED_CHECKOUT_LOCK_EXPIRES_AT = "1970-01-01T00:00:00.000Z";
+
+function expectReleasedCheckoutLock(lock: StoredIdempotencyKey | null): void {
+	const isReleased = lock === null
+		|| (
+			typeof lock.responseBody === "object"
+			&& lock.responseBody !== null
+			&& (lock.responseBody as { kind: string; expiresAt: string }).kind === "checkout_cart_lock"
+			&& (lock.responseBody as { kind: string; expiresAt: string }).expiresAt === RELEASED_CHECKOUT_LOCK_EXPIRES_AT
+		);
+	expect(isReleased).toBe(true);
+}
 
 type MemCollection<T extends object> = {
 	get(id: string): Promise<T | null>;
@@ -1104,12 +1116,7 @@ describe("checkout route guardrails", () => {
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
 
-		await expect(idempotencyKeys.get(lockId)).resolves.toMatchObject({
-			responseBody: {
-				kind: "checkout_cart_lock",
-				expiresAt: "1970-01-01T00:00:00.000Z",
-			},
-		});
+		expectReleasedCheckoutLock(await idempotencyKeys.get(lockId));
 	});
 
 	it("requires atomic lock ops for checkout under hardened mode", async () => {
@@ -1520,12 +1527,7 @@ describe("checkout route guardrails", () => {
 		});
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
-		expect(await idempotencyKeys.get(lockId)).toMatchObject({
-			responseBody: {
-				kind: "checkout_cart_lock",
-				expiresAt: "1970-01-01T00:00:00.000Z",
-			},
-		});
+		expectReleasedCheckoutLock(await idempotencyKeys.get(lockId));
 	});
 
 	it("returns cached completed checkout before open-checkout conflict check", async () => {
@@ -1636,12 +1638,7 @@ describe("checkout route guardrails", () => {
 		});
 		const lockFingerprint = await sha256HexAsync(`checkout-cart-lock|${cartId}`);
 		const lockId = `checkout-lock:${lockFingerprint}`;
-		await expect(idempotencyKeys.get(lockId)).resolves.toMatchObject({
-			responseBody: {
-				kind: "checkout_cart_lock",
-				expiresAt: "1970-01-01T00:00:00.000Z",
-			},
-		});
+		expectReleasedCheckoutLock(await idempotencyKeys.get(lockId));
 	});
 
 	it("rejects checkout when simple-item product-level stock row is missing", async () => {

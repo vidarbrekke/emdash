@@ -558,7 +558,12 @@ async function assertAndRefreshClaim(
 		activeClaim.claimToken,
 		claimLeaseWindowMs,
 	);
-	const refreshedReceipt = await ports.webhookReceipts.compareAndSwap!(
+	const compareAndSwap = ports.webhookReceipts.compareAndSwap;
+	if (!compareAndSwap) {
+		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+	}
+
+	const refreshedReceipt = await compareAndSwap(
 		receiptId,
 		pendingReceipt.updatedAt,
 		refreshed,

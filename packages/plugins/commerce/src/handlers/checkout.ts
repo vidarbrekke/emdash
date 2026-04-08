@@ -242,6 +242,14 @@ async function releaseCheckoutCartLock(args: {
 	if (!released) {
 		return;
 	}
+
+	// Preserve ownership safety while avoiding lock-table tombstone buildup:
+	// write a released marker first (for crash-safe intent), then attempt cleanup.
+	try {
+		await args.locks.delete(args.lockId);
+	} catch {
+		// Delete is best-effort for environments where collection cleanup may be unavailable.
+	}
 }
 
 function buildCheckoutLockRequestId(idempotencyKey: string, nowIso: string): string {
