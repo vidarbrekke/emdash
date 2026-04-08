@@ -28,6 +28,14 @@ export type OrderPaymentPhase =
 	| "refunded"
 	| "canceled";
 
+export const WEBHOOK_RECEIPT_REASONS = {
+	PROCESSED: "webhook_receipt_processed",
+	DUPLICATE: "webhook_receipt_duplicate",
+	IN_FLIGHT: "webhook_receipt_in_flight",
+	CLAIM_RETRY_FAILED: "webhook_receipt_claim_retry_failed",
+} as const;
+export type WebhookReceiptReason = (typeof WEBHOOK_RECEIPT_REASONS)[keyof typeof WEBHOOK_RECEIPT_REASONS];
+
 /**
  * Minimal receipt state for idempotent finalize. **Storage-facing semantics to
  * pin before persistence ships:**
@@ -51,8 +59,7 @@ export type WebhookReceiptView =
 export type FinalizeNoopCode = "WEBHOOK_REPLAY_DETECTED" | "ORDER_STATE_CONFLICT";
 export type FinalizeNoopReason =
 	| "order_already_paid"
-	| "webhook_receipt_processed"
-	| "webhook_receipt_duplicate"
+	| WebhookReceiptReason
 	| "webhook_error"
 	| "webhook_pending"
 	| "order_not_finalizable";
@@ -96,7 +103,7 @@ export function decidePaymentFinalize(input: {
 		if (receipt.status === "processed") {
 			return {
 				action: "noop",
-				reason: "webhook_receipt_processed",
+				reason: WEBHOOK_RECEIPT_REASONS.PROCESSED,
 				httpStatus: 200,
 				code: "WEBHOOK_REPLAY_DETECTED",
 			};
@@ -105,7 +112,7 @@ export function decidePaymentFinalize(input: {
 		if (receipt.status === "duplicate") {
 			return {
 				action: "noop",
-				reason: "webhook_receipt_duplicate",
+				reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE,
 				httpStatus: 200,
 				code: "WEBHOOK_REPLAY_DETECTED",
 			};

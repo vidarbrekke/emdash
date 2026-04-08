@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { sha256HexAsync } from "../lib/crypto-adapter.js";
+import { WEBHOOK_RECEIPT_REASONS } from "../kernel/finalize-decision.js";
 import type {
 	StoredInventoryLedgerEntry,
 	StoredInventoryStock,
@@ -454,9 +455,9 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: freshNow,
 		});
-		expect(inFlightRes).toMatchObject({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		expect(inFlightRes).toMatchObject({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 		const noop = logs.find((entry) => entry.message === "commerce.finalize.noop");
-		expect((noop?.data as { reason?: string } | undefined)?.reason).toBe("webhook_receipt_in_flight");
+		expect((noop?.data as { reason?: string } | undefined)?.reason).toBe(WEBHOOK_RECEIPT_REASONS.IN_FLIGHT);
 
 		const afterLease = new Date(Date.parse(freshNow) + WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS + 1).toISOString();
 		const completedRes = await finalizePaymentFromWebhook(portsWithLogs, {
@@ -1027,7 +1028,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_processed" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED });
 	});
 
 	it("order already paid without receipt row still replays", async () => {
@@ -1881,7 +1882,7 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(result).toMatchObject({ kind: "replay", reason: "webhook_receipt_claim_retry_failed" });
+		expect(result).toMatchObject({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED });
 
 		const finalReceipt = await basePorts.webhookReceipts.get(receiptId);
 		expect(finalReceipt).not.toBeNull();
@@ -2016,7 +2017,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(ledger.items).toHaveLength(1);
 
 		const replay = await finalizePaymentFromWebhook(portsWithLogs, input);
-		expect(replay).toEqual({ kind: "replay", reason: "webhook_receipt_processed" });
+		expect(replay).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED });
 
 		const finalStatus = await queryFinalizationStatus(portsWithLogs, orderId, "stripe", extId);
 		expect(finalStatus).toMatchObject({
@@ -2227,7 +2228,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await ports.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("payment_pending");
@@ -2359,7 +2360,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_claim_retry_failed" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("payment_pending");
@@ -2439,7 +2440,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_claim_retry_failed" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("payment_pending");
@@ -2512,7 +2513,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("payment_pending");
@@ -2578,7 +2579,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("paid");
@@ -2646,7 +2647,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_in_flight" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("paid");
@@ -2726,7 +2727,7 @@ describe("finalizePaymentFromWebhook", () => {
 			nowIso: now,
 		});
 
-		expect(res).toEqual({ kind: "replay", reason: "webhook_receipt_processed" });
+		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED });
 
 		const order = await basePorts.orders.get(orderId);
 		expect(order?.paymentPhase).toBe("paid");

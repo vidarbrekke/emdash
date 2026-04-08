@@ -12,7 +12,11 @@
  */
 
 import type { CommerceApiErrorInput } from "../kernel/api-errors.js";
-import { decidePaymentFinalize, type WebhookReceiptView } from "../kernel/finalize-decision.js";
+import {
+	decidePaymentFinalize,
+	WEBHOOK_RECEIPT_REASONS,
+	type WebhookReceiptView,
+} from "../kernel/finalize-decision.js";
 import { equalSha256HexDigestAsync, sha256HexAsync } from "../lib/crypto-adapter.js";
 import type {
 	StoredInventoryLedgerEntry,
@@ -310,18 +314,18 @@ function canTakeClaim(existing: StoredWebhookReceipt, nowIso: string): { canTake
 			const nowMs = parseClaimTimestampMs(nowIso);
 			const expiresMs = parseClaimTimestampMs(existing.claimExpiresAt);
 			if (nowMs === null || expiresMs === null) {
-				return { canTake: false, reason: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+				return { canTake: false, reason: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 			}
 			const isInFlight = nowMs <= expiresMs;
 			if (isInFlight) {
-				return { canTake: false, reason: { kind: "replay", reason: "webhook_receipt_in_flight" } };
+				return { canTake: false, reason: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT } };
 			}
-			return { canTake: true, reason: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+			return { canTake: true, reason: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 		}
 		case "unclaimed":
 		case "released":
 		default:
-			return { canTake: true, reason: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+			return { canTake: true, reason: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 	}
 }
 
@@ -358,7 +362,7 @@ async function claimWebhookReceipt({
 	if (!ports.webhookReceipts.putIfAbsent || !ports.webhookReceipts.compareAndSwap) {
 		return {
 			kind: "replay",
-			result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" },
+			result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED },
 		};
 	}
 
@@ -391,15 +395,15 @@ async function claimWebhookReceipt({
 		if (replayInsert) return { kind: "acquired", persisted: true, receipt: stagedReceipt };
 		return {
 			kind: "replay",
-			result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" },
+			result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED },
 		};
 	}
 
 	if (existing.status === "processed") {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_processed" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED } };
 	}
 	if (existing.status === "duplicate") {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_duplicate" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE } };
 	}
 	if (existing.status === "error") {
 		return { kind: "replay", result: { kind: "replay", reason: "webhook_error" } };
@@ -420,7 +424,7 @@ async function claimWebhookReceipt({
 		claimedExistingReceipt,
 	);
 	if (!stolen) {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 	}
 
 	return { kind: "acquired", persisted: true, receipt: claimedExistingReceipt };
@@ -560,7 +564,7 @@ async function assertAndRefreshClaim(
 	);
 	const compareAndSwap = ports.webhookReceipts.compareAndSwap;
 	if (!compareAndSwap) {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 	}
 
 	const refreshedReceipt = await compareAndSwap(
@@ -569,7 +573,7 @@ async function assertAndRefreshClaim(
 		refreshed,
 	);
 	if (!refreshedReceipt) {
-		return { kind: "replay", result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" } };
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 	}
 
 	return { kind: "acquired", receipt: refreshed };
@@ -586,21 +590,21 @@ async function assertClaimStillActive(
 
 	const liveReceipt = await ports.webhookReceipts.get(receiptId);
 	if (!liveReceipt) {
-		return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 	}
 
 	if (liveReceipt.status === "processed") {
-		return { kind: "replay", reason: "webhook_receipt_processed" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED };
 	}
 	if (liveReceipt.status === "duplicate") {
-		return { kind: "replay", reason: "webhook_receipt_duplicate" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE };
 	}
 	if (liveReceipt.status === "error") {
 		return { kind: "replay", reason: "webhook_error" };
 	}
 
 	if (liveReceipt.claimState !== "claimed") {
-		return { kind: "replay", reason: "webhook_receipt_in_flight" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT };
 	}
 
 	if (
@@ -608,11 +612,11 @@ async function assertClaimStillActive(
 		liveReceipt.claimToken !== activeClaim.claimToken ||
 		liveReceipt.claimVersion !== activeClaim.claimVersion
 	) {
-		return { kind: "replay", reason: "webhook_receipt_in_flight" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT };
 	}
 
 	if (isClaimLeaseExpired(liveReceipt.claimExpiresAt, nowIso)) {
-		return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+		return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 	}
 
 	return null;
@@ -753,7 +757,7 @@ export async function finalizePaymentFromWebhook(
 		if (!persistedPending) {
 			return {
 				kind: "replay",
-				reason: "webhook_receipt_claim_retry_failed",
+				reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED,
 			};
 		}
 	}
@@ -766,14 +770,20 @@ export async function finalizePaymentFromWebhook(
 		pendingReceipt = refreshedClaim.receipt;
 		return null;
 	};
+	const runWithActiveClaim = async (step?: () => Promise<void>): Promise<FinalizeWebhookResult | null> => {
+		const claimReplay = await refreshClaim();
+		if (claimReplay) return claimReplay;
+		if (step) await step();
+		return null;
+	};
 	ports.log?.info("commerce.finalize.receipt_pending", {
 		...logContext,
 		stage: "pending_receipt_written",
 		priorReceiptStatus: decision.existingReceipt?.status,
 	});
 	{
-		const claimCheck = await refreshClaim();
-		if (claimCheck) return claimCheck;
+		const claimReplay = await runWithActiveClaim();
+		if (claimReplay) return claimReplay;
 	}
 
 	const freshOrder = await ports.orders.get(input.orderId);
@@ -789,8 +799,8 @@ export async function finalizePaymentFromWebhook(
 		 * Treat as terminal and escalate rather than auto-retrying indefinitely.
 		 */
 		{
-			const claimCheck = await refreshClaim();
-			if (claimCheck) return claimCheck;
+			const claimReplay = await runWithActiveClaim();
+			if (claimReplay) return claimReplay;
 		}
 		const orderNotFoundNow = now();
 		const persistedOrderMissing = await persistReceiptStatus(
@@ -803,7 +813,7 @@ export async function finalizePaymentFromWebhook(
 			{ orderId: input.orderId, correlationId: input.correlationId },
 		);
 		if (!persistedOrderMissing) {
-			return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+			return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 		}
 		return {
 			kind: "api_error",
@@ -825,8 +835,8 @@ export async function finalizePaymentFromWebhook(
 			 * and operators get a clear terminal signal.
 			 */
 			{
-				const claimCheck = await refreshClaim();
-				if (claimCheck) return claimCheck;
+				const claimReplay = await runWithActiveClaim();
+				if (claimReplay) return claimReplay;
 			}
 			const conflictNow = now();
 			const persistedConflict = await persistReceiptStatus(
@@ -839,7 +849,7 @@ export async function finalizePaymentFromWebhook(
 				{ paymentPhase: freshOrder.paymentPhase },
 			);
 			if (!persistedConflict) {
-				return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+				return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 			}
 			return {
 				kind: "api_error",
@@ -853,8 +863,8 @@ export async function finalizePaymentFromWebhook(
 
 		try {
 			{
-				const claimCheck = await refreshClaim();
-				if (claimCheck) return claimCheck;
+				const claimReplay = await runWithActiveClaim();
+				if (claimReplay) return claimReplay;
 			}
 			ports.log?.info("commerce.finalize.inventory_reconcile", {
 				...logContext,
@@ -863,8 +873,8 @@ export async function finalizePaymentFromWebhook(
 			const inventoryNow = now();
 			await applyInventoryForOrder(ports, freshOrder, input.orderId, inventoryNow);
 			{
-				const claimCheck = await refreshClaim();
-				if (claimCheck) return claimCheck;
+				const claimReplay = await runWithActiveClaim();
+				if (claimReplay) return claimReplay;
 			}
 			ports.log?.info("commerce.finalize.inventory_applied", {
 				...logContext,
@@ -880,8 +890,8 @@ export async function finalizePaymentFromWebhook(
 						details: err.details,
 					});
 					{
-						const claimCheck = await refreshClaim();
-						if (claimCheck) return claimCheck;
+						const claimReplay = await runWithActiveClaim();
+						if (claimReplay) return claimReplay;
 					}
 					const inventoryErrorNow = now();
 					const persistedInventoryError = await persistReceiptStatus(
@@ -898,7 +908,7 @@ export async function finalizePaymentFromWebhook(
 						},
 					);
 					if (!persistedInventoryError) {
-						return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+						return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 					}
 				} else {
 					ports.log?.warn("commerce.finalize.inventory_failed", {
@@ -934,8 +944,8 @@ export async function finalizePaymentFromWebhook(
 		};
 		try {
 			{
-				const claimCheck = await refreshClaim();
-				if (claimCheck) return claimCheck;
+				const claimReplay = await runWithActiveClaim();
+				if (claimReplay) return claimReplay;
 			}
 			await ports.orders.put(input.orderId, paidOrder);
 		} catch (err) {
@@ -956,8 +966,8 @@ export async function finalizePaymentFromWebhook(
 
 	try {
 		{
-			const claimCheck = await refreshClaim();
-			if (claimCheck) return claimCheck;
+			const claimReplay = await runWithActiveClaim();
+			if (claimReplay) return claimReplay;
 		}
 		ports.log?.info("commerce.finalize.payment_attempt_update_attempt", {
 			...logContext,
@@ -967,8 +977,8 @@ export async function finalizePaymentFromWebhook(
 		const attemptNow = now();
 		await markPaymentAttemptSucceeded(ports, input.orderId, input.providerId, attemptNow);
 		{
-			const claimCheck = await refreshClaim();
-			if (claimCheck) return claimCheck;
+			const claimReplay = await runWithActiveClaim();
+			if (claimReplay) return claimReplay;
 		}
 	} catch (err) {
 		ports.log?.warn("commerce.finalize.attempt_update_failed", {
@@ -992,8 +1002,8 @@ export async function finalizePaymentFromWebhook(
 	 */
 	try {
 		{
-			const claimCheck = await refreshClaim();
-			if (claimCheck) return claimCheck;
+			const claimReplay = await runWithActiveClaim();
+			if (claimReplay) return claimReplay;
 		}
 		ports.log?.info("commerce.finalize.receipt_processed", {
 			...logContext,
@@ -1002,7 +1012,7 @@ export async function finalizePaymentFromWebhook(
 		const processedNow = now();
 		const persistedProcessed = await persistReceiptStatus(ports, receiptId, pendingReceipt, "processed", processedNow);
 		if (!persistedProcessed) {
-			return { kind: "replay", reason: "webhook_receipt_claim_retry_failed" };
+			return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
 		}
 	} catch (err) {
 		ports.log?.warn("commerce.finalize.receipt_processed_write_failed", {

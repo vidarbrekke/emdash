@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decidePaymentFinalize } from "./finalize-decision.js";
+import { WEBHOOK_RECEIPT_REASONS, decidePaymentFinalize } from "./finalize-decision.js";
 
 describe("decidePaymentFinalize", () => {
 	const cid = "corr-1";
@@ -35,7 +35,7 @@ describe("decidePaymentFinalize", () => {
 		if (d.action === "noop") {
 			expect(d.httpStatus).toBe(200);
 			expect(d.code).toBe("WEBHOOK_REPLAY_DETECTED");
-			expect(d.reason).toBe("webhook_receipt_processed");
+			expect(d.reason).toBe(WEBHOOK_RECEIPT_REASONS.PROCESSED);
 		}
 	});
 
@@ -47,7 +47,7 @@ describe("decidePaymentFinalize", () => {
 		});
 		expect(d).toEqual({
 			action: "noop",
-			reason: "webhook_receipt_processed",
+			reason: WEBHOOK_RECEIPT_REASONS.PROCESSED,
 			httpStatus: 200,
 			code: "WEBHOOK_REPLAY_DETECTED",
 		});
@@ -61,7 +61,7 @@ describe("decidePaymentFinalize", () => {
 		});
 		expect(d).toMatchObject({
 			action: "noop",
-			reason: "webhook_receipt_duplicate",
+			reason: WEBHOOK_RECEIPT_REASONS.DUPLICATE,
 			httpStatus: 200,
 			code: "WEBHOOK_REPLAY_DETECTED",
 		});
