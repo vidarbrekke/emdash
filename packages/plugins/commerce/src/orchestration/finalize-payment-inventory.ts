@@ -201,6 +201,17 @@ async function applyInventoryMutations(
 			);
 		}
 		if (stock.version === line.inventoryVersion) {
+			if (stock.quantity < line.quantity) {
+				throw new InventoryFinalizeError(
+					"INSUFFICIENT_STOCK",
+					"Not enough stock to finalize order",
+					{
+						productId: line.productId,
+						requested: line.quantity,
+						available: stock.quantity,
+					},
+				);
+			}
 			await ports.inventoryStock.put(stockId, {
 				...stock,
 				version: stock.version + 1,

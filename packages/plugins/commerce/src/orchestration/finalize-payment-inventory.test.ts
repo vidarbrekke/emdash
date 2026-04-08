@@ -118,6 +118,75 @@ describe("finalize-payment-inventory bundle expansion", () => {
 		expect(after?.version).toBe(5);
 	});
 
+	it("throws INSUFFICIENT_STOCK when reconciling a stale partial ledger write with unchanged version", async () => {
+		const line: OrderLineItem = {
+			productId: "simple_reconcile_1",
+			quantity: 3,
+			inventoryVersion: 4,
+			unitPriceMinor: 500,
+			snapshot: {
+				productId: "simple_reconcile_1",
+				skuId: "simple_reconcile_1",
+				productType: "simple",
+				productTitle: "Simple Reconcile",
+				skuCode: "SIMPLE-RECONCILE",
+				selectedOptions: [],
+				currency: "USD",
+				unitPriceMinor: 500,
+				lineSubtotalMinor: 1500,
+				lineDiscountMinor: 0,
+				lineTotalMinor: 1500,
+				requiresShipping: true,
+				isDigital: false,
+			},
+		};
+		const productStockId = inventoryStockDocId("simple_reconcile_1", "");
+		const staleNow = "2026-04-10T12:00:00.000Z";
+		const inventoryStock = new MemColl<StoredInventoryStock>(
+			new Map([
+				[
+					productStockId,
+					{
+						productId: "simple_reconcile_1",
+						variantId: "",
+						version: 4,
+						quantity: 2,
+						updatedAt: staleNow,
+					},
+				],
+			]),
+		);
+		const ledgerId = "line:order_reconcile:simple_reconcile_1:";
+		const inventoryLedger = new MemColl<StoredInventoryLedgerEntry>(
+			new Map([
+				[
+					ledgerId,
+					{
+						productId: "simple_reconcile_1",
+						variantId: "simple_reconcile_1",
+						delta: -3,
+						referenceType: "order",
+						referenceId: "order_reconcile",
+						createdAt: staleNow,
+					},
+				],
+			]),
+		);
+
+		await expect(
+			applyInventoryForOrder(
+				{ inventoryStock, inventoryLedger },
+				{ lineItems: [line] },
+				"order_reconcile",
+				staleNow,
+			),
+		).rejects.toMatchObject({ code: "INSUFFICIENT_STOCK" });
+
+		const stockAfter = await inventoryStock.get(productStockId);
+		expect(stockAfter?.quantity).toBe(2);
+		expect(stockAfter?.version).toBe(4);
+	});
+
 	it("throws ORDER_STATE_CONFLICT when a bundle snapshot lacks valid component versions", async () => {
 		const bundleProductId = "bundle_legacy_1";
 		const line: OrderLineItem = {

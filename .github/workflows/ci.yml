@@ -121,6 +121,8 @@ jobs:
             $CLI plugin bundle --validateOnly --dir "$dir"
             echo "::endgroup::"
           done
+      - name: Validate commerce plugin package checks
+        run: pnpm --filter @emdash-cms/plugin-dashing-commerce run check
 
   test-smoke:
     name: Smoke Tests

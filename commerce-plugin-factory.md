@@ -26,7 +26,7 @@ This factory introduces four guarantees:
    - missing required capabilities fail immediately
 
 3. **Runtime guards**
-   - required resources like `kv` and `fetch` are asserted before handlers run
+	- required resources like `kv` and `fetch` are asserted only for handlers that opt in to them
 
 4. **Consistent plugin shape**
    - all lifecycle and route handlers are wrapped the same way
@@ -61,8 +61,8 @@ src/
 
 ## Reference implementation included
 
-Companion file:
-- `commerce-plugin-factory.ts`
+Canonical implementation:
+- `packages/plugins/commerce/src/commerce-plugin-factory.ts`
 
 This file provides:
 
@@ -72,6 +72,8 @@ This file provides:
 - `requireKV()`
 - `requireFetch()`
 - `optionalCron()`
+- `withKV()`
+- `withFetch()`
 - `createCommercePlugin()`
 - `validateCommerceRuntime()`
 
@@ -121,8 +123,8 @@ That is forbidden because it bypasses the shared contract layer.
 | Layer | Enforcement |
 |---|---|
 | TypeScript | manifest shape and capability names |
-| Factory | manifest validation and route wrapping |
-| Runtime | capability assertions |
+| Factory | manifest validation and explicit per-handler wrapper control |
+| Runtime | capability assertions on wrapped handlers |
 | CI | regression and drift prevention |
 
 ---
@@ -171,7 +173,7 @@ With a factory:
 
 `commerce-plugin-contracts.md` defines how to enforce it.
 
-`commerce-plugin-factory.ts` makes the correct path the default path.
+`packages/plugins/commerce/src/commerce-plugin-factory.ts` makes the correct path the default path.
 
 That is the point:
 > the safe path should also be the easiest path.

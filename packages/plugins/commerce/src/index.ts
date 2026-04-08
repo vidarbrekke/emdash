@@ -20,7 +20,12 @@ import type {
 	ResolvedPlugin,
 	RouteContext,
 } from "emdash/plugin";
-import { COMMERCE_MANIFEST, createCommercePlugin, requireCron, requireKV } from "../../../../commerce-plugin-factory.js";
+import {
+	COMMERCE_MANIFEST,
+	createCommercePlugin,
+	withKV,
+	requireCron,
+} from "./commerce-plugin-factory.js";
 
 import {
 	COMMERCE_EXTENSION_HOOKS,
@@ -183,14 +188,14 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 		manifest: COMMERCE_MANIFEST,
 		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginStorageConfig,
 		onInstall: async (ctx) => {
-			requireKV(ctx);
+			void ctx;
 		},
 		onActivate: async (ctx) => {
 			const cron = requireCron(ctx);
 			await cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
 		},
 		onDeactivate: async (ctx) => {
-			requireKV(ctx);
+			void ctx;
 		},
 		hooks: {
 			cron: async (event: { name?: string }, ctx: PluginContext) => {
@@ -228,60 +233,60 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 
 		routes: {
 			// Storefront-safe read and action routes (public API surface, POST-only by contract).
-			"cart/upsert": publicRoute(cartUpsertInputSchema, cartUpsertHandler),
-			"cart/get": publicRoute(cartGetInputSchema, cartGetHandler),
-			"bundle/compute": publicRoute(bundleComputeInputSchema, bundleComputeStorefrontHandler),
-			"catalog/product/get": publicRoute(productGetInputSchema, getStorefrontProductHandler),
-			"catalog/product/get-by-slug": publicRoute(productGetBySlugInputSchema, getStorefrontProductBySlugHandler),
-			"catalog/category/list": publicRoute(categoryListInputSchema, listCategoriesHandler),
-			"catalog/tag/list": publicRoute(tagListInputSchema, listTagsHandler),
-			"catalog/products": publicRoute(productListInputSchema, listStorefrontProductsHandler),
-			"catalog/sku/list": publicRoute(productSkuListInputSchema, listStorefrontProductSkusHandler),
-			checkout: publicRoute(checkoutInputSchema, checkoutHandler),
-			"checkout/get-order": publicRoute(checkoutGetOrderInputSchema, checkoutGetOrderHandler),
+			"cart/upsert": withKV(publicRoute(cartUpsertInputSchema, cartUpsertHandler)),
+			"cart/get": withKV(publicRoute(cartGetInputSchema, cartGetHandler)),
+			"bundle/compute": withKV(publicRoute(bundleComputeInputSchema, bundleComputeStorefrontHandler)),
+			"catalog/product/get": withKV(publicRoute(productGetInputSchema, getStorefrontProductHandler)),
+			"catalog/product/get-by-slug": withKV(publicRoute(productGetBySlugInputSchema, getStorefrontProductBySlugHandler)),
+			"catalog/category/list": withKV(publicRoute(categoryListInputSchema, listCategoriesHandler)),
+			"catalog/tag/list": withKV(publicRoute(tagListInputSchema, listTagsHandler)),
+			"catalog/products": withKV(publicRoute(productListInputSchema, listStorefrontProductsHandler)),
+			"catalog/sku/list": withKV(publicRoute(productSkuListInputSchema, listStorefrontProductSkusHandler)),
+			checkout: withKV(publicRoute(checkoutInputSchema, checkoutHandler)),
+			"checkout/get-order": withKV(publicRoute(checkoutGetOrderInputSchema, checkoutGetOrderHandler)),
 			recommendations: publicRoute(recommendationsInputSchema, recommendationsRouteHandler),
-			"webhooks/stripe": publicRoute(stripeWebhookInputSchema, stripeWebhookHandler),
+			"webhooks/stripe": withKV(publicRoute(stripeWebhookInputSchema, stripeWebhookHandler)),
 
 			// Admin/auth-required catalog and commerce-admin mutation routes.
-			"admin/catalog/product/get": adminRoute(productGetInputSchema, getProductHandler),
-			"product-assets/register": adminRoute(productAssetRegisterInputSchema, registerProductAssetHandler),
-			"catalog/asset/link": adminRoute(productAssetLinkInputSchema, linkCatalogAssetHandler),
-			"catalog/asset/unlink": adminRoute(productAssetUnlinkInputSchema, unlinkCatalogAssetHandler),
-			"catalog/asset/reorder": adminRoute(productAssetReorderInputSchema, reorderCatalogAssetHandler),
-			"bundle-components/add": adminRoute(bundleComponentAddInputSchema, addBundleComponentHandler),
-			"bundle-components/remove": adminRoute(
+			"admin/catalog/product/get": withKV(adminRoute(productGetInputSchema, getProductHandler)),
+			"product-assets/register": withKV(adminRoute(productAssetRegisterInputSchema, registerProductAssetHandler)),
+			"catalog/asset/link": withKV(adminRoute(productAssetLinkInputSchema, linkCatalogAssetHandler)),
+			"catalog/asset/unlink": withKV(adminRoute(productAssetUnlinkInputSchema, unlinkCatalogAssetHandler)),
+			"catalog/asset/reorder": withKV(adminRoute(productAssetReorderInputSchema, reorderCatalogAssetHandler)),
+			"bundle-components/add": withKV(adminRoute(bundleComponentAddInputSchema, addBundleComponentHandler)),
+			"bundle-components/remove": withKV(adminRoute(
 				bundleComponentRemoveInputSchema,
 				removeBundleComponentHandler,
-			),
-			"bundle-components/reorder": adminRoute(
+			)),
+			"bundle-components/reorder": withKV(adminRoute(
 				bundleComponentReorderInputSchema,
 				reorderBundleComponentHandler,
-			),
-			"digital-assets/create": adminRoute(digitalAssetCreateInputSchema, createDigitalAssetHandler),
-			"digital-entitlements/create": adminRoute(
+			)),
+			"digital-assets/create": withKV(adminRoute(digitalAssetCreateInputSchema, createDigitalAssetHandler)),
+			"digital-entitlements/create": withKV(adminRoute(
 				digitalEntitlementCreateInputSchema,
 				createDigitalEntitlementHandler,
-			),
-			"digital-entitlements/remove": adminRoute(
+			)),
+			"digital-entitlements/remove": withKV(adminRoute(
 				digitalEntitlementRemoveInputSchema,
 				removeDigitalEntitlementHandler,
-			),
-			"catalog/product/create": adminRoute(productCreateInputSchema, createProductHandler),
-			"catalog/product/update": adminRoute(productUpdateInputSchema, updateProductHandler),
-			"catalog/product/state": adminRoute(productStateInputSchema, setProductStateHandler),
-			"catalog/category/create": adminRoute(categoryCreateInputSchema, createCategoryHandler),
-			"catalog/category/link": adminRoute(productCategoryLinkInputSchema, createProductCategoryLinkHandler),
-			"catalog/category/unlink": adminRoute(productCategoryUnlinkInputSchema, removeProductCategoryLinkHandler),
-			"catalog/tag/create": adminRoute(tagCreateInputSchema, createTagHandler),
-			"catalog/tag/link": adminRoute(productTagLinkInputSchema, createProductTagLinkHandler),
-			"catalog/tag/unlink": adminRoute(productTagUnlinkInputSchema, removeProductTagLinkHandler),
-			"admin/catalog/products": adminRoute(productListInputSchema, listProductsHandler),
-			"catalog/sku/create": adminRoute(productSkuCreateInputSchema, createProductSkuHandler),
-			"catalog/sku/update": adminRoute(productSkuUpdateInputSchema, updateProductSkuHandler),
-			"catalog/sku/state": adminRoute(productSkuStateInputSchema, setSkuStatusHandler),
-			"admin/catalog/sku/list": adminRoute(productSkuListInputSchema, listProductSkusHandler),
+			)),
+			"catalog/product/create": withKV(adminRoute(productCreateInputSchema, createProductHandler)),
+			"catalog/product/update": withKV(adminRoute(productUpdateInputSchema, updateProductHandler)),
+			"catalog/product/state": withKV(adminRoute(productStateInputSchema, setProductStateHandler)),
+			"catalog/category/create": withKV(adminRoute(categoryCreateInputSchema, createCategoryHandler)),
+			"catalog/category/link": withKV(adminRoute(productCategoryLinkInputSchema, createProductCategoryLinkHandler)),
+			"catalog/category/unlink": withKV(adminRoute(productCategoryUnlinkInputSchema, removeProductCategoryLinkHandler)),
+			"catalog/tag/create": withKV(adminRoute(tagCreateInputSchema, createTagHandler)),
+			"catalog/tag/link": withKV(adminRoute(productTagLinkInputSchema, createProductTagLinkHandler)),
+			"catalog/tag/unlink": withKV(adminRoute(productTagUnlinkInputSchema, removeProductTagLinkHandler)),
+			"admin/catalog/products": withKV(adminRoute(productListInputSchema, listProductsHandler)),
+			"catalog/sku/create": withKV(adminRoute(productSkuCreateInputSchema, createProductSkuHandler)),
+			"catalog/sku/update": withKV(adminRoute(productSkuUpdateInputSchema, updateProductSkuHandler)),
+			"catalog/sku/state": withKV(adminRoute(productSkuStateInputSchema, setSkuStatusHandler)),
+			"admin/catalog/sku/list": withKV(adminRoute(productSkuListInputSchema, listProductSkusHandler)),
 		},
-	}) as ResolvedPlugin<CommerceStorage>;
+	}) as unknown as ResolvedPlugin<CommerceStorage>;
 	return pluginDefinition;
 }
 

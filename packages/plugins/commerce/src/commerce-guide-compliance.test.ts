@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { COMMERCE_MANIFEST } from "../../../../commerce-plugin-factory.js";
+import { COMMERCE_MANIFEST, withFetch, withKV } from "./commerce-plugin-factory.js";
 import { commercePlugin, createPlugin } from "./index.js";
 
 const ROOT = resolve(import.meta.dirname, ".");
@@ -33,6 +33,12 @@ describe("EmDash guide compliance: manifest contract", () => {
 		expect(descriptor.id).toBe(COMMERCE_MANIFEST.id);
 		expect(descriptor.version).toBe(COMMERCE_MANIFEST.version);
 		expect(descriptor.storage).toBeDefined();
+	});
+
+	it("keeps manifest version aligned with package version", () => {
+		const pkg = readPackageJson();
+		const packageVersion = String(pkg.version ?? "");
+		expect(packageVersion).toBe(COMMERCE_MANIFEST.version);
 	});
 
 	it("declares every guide-required capability used by this plugin", () => {
@@ -86,7 +92,7 @@ describe("EmDash guide compliance: manifest contract", () => {
 
 	it("keeps descriptor and runtime manifest fields aligned", () => {
 		const descriptor = commercePlugin() as Record<string, unknown>;
-		const plugin = createPlugin() as unknown as Record<string, unknown>;
+		const plugin = createPlugin() as unknown as { manifest?: Record<string, unknown> };
 
 		expect(descriptor.id).toBe(plugin.manifest?.id);
 		expect(descriptor.version).toBe(plugin.manifest?.version);
@@ -139,6 +145,92 @@ describe("EmDash guide compliance: source-level contract", () => {
 		const source = readIndexSource();
 		expect(source).toContain("hooks");
 		expect(source).toMatch(CRON_HOOK_PATTERN);
+	});
+
+	it("enforces route capability precision without fetch by default", async () => {
+		const withoutFetch = withKV(async (_ctx: unknown) => "ok");
+		const withFetchRoute = withFetch(async (_ctx: unknown) => "ok");
+
+		const withNoFetch = withoutFetch;
+		const withFetchHandler = withFetchRoute;
+		expect(withNoFetch).toBeTypeOf("function");
+		expect(withFetchHandler).toBeTypeOf("function");
+
+		await expect(
+			withNoFetch({
+				kv: {},
+				request: new Request("https://example.test/test-route", { method: "POST" }),
+				storage: {},
+			} as Record<string, unknown>),
+		).resolves.toBe("ok");
+
+		await expect(
+			withFetchHandler({
+				kv: {},
+				request: new Request("https://example.test/test-route-fetch", { method: "POST" }),
+				storage: {},
+			} as Record<string, unknown>),
+		).rejects.toMatchObject({ message: "[CommercePlugin] Fetch capability missing" });
+	});
+
+	it("enforces KV capability on storage-backed storefront routes", async () => {
+		const plugin = createPlugin() as {
+			routes: Record<string, { handler?: unknown }>;
+		};
+
+		const routes = plugin.routes ?? {};
+		const storageBackedRoutes = [
+			"cart/upsert",
+			"cart/get",
+			"bundle/compute",
+			"catalog/product/get",
+			"catalog/product/get-by-slug",
+			"catalog/category/list",
+			"catalog/tag/list",
+			"catalog/products",
+			"catalog/sku/list",
+			"checkout",
+			"checkout/get-order",
+			"webhooks/stripe",
+			"admin/catalog/product/get",
+			"product-assets/register",
+			"catalog/asset/link",
+			"catalog/asset/unlink",
+			"catalog/asset/reorder",
+			"bundle-components/add",
+			"bundle-components/remove",
+			"bundle-components/reorder",
+			"digital-assets/create",
+			"digital-entitlements/create",
+			"digital-entitlements/remove",
+			"catalog/product/create",
+			"catalog/product/update",
+			"catalog/product/state",
+			"catalog/category/create",
+			"catalog/category/link",
+			"catalog/category/unlink",
+			"catalog/tag/create",
+			"catalog/tag/link",
+			"catalog/tag/unlink",
+			"admin/catalog/products",
+			"catalog/sku/create",
+			"catalog/sku/update",
+			"catalog/sku/state",
+			"admin/catalog/sku/list",
+		] as const;
+
+		for (const routeKey of storageBackedRoutes) {
+			const route = routes[routeKey];
+			expect(route).toBeDefined();
+			expect(route?.handler).toBeTypeOf("function");
+			const handler = route?.handler;
+			await expect(
+				(handler as (_ctx: Record<string, unknown>) => Promise<unknown>)({
+					request: new Request(`https://example.test/${routeKey}`),
+					storage: {},
+				}),
+			).rejects.toMatchObject({ message: "[CommercePlugin] KV capability missing" });
+		}
 	});
 });
 
