@@ -15,6 +15,9 @@ import { z } from "zod";
 export const PLUGIN_CAPABILITIES = [
 	"network:fetch",
 	"network:fetch:any",
+	"storage:kv",
+	"cron:schedule",
+	"admin:ui",
 	"read:content",
 	"write:content",
 	"read:media",
@@ -181,6 +184,11 @@ export const pluginManifestSchema = z.object({
 	version: z.string().min(1),
 	capabilities: z.array(z.enum(PLUGIN_CAPABILITIES)),
 	allowedHosts: z.array(z.string()),
+	network: z
+		.object({
+			allowedHostnames: z.array(z.string()),
+		})
+		.optional(),
 	storage: z.record(z.string(), storageCollectionSchema),
 	/**
 	 * Hook declarations — accepts both plain name strings (legacy) and

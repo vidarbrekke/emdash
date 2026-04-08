@@ -25,6 +25,9 @@ import type { FieldType } from "../schema/types.js";
 export type PluginCapability =
 	| "network:fetch" // ctx.http is available (host-restricted via allowedHosts)
 	| "network:fetch:any" // ctx.http is available (unrestricted outbound — use for user-configured URLs)
+	| "storage:kv" // KV store APIs available
+	| "cron:schedule" // cron scheduling available
+	| "admin:ui" // admin UI helpers available
 	| "read:content" // ctx.content.get/list available
 	| "write:content" // ctx.content.create/update/delete available
 	| "read:media" // ctx.media.get/list available
@@ -987,6 +990,13 @@ export interface PluginRoute<TInput = unknown> {
 	handler: (ctx: RouteContext<TInput>) => Promise<unknown>;
 }
 
+/**
+ * Guide-compatible network policy
+ */
+export interface PluginNetworkPolicy {
+	allowedHostnames: string[];
+}
+
 // =============================================================================
 // Plugin Definition
 // =============================================================================
@@ -1126,14 +1136,30 @@ export interface PluginDefinition<TStorage extends PluginStorageConfig = PluginS
 	/** Declared capabilities */
 	capabilities?: PluginCapability[];
 
-	/** Allowed hosts for network:fetch (wildcards supported: *.example.com) */
+	/**
+	 * Deprecated compatibility output for runtime internals.
+	 * Prefer `network.allowedHostnames` (guide shape).
+	 */
 	allowedHosts?: string[];
+	/**
+	 * Guide-shaped network policy.
+	 */
+	network?: PluginNetworkPolicy;
 
 	/** Storage collections with indexes */
 	storage?: TStorage;
 
 	/** Hooks */
 	hooks?: PluginHooks;
+
+	/** Guide lifecycle entry point (maps to internal `plugin:install`) */
+	onInstall?: LifecycleHandler;
+	/** Guide lifecycle entry point (maps to internal `plugin:activate`) */
+	onActivate?: LifecycleHandler;
+	/** Guide lifecycle entry point (maps to internal `plugin:deactivate`) */
+	onDeactivate?: LifecycleHandler;
+	/** Guide request handler hook (reserved for future runtime invocation) */
+	onRequest?: (event: { request: Request }) => Promise<unknown>;
 
 	/** API routes */
 	routes?: Record<string, PluginRoute>;
@@ -1150,10 +1176,15 @@ export interface ResolvedPlugin<TStorage extends PluginStorageConfig = PluginSto
 	version: string;
 	capabilities: PluginCapability[];
 	allowedHosts: string[];
+	network: PluginNetworkPolicy;
 	storage: TStorage;
 	hooks: ResolvedPluginHooks;
 	routes: Record<string, PluginRoute>;
 	admin: PluginAdminConfig;
+	onInstall?: LifecycleHandler;
+	onActivate?: LifecycleHandler;
+	onDeactivate?: LifecycleHandler;
+	onRequest?: (event: { request: Request }) => Promise<unknown>;
 }
 
 /**
@@ -1292,6 +1323,9 @@ export interface PluginManifest {
 	version: string;
 	capabilities: PluginCapability[];
 	allowedHosts: string[];
+	network?: {
+		allowedHostnames: string[];
+	};
 	storage: PluginStorageConfig;
 	/** Hook declarations — either plain name strings or structured objects */
 	hooks: Array<ManifestHookEntry | HookName>;

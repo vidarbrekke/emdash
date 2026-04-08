@@ -119,7 +119,12 @@ function defineNativePlugin<TStorage extends PluginStorageConfig>(
 		version,
 		capabilities = [],
 		allowedHosts = [],
+		network,
 		hooks = {},
+		onInstall,
+		onActivate,
+		onDeactivate,
+		onRequest,
 		routes = {},
 		admin = {},
 	} = definition;
@@ -147,6 +152,9 @@ function defineNativePlugin<TStorage extends PluginStorageConfig>(
 	const validCapabilities = new Set([
 		"network:fetch",
 		"network:fetch:any",
+		"storage:kv",
+		"cron:schedule",
+		"admin:ui",
 		"read:content",
 		"write:content",
 		"read:media",
@@ -175,16 +183,51 @@ function defineNativePlugin<TStorage extends PluginStorageConfig>(
 		normalizedCapabilities.push("network:fetch");
 	}
 
+	// Network policy compatibility shape (guide form).
+	const guideAllowedHostnames = network?.allowedHostnames ?? [];
+	if (guideAllowedHostnames.some((hostname) => hostname.includes("*"))) {
+		throw new Error(
+			`Invalid network.allowedHostnames value for plugin "${id}". Wildcards are not allowed.`,
+		);
+	}
+
 	// Normalize hooks
-	const resolvedHooks = resolveHooks(hooks, id);
+	const resolvedHooksInput: PluginHooks = { ...hooks };
+	if (onInstall) {
+		if (resolvedHooksInput["plugin:install"] !== undefined) {
+			throw new Error(
+				`Plugin "${id}" defines both onInstall and hooks["plugin:install"]; use one source.`,
+			);
+		}
+		resolvedHooksInput["plugin:install"] = onInstall;
+	}
+	if (onActivate) {
+		if (resolvedHooksInput["plugin:activate"] !== undefined) {
+			throw new Error(
+				`Plugin "${id}" defines both onActivate and hooks["plugin:activate"]; use one source.`,
+			);
+		}
+		resolvedHooksInput["plugin:activate"] = onActivate;
+	}
+	if (onDeactivate) {
+		if (resolvedHooksInput["plugin:deactivate"] !== undefined) {
+			throw new Error(
+				`Plugin "${id}" defines both onDeactivate and hooks["plugin:deactivate"]; use one source.`,
+			);
+		}
+		resolvedHooksInput["plugin:deactivate"] = onDeactivate;
+	}
+	const resolvedHooks = resolveHooks(resolvedHooksInput, id);
 
 	return {
 		id,
 		version,
 		capabilities: normalizedCapabilities,
-		allowedHosts,
+		allowedHosts: [...new Set([...guideAllowedHostnames, ...allowedHosts])],
+		network: { allowedHostnames: guideAllowedHostnames },
 		storage,
 		hooks: resolvedHooks,
+		onRequest,
 		routes,
 		admin,
 	};

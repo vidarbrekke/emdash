@@ -85,6 +85,7 @@ export type {
 export type {
 	// Core types
 	PluginCapability,
+	PluginNetworkPolicy,
 	PluginStorageConfig,
 	StorageCollectionConfig,
 	PaginatedResult,

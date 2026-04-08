@@ -989,7 +989,10 @@ export class EmDashRuntime {
 					id: entry.id,
 					version: entry.version,
 					capabilities: entry.capabilities ?? [],
-					allowedHosts: entry.allowedHosts ?? [],
+					allowedHosts: entry.allowedHosts ?? entry.network?.allowedHostnames ?? [],
+					network: {
+						allowedHostnames: entry.network?.allowedHostnames ?? [],
+					},
 					storage: entry.storage ?? {},
 					hooks: [],
 					routes: [],

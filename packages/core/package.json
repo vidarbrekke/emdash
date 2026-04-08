@@ -38,6 +38,10 @@
       "types": "./dist/astro/middleware/redirect.d.mts",
       "default": "./dist/astro/middleware/redirect.mjs"
     },
+    "./plugin": {
+      "types": "./dist/plugin.d.mts",
+      "default": "./dist/plugin.mjs"
+    },
     "./ui": "./src/ui.ts",
     "./ui/search": "./src/components/LiveSearch.astro",
     "./cli": {

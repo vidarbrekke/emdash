@@ -105,6 +105,12 @@ export interface PluginDescriptor<TOptions = Record<string, unknown>> {
 	 */
 	capabilities?: string[];
 	/**
+	 * Guide-compatible network policy.
+	 */
+	network?: {
+		allowedHostnames: string[];
+	};
+	/**
 	 * Allowed hosts for network:fetch capability
 	 * Supports wildcards like "*.example.com"
 	 */

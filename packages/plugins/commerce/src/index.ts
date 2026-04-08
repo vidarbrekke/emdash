@@ -16,12 +16,12 @@
 import type {
 	PluginContext,
 	PluginDefinition,
-	PluginDescriptor,
+	PluginStorageConfig,
 	PluginRoute,
 	ResolvedPlugin,
 	RouteContext,
-} from "emdash";
-import { definePlugin } from "emdash";
+} from "emdash/plugin";
+import { definePlugin } from "emdash/plugin";
 
 import {
 	COMMERCE_EXTENSION_HOOKS,
@@ -150,21 +150,21 @@ function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteCont
 	};
 }
 
-/** Outbound Stripe API (`api.stripe.com`, `connect.stripe.com`, etc.). */
-const STRIPE_ALLOWED_HOSTS = ["*.stripe.com"] as const;
+/** Outbound Stripe API hosts. */
+const STRIPE_ALLOWED_HOSTS = ["api.stripe.com", "connect.stripe.com"] as const;
 
 /**
  * Manifest-style descriptor; uses the same storage declaration as {@link createPlugin}.
- * Cast matches `PluginDescriptor`’s simplified typing; composite indexes match runtime config.
+ * Composite indexes match runtime config.
  */
-export function commercePlugin(): PluginDescriptor {
+export function commercePlugin() {
 	return {
 		id: "dashing-commerce",
 		version: "0.1.0",
 		entrypoint: "@emdash-cms/plugin-dashing-commerce",
-		capabilities: ["network:fetch"],
-		allowedHosts: [...STRIPE_ALLOWED_HOSTS],
-		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginDescriptor["storage"],
+		capabilities: ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"],
+		network: { allowedHostnames: [...STRIPE_ALLOWED_HOSTS] },
+		storage: COMMERCE_STORAGE_CONFIG as unknown as PluginStorageConfig,
 	};
 }
 
@@ -190,8 +190,8 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 	const pluginDefinition: PluginDefinition<CommerceStorage> = {
 		id: "dashing-commerce",
 		version: "0.1.0",
-		capabilities: ["network:fetch"],
-		allowedHosts: [...STRIPE_ALLOWED_HOSTS],
+		capabilities: ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"],
+		network: { allowedHostnames: [...STRIPE_ALLOWED_HOSTS] },
 
 		storage: COMMERCE_STORAGE_CONFIG,
 
@@ -222,20 +222,16 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 			},
 		},
 
+		onActivate: async (_event: unknown, ctx: PluginContext) => {
+			if (ctx.cron) {
+				await ctx.cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
+			}
+		},
 		hooks: {
-			"plugin:activate": {
-				handler: async (_event: unknown, ctx: PluginContext) => {
-					if (ctx.cron) {
-						await ctx.cron.schedule("idempotency-cleanup", { schedule: "@weekly" });
-					}
-				},
-			},
-			cron: {
-				handler: async (event: unknown, ctx: PluginContext) => {
-					if ((event as { name?: string }).name === "idempotency-cleanup") {
-						await handleIdempotencyCleanup(ctx);
-					}
-				},
+			cron: async (event: { name?: string }, ctx: PluginContext) => {
+				if (event.name === "idempotency-cleanup") {
+					await handleIdempotencyCleanup(ctx);
+				}
 			},
 		},
 

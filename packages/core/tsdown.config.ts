@@ -41,6 +41,8 @@ export default defineConfig({
 		"src/plugin-utils.ts",
 		// Standard plugin adapter (loaded by virtual:emdash/plugins at runtime)
 		"src/plugins/adapt-sandbox-entry.ts",
+		// Plugin-facing guide entrypoint
+		"src/plugin.ts",
 	],
 	format: "esm",
 	dts: true,

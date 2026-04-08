@@ -16,8 +16,9 @@
 	},
 	"files": ["src"],
 	"scripts": {
-		"check": "pnpm run typecheck && pnpm run lint && pnpm run test:webhook-receipt-reason-guard",
+		"check": "pnpm run typecheck && pnpm run lint && pnpm run test:guide-compliance && pnpm run test:webhook-receipt-reason-guard && pnpm run test src/orchestration/finalize-payment.test.ts",
 		"test": "vitest run",
+		"test:guide-compliance": "vitest run src/commerce-guide-compliance.test.ts",
 		"test:webhook-receipt-reason-guard": "vitest run src/orchestration/finalize-receipt-reason-literals.test.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "oxlint"
@@ -27,11 +28,11 @@
 	},
 	"peerDependencies": {
 		"astro": ">=6.0.0-beta.0",
-		"emdash": "workspace:*"
+		"emdash": "^0.1.0"
 	},
 	"devDependencies": {
 		"astro": "catalog:",
-		"emdash": "workspace:*",
+		"emdash": "^0.1.0",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	},

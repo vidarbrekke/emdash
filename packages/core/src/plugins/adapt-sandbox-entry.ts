@@ -24,6 +24,7 @@ import type {
 	PluginCapability,
 	PluginStorageConfig,
 	PluginAdminConfig,
+	PluginNetworkPolicy,
 } from "./types.js";
 
 /**
@@ -163,6 +164,9 @@ export function adaptSandboxEntry(
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated against VALID_CAPABILITIES_SET above; descriptor uses string[] for flexibility
 	const capabilities = [...rawCapabilities] as PluginCapability[];
 	const allowedHosts = descriptor.allowedHosts ?? [];
+	const network: PluginNetworkPolicy = {
+		allowedHostnames: descriptor.network?.allowedHostnames ?? allowedHosts,
+	};
 
 	// Capability implications: broader capabilities imply narrower ones
 	// (mirrors the normalization in define-plugin.ts for native format)
@@ -202,6 +206,7 @@ export function adaptSandboxEntry(
 		version,
 		capabilities,
 		allowedHosts,
+		network,
 		storage,
 		hooks: resolvedHooks,
 		routes: resolvedRoutes,
