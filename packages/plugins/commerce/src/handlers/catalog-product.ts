@@ -309,14 +309,14 @@ async function replaceVariableProductAttributes(args: {
 		for (const plannedAttribute of plannedAttributeRows) {
 			await productAttributes.delete(plannedAttribute.id);
 		}
-		for (const optionRow of existingOptionSnapshot) {
-			await productSkuOptionValues.put(optionRow.id, optionRow.data);
+		for (const attributeRow of existingAttributeSnapshot) {
+			await productAttributes.put(attributeRow.id, attributeRow.data);
 		}
 		for (const valueRow of existingValueSnapshot) {
 			await productAttributeValues.put(valueRow.id, valueRow.data);
 		}
-		for (const attributeRow of existingAttributeSnapshot) {
-			await productAttributes.put(attributeRow.id, attributeRow.data);
+		for (const optionRow of existingOptionSnapshot) {
+			await productSkuOptionValues.put(optionRow.id, optionRow.data);
 		}
 		throw error;
 	}
@@ -625,17 +625,14 @@ function intersectProductIdSets(left: Set<string>, right: Set<string>): Set<stri
 }
 
 async function collectLinkedProductIds(links: Collection<{ productId: string }>, where: ProductCategoryIdFilter | ProductTagIdFilter): Promise<Set<string>> {
+	const linksResult = await queryAllPages((cursor) => links.query({
+		where,
+		cursor,
+		limit: 100,
+	}));
 	const ids = new Set<string>();
-	let cursor: string | undefined;
-	while (true) {
-		const result = await links.query({ where, cursor, limit: 100 });
-		for (const row of result.items) {
-			ids.add(row.data.productId);
-		}
-		if (!result.hasMore || !result.cursor) {
-			break;
-		}
-		cursor = result.cursor;
+	for (const row of linksResult) {
+		ids.add(row.data.productId);
 	}
 	return ids;
 }

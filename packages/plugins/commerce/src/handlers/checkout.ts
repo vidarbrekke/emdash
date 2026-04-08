@@ -65,7 +65,6 @@ type CheckoutAtomicSupportArgs = {
 	path: "checkout";
 	hasPutIfAbsent: boolean;
 	hasCompareAndSwap: boolean;
-	allowDegradedMode?: boolean;
 };
 
 type CheckoutCartLock = {
@@ -80,7 +79,6 @@ const CHECKOUT_CART_LOCK_KIND = "checkout_cart_lock";
 const CHECKOUT_CART_LOCK_TTL_MS = 30_000;
 
 function assertAtomicMoneyPathSupport(args: CheckoutAtomicSupportArgs): void {
-	if (args.allowDegradedMode) return;
 	if (!args.hasPutIfAbsent || !args.hasCompareAndSwap) {
 		throwCommerceApiError({
 			code: "ATOMIC_STORAGE_REQUIRED",
@@ -238,16 +236,11 @@ async function releaseCheckoutCartLock(args: {
 			expiresAt: "1970-01-01T00:00:00.000Z",
 		},
 	};
-
-	const compareAndSwapLock = (args.locks as CheckoutLockCollection & { compareAndSwap?: (id: string, expectedVersion: string, data: StoredIdempotencyKey) => Promise<boolean> }).compareAndSwap;
-	if (compareAndSwapLock) {
-		await compareAndSwapLock.call(args.locks, args.lockId, existing.createdAt, releasedLockRecord);
+	const compareAndSwapLock = args.locks.compareAndSwap;
+	if (!compareAndSwapLock) return;
+	const released = await compareAndSwapLock.call(args.locks, args.lockId, existing.createdAt, releasedLockRecord);
+	if (!released) {
 		return;
-	}
-
-	const deleteLock = (args.locks as CheckoutLockCollection & { delete?: (id: string) => Promise<boolean> }).delete;
-	if (deleteLock) {
-		await deleteLock.call(args.locks, args.lockId);
 	}
 }
 

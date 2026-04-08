@@ -85,7 +85,6 @@ type FinalizeAtomicSupportArgs = {
 	path: "finalize";
 	hasPutIfAbsent: boolean;
 	hasCompareAndSwap: boolean;
-	allowDegradedMode?: boolean;
 };
 
 export const WEBHOOK_RECEIPT_CLAIM_LEASE_WINDOW_MS = 30_000;
@@ -166,7 +165,6 @@ function claimLeaseState(nowIso: string, claimLeaseWindowMs: number): {
 }
 
 function assertAtomicMoneyPathSupport(args: FinalizeAtomicSupportArgs): FinalizeWebhookResult | null {
-	if (args.allowDegradedMode) return null;
 	if (!args.hasPutIfAbsent || !args.hasCompareAndSwap) {
 		return {
 			kind: "api_error",
@@ -357,8 +355,11 @@ async function claimWebhookReceipt({
 	nowIso: string;
 	claimLeaseWindowMs: number;
 }): Promise<ClaimWebhookReceiptResult> {
-	if (!ports.webhookReceipts.putIfAbsent) {
-		return { kind: "acquired", persisted: false, receipt };
+	if (!ports.webhookReceipts.putIfAbsent || !ports.webhookReceipts.compareAndSwap) {
+		return {
+			kind: "replay",
+			result: { kind: "replay", reason: "webhook_receipt_claim_retry_failed" },
+		};
 	}
 
 	const claimContext = createClaimContext(nowIso, claimLeaseWindowMs);
@@ -413,10 +414,6 @@ async function claimWebhookReceipt({
 	}
 
 	const claimedExistingReceipt = withClaimedMetadata(existing, claimContext, existing.updatedAt, nowIso);
-	if (!ports.webhookReceipts.compareAndSwap) {
-		return { kind: "acquired", persisted: false, receipt: claimedExistingReceipt };
-	}
-
 	const stolen = await ports.webhookReceipts.compareAndSwap(
 		receiptId,
 		existing.updatedAt,
@@ -492,12 +489,11 @@ async function persistReceiptStatus(
 		updatedAt: nowIso,
 	};
 
-	if (ports.webhookReceipts.compareAndSwap) {
-		return await ports.webhookReceipts.compareAndSwap(receiptId, receipt.updatedAt, persisted);
+	if (!ports.webhookReceipts.compareAndSwap) {
+		return false;
 	}
 
-	await ports.webhookReceipts.put(receiptId, persisted);
-	return true;
+	return await ports.webhookReceipts.compareAndSwap(receiptId, receipt.updatedAt, persisted);
 }
 
 function getActiveClaim(receipt: StoredWebhookReceipt):
@@ -562,11 +558,7 @@ async function assertAndRefreshClaim(
 		activeClaim.claimToken,
 		claimLeaseWindowMs,
 	);
-	if (!ports.webhookReceipts.compareAndSwap) {
-		return { kind: "acquired", receipt: pendingReceipt };
-	}
-
-	const refreshedReceipt = await ports.webhookReceipts.compareAndSwap(
+	const refreshedReceipt = await ports.webhookReceipts.compareAndSwap!(
 		receiptId,
 		pendingReceipt.updatedAt,
 		refreshed,

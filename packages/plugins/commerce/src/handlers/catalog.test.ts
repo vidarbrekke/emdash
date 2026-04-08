@@ -27,6 +27,7 @@ import type {
 	ProductSkuCreateInput,
 	ProductSkuUpdateInput,
 	ProductCreateInput,
+	ProductUpdateInput,
 	DigitalAssetCreateInput,
 	DigitalEntitlementCreateInput,
 	BundleComponentAddInput,
@@ -981,6 +982,219 @@ describe("catalog product handlers", () => {
 			id: "sku_1_color_red",
 			attributeValueId: "val_existing_red",
 		});
+	});
+
+	it("replaces variable attributes across paged existing rows", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productSkus = new PagedQueryMemColl<StoredProductSku>();
+		const productAttributes = new PagedQueryMemColl<StoredProductAttribute>();
+		const productAttributeValues = new PagedQueryMemColl<StoredProductAttributeValue>();
+		const productSkuOptionValues = new PagedQueryMemColl<StoredProductSkuOptionValue>();
+		const totalRows = 110;
+		const now = "2026-01-01T00:00:00.000Z";
+
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "draft",
+			visibility: "hidden",
+			slug: "variable-product-paged-replace",
+			title: "Variable Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: now,
+			updatedAt: now,
+		});
+
+		for (let index = 0; index < totalRows; index += 1) {
+			await productAttributes.put(`attr_${index}`, {
+				id: `attr_${index}`,
+				productId: "prod_var",
+				name: `Attribute ${index}`,
+				code: `attr_${index}`,
+				kind: "variant_defining",
+				position: index,
+				createdAt: now,
+				updatedAt: now,
+			});
+			await productAttributeValues.put(`val_${index}`, {
+				id: `val_${index}`,
+				attributeId: `attr_${index}`,
+				value: `Value ${index}`,
+				code: `val_${index}`,
+				position: index,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		for (let index = 0; index < totalRows; index += 1) {
+			const skuId = `sku_${index}`;
+			await productSkus.put(skuId, {
+				id: skuId,
+				productId: "prod_var",
+				skuCode: `SKU-${index}`,
+				status: "active",
+				unitPriceMinor: 1000,
+				inventoryQuantity: 5,
+				inventoryVersion: 1,
+				requiresShipping: true,
+				isDigital: false,
+				createdAt: now,
+				updatedAt: now,
+			});
+			await productSkuOptionValues.put(`opt_${index}`, {
+				id: `opt_${index}`,
+				skuId,
+				attributeId: `attr_${index}`,
+				attributeValueId: `val_${index}`,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		await updateProductHandler(
+			catalogCtx<ProductUpdateInput>(
+				{
+					productId: "prod_var",
+					attributes: [
+						{
+							name: "Color",
+							code: "color",
+							kind: "variant_defining",
+							position: 0,
+							values: [{ value: "Red", code: "red", position: 0 }],
+						},
+					],
+				},
+				products,
+				productSkus,
+				new MemColl(),
+				new MemColl(),
+				productAttributes,
+				productAttributeValues,
+				productSkuOptionValues,
+			),
+		);
+
+		expect(productAttributes.rows.size).toBe(1);
+		expect(productAttributeValues.rows.size).toBe(1);
+		expect(productSkuOptionValues.rows.size).toBe(0);
+		expect(Array.from(productAttributes.rows.values(), (attribute) => attribute.code)).toEqual(["color"]);
+		expect(Array.from(productAttributeValues.rows.values(), (value) => value.code)).toEqual(["red"]);
+	});
+
+	it("restores all paged attribute data when cleanup fails mid option deletion", async () => {
+		const products = new MemColl<StoredProduct>();
+		const productSkus = new PagedQueryMemColl<StoredProductSku>();
+		const productAttributes = new PagedQueryMemColl<StoredProductAttribute>();
+		const productAttributeValues = new PagedQueryMemColl<StoredProductAttributeValue>();
+		const productSkuOptionValues = new PagedQueryMemColl<StoredProductSkuOptionValue>();
+		const totalRows = 110;
+		const now = "2026-01-01T00:00:00.000Z";
+
+		await products.put("prod_var", {
+			id: "prod_var",
+			type: "variable",
+			status: "draft",
+			visibility: "hidden",
+			slug: "variable-product-paged-replace-fail",
+			title: "Variable Product",
+			shortDescription: "",
+			longDescription: "",
+			featured: false,
+			sortOrder: 0,
+			requiresShippingDefault: true,
+			createdAt: now,
+			updatedAt: now,
+		});
+
+		for (let index = 0; index < totalRows; index += 1) {
+			await productAttributes.put(`attr_${index}`, {
+				id: `attr_${index}`,
+				productId: "prod_var",
+				name: `Attribute ${index}`,
+				code: `attr_${index}`,
+				kind: "variant_defining",
+				position: index,
+				createdAt: now,
+				updatedAt: now,
+			});
+			await productAttributeValues.put(`val_${index}`, {
+				id: `val_${index}`,
+				attributeId: `attr_${index}`,
+				value: `Value ${index}`,
+				code: `val_${index}`,
+				position: index,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		for (let index = 0; index < totalRows; index += 1) {
+			const skuId = `sku_${index}`;
+			await productSkus.put(skuId, {
+				id: skuId,
+				productId: "prod_var",
+				skuCode: `SKU-${index}`,
+				status: "active",
+				unitPriceMinor: 1000,
+				inventoryQuantity: 5,
+				inventoryVersion: 1,
+				requiresShipping: true,
+				isDigital: false,
+				createdAt: now,
+				updatedAt: now,
+			});
+			await productSkuOptionValues.put(`opt_${index}`, {
+				id: `opt_${index}`,
+				skuId,
+				attributeId: `attr_${index}`,
+				attributeValueId: `val_${index}`,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		const failingProductSkuOptionValues = withFailingDeleteOnNth(productSkuOptionValues, 101);
+
+		await expect(
+			updateProductHandler(
+				catalogCtx<ProductUpdateInput>(
+					{
+						productId: "prod_var",
+						attributes: [
+							{
+								name: "Color",
+								code: "color",
+								kind: "variant_defining",
+								position: 0,
+								values: [{ value: "Red", code: "red", position: 0 }],
+							},
+						],
+					},
+					products,
+					productSkus,
+					new MemColl(),
+					new MemColl(),
+					productAttributes,
+					productAttributeValues,
+					failingProductSkuOptionValues,
+				),
+			),
+		).rejects.toThrow("mutation delete failure");
+
+		expect(productAttributes.rows.size).toBe(totalRows);
+		expect(productAttributeValues.rows.size).toBe(totalRows);
+		expect(failingProductSkuOptionValues.rows.size).toBe(totalRows);
+		const firstAttribute = productAttributes.rows.get("attr_0");
+		expect(firstAttribute).toMatchObject({ id: "attr_0", code: "attr_0" });
+		const firstValue = productAttributeValues.rows.get("val_0");
+		expect(firstValue).toMatchObject({ id: "val_0", code: "val_0" });
+		expect(Array.from(failingProductSkuOptionValues.rows.values(), (option) => option.skuId).every((skuId) => skuId.startsWith("sku_"))).toBe(true);
 	});
 
 	it("updates mutable product fields and preserves immutable fields", async () => {
