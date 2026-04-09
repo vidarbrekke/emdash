@@ -47,7 +47,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "getProductHandler",
+      "handlerHasRequirePostGuard": false
     },
     "admin/catalog/products": {
       "public": false,
@@ -55,7 +57,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listProductsHandler",
+      "handlerHasRequirePostGuard": false
     },
     "admin/catalog/sku/list": {
       "public": false,
@@ -63,7 +67,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listProductSkusHandler",
+      "handlerHasRequirePostGuard": false
     },
     "bundle-components/add": {
       "public": false,
@@ -71,7 +77,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "addBundleComponentHandler",
+      "handlerHasRequirePostGuard": false
     },
     "bundle-components/remove": {
       "public": false,
@@ -79,7 +87,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "removeBundleComponentHandler",
+      "handlerHasRequirePostGuard": false
     },
     "bundle-components/reorder": {
       "public": false,
@@ -87,7 +97,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "reorderBundleComponentHandler",
+      "handlerHasRequirePostGuard": false
     },
     "bundle/compute": {
       "public": true,
@@ -95,7 +107,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "bundleComputeStorefrontHandler",
+      "handlerHasRequirePostGuard": true
     },
     "cart/get": {
       "public": true,
@@ -103,7 +117,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "cartGetHandler",
+      "handlerHasRequirePostGuard": true
     },
     "cart/upsert": {
       "public": true,
@@ -112,7 +128,9 @@
         "withRouteCapabilities"
       ],
       "hasRouteCapabilitiesWrapper": true,
-      "needsRouteCapabilities": true
+      "needsRouteCapabilities": true,
+      "routeHandlerName": "cartUpsertHandler",
+      "handlerHasRequirePostGuard": true
     },
     "catalog/asset/link": {
       "public": false,
@@ -120,7 +138,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "linkCatalogAssetHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/asset/reorder": {
       "public": false,
@@ -128,7 +148,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "reorderCatalogAssetHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/asset/unlink": {
       "public": false,
@@ -136,7 +158,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "unlinkCatalogAssetHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/category/create": {
       "public": false,
@@ -144,7 +168,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createCategoryHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/category/link": {
       "public": false,
@@ -152,7 +178,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createProductCategoryLinkHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/category/list": {
       "public": true,
@@ -160,7 +188,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listCategoriesHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/category/unlink": {
       "public": false,
@@ -168,7 +198,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "removeProductCategoryLinkHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/product/create": {
       "public": false,
@@ -176,7 +208,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createProductHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/product/get": {
       "public": true,
@@ -184,7 +218,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "getStorefrontProductHandler",
+      "handlerHasRequirePostGuard": true
     },
     "catalog/product/get-by-slug": {
       "public": true,
@@ -192,7 +228,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "getStorefrontProductBySlugHandler",
+      "handlerHasRequirePostGuard": true
     },
     "catalog/product/state": {
       "public": false,
@@ -200,7 +238,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "setProductStateHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/product/update": {
       "public": false,
@@ -208,7 +248,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "updateProductHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/products": {
       "public": true,
@@ -216,7 +258,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listStorefrontProductsHandler",
+      "handlerHasRequirePostGuard": true
     },
     "catalog/sku/create": {
       "public": false,
@@ -224,7 +268,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createProductSkuHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/sku/list": {
       "public": true,
@@ -232,7 +278,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listStorefrontProductSkusHandler",
+      "handlerHasRequirePostGuard": true
     },
     "catalog/sku/state": {
       "public": false,
@@ -240,7 +288,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "setSkuStatusHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/sku/update": {
       "public": false,
@@ -248,7 +298,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "updateProductSkuHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/tag/create": {
       "public": false,
@@ -256,7 +308,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createTagHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/tag/link": {
       "public": false,
@@ -264,7 +318,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createProductTagLinkHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/tag/list": {
       "public": true,
@@ -272,7 +328,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "listTagsHandler",
+      "handlerHasRequirePostGuard": false
     },
     "catalog/tag/unlink": {
       "public": false,
@@ -280,7 +338,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "removeProductTagLinkHandler",
+      "handlerHasRequirePostGuard": false
     },
     "checkout": {
       "public": true,
@@ -289,7 +349,9 @@
         "withRouteCapabilities"
       ],
       "hasRouteCapabilitiesWrapper": true,
-      "needsRouteCapabilities": true
+      "needsRouteCapabilities": true,
+      "routeHandlerName": "checkoutHandler",
+      "handlerHasRequirePostGuard": true
     },
     "checkout/get-order": {
       "public": true,
@@ -297,7 +359,9 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "checkoutGetOrderHandler",
+      "handlerHasRequirePostGuard": true
     },
     "digital-assets/create": {
       "public": false,
@@ -305,7 +369,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createDigitalAssetHandler",
+      "handlerHasRequirePostGuard": false
     },
     "digital-entitlements/create": {
       "public": false,
@@ -313,7 +379,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "createDigitalEntitlementHandler",
+      "handlerHasRequirePostGuard": false
     },
     "digital-entitlements/remove": {
       "public": false,
@@ -321,7 +389,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "removeDigitalEntitlementHandler",
+      "handlerHasRequirePostGuard": false
     },
     "product-assets/register": {
       "public": false,
@@ -329,7 +399,9 @@
         "adminRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "registerProductAssetHandler",
+      "handlerHasRequirePostGuard": false
     },
     "recommendations": {
       "public": true,
@@ -337,7 +409,8 @@
         "publicRoute"
       ],
       "hasRouteCapabilitiesWrapper": false,
-      "needsRouteCapabilities": false
+      "needsRouteCapabilities": false,
+      "routeHandlerName": "recommendationsRouteHandler"
     },
     "webhooks/stripe": {
       "public": true,
@@ -346,7 +419,9 @@
         "withRouteCapabilities"
       ],
       "hasRouteCapabilitiesWrapper": true,
-      "needsRouteCapabilities": true
+      "needsRouteCapabilities": true,
+      "routeHandlerName": "stripeWebhookHandler",
+      "handlerHasRequirePostGuard": true
     }
   },
   "unknownPublicRoutes": []

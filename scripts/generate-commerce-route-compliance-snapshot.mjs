@@ -38,6 +38,7 @@ const pluginIndexSourceText = readFileSync(PLUGIN_INDEX_PATH, "utf8");
 const contractSource = ts.createSourceFile(CONTRACT_SOURCE_PATH, contractSourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
 const pluginIndexSource = ts.createSourceFile(PLUGIN_INDEX_PATH, pluginIndexSourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
 const SUPPORTED_ROUTE_DEFINITION_WRAPPERS = new Set(["publicRoute", "adminRoute", "withRouteCapabilities"]);
+const ROUTE_HANDLER_WRAPPERS = new Set(["publicRoute", "adminRoute", "withRouteCapabilities"]);
 
 function unwrapExpression(node) {
 	while (
@@ -122,6 +123,55 @@ function deriveRoutePublicness(node, unsupportedWrappers = new Set()) {
 	return undefined;
 }
 
+function hasRequirePostCall(node) {
+	let found = false;
+	const visit = (candidate) => {
+		if (found) return;
+		if (!candidate) return;
+		if (ts.isCallExpression(candidate) && getCalleeName(candidate.expression) === "requirePost") {
+			found = true;
+			return;
+		}
+		ts.forEachChild(candidate, visit);
+	};
+	visit(node);
+	return found;
+}
+
+function hasHandlerRequirePostGuard(handlerName) {
+	const sourcePath = ROUTE_HANDLER_IMPORTS[handlerName];
+	if (!sourcePath) return undefined;
+	let sourceText;
+	try {
+		sourceText = readFileSync(sourcePath, "utf8");
+	} catch {
+		return undefined;
+	}
+
+	const handlerSource = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+	let handlerDeclaration = null;
+	for (const statement of handlerSource.statements) {
+		if (ts.isFunctionDeclaration(statement) && statement.name?.text === handlerName) {
+			handlerDeclaration = statement;
+			break;
+		}
+
+		if (!ts.isVariableStatement(statement)) continue;
+		for (const declaration of statement.declarationList.declarations) {
+			if (!ts.isIdentifier(declaration.name) || declaration.name.text !== handlerName) continue;
+			const initializer = declaration.initializer;
+			if (initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))) {
+				handlerDeclaration = initializer;
+				break;
+			}
+		}
+	}
+	if (!handlerDeclaration) return undefined;
+	if (!ts.isFunctionLike(handlerDeclaration)) return undefined;
+	if (!handlerDeclaration.body) return undefined;
+	return hasRequirePostCall(handlerDeclaration.body);
+}
+
 function collectRouteWrappers(node, wrappers = new Set()) {
 	const expression = unwrapExpression(node);
 	if (ts.isCallExpression(expression)) {
@@ -142,6 +192,61 @@ function collectRouteWrappers(node, wrappers = new Set()) {
 	}
 
 	return wrappers;
+}
+
+function resolveHandlerSourcePath(rawModuleSpecifier) {
+	const resolved = resolve(dirname(PLUGIN_INDEX_PATH), rawModuleSpecifier);
+	if (resolved.endsWith(".ts")) return resolved;
+	if (resolved.endsWith(".js")) return `${resolved.slice(0, -3)}.ts`;
+	return `${resolved}.ts`;
+}
+
+function collectRouteHandlerImports() {
+	const imports = {};
+	for (const statement of pluginIndexSource.statements) {
+		if (!ts.isImportDeclaration(statement)) continue;
+		const moduleSpecifier = statement.moduleSpecifier;
+		if (!ts.isStringLiteral(moduleSpecifier)) continue;
+		const rawModule = moduleSpecifier.text;
+		if (!rawModule.startsWith("./handlers/")) continue;
+		if (!statement.importClause) continue;
+		const named = statement.importClause.namedBindings;
+		if (!named || !ts.isNamedImports(named)) continue;
+		const sourcePath = resolveHandlerSourcePath(rawModule);
+		for (const element of named.elements) {
+			const localName = element.name.text;
+			imports[localName] = sourcePath;
+		}
+	}
+	return imports;
+}
+
+const ROUTE_HANDLER_IMPORTS = collectRouteHandlerImports();
+
+function deriveRouteHandlerNode(node) {
+	const expression = unwrapExpression(node);
+	if (ts.isCallExpression(expression)) {
+		const callee = getCalleeName(expression.expression);
+		const handlerCandidate = callee && ROUTE_HANDLER_WRAPPERS.has(callee) ? expression.arguments[1] : undefined;
+		if (handlerCandidate) {
+			const handler = deriveRouteHandlerNode(handlerCandidate);
+			if (handler) return handler;
+		}
+
+		for (const argument of expression.arguments) {
+			const nested = deriveRouteHandlerNode(argument);
+			if (nested) return nested;
+		}
+		return undefined;
+	}
+
+	if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) return expression;
+	return undefined;
+}
+
+function handlerNameFromNode(node) {
+	if (ts.isIdentifier(node)) return node.text;
+	return undefined;
 }
 
 function findPluginRoutesObject() {
@@ -291,6 +396,9 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 		const routeUnsupportedWrappers = new Set();
 		const publicness = deriveRoutePublicness(entry.initializer, routeUnsupportedWrappers);
 		const routeWrappers = [...collectRouteWrappers(entry.initializer)].sort();
+		const routeHandlerNode = deriveRouteHandlerNode(entry.initializer);
+		const routeHandlerName = handlerNameFromNode(routeHandlerNode);
+		const handlerHasRequirePostGuard = routeHandlerName ? hasHandlerRequirePostGuard(routeHandlerName) : undefined;
 		if (routeUnsupportedWrappers.size > 0) {
 			unsupportedRouteWrappers[route] = [...routeUnsupportedWrappers].sort();
 		}
@@ -303,6 +411,8 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 			wrappers: routeWrappers,
 			hasRouteCapabilitiesWrapper: routeWrappers.includes("withRouteCapabilities"),
 			needsRouteCapabilities: contractMetadata.requiresKV || contractMetadata.requiresFetch,
+			routeHandlerName: routeHandlerName ?? "unknown",
+			handlerHasRequirePostGuard,
 		};
 	}
 
@@ -506,6 +616,9 @@ const contractRoutePublicMap = Object.fromEntries(
 const contractRouteCapabilitiesMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
 );
+const contractRouteSideEffectMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { sideEffectful: contract.sideEffectful }]),
+);
 
 describe("route contract to registered route alignment", () => {
 	it("must report the same route count from source and contracts", () => {
@@ -522,6 +635,13 @@ describe("route contract to registered route alignment", () => {
 	it("must keep capability wrapper usage aligned with contracts", () => {
 		for (const [route, contract] of Object.entries(contractRouteCapabilitiesMap)) {
 			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
+		}
+	});
+	it("must apply requirePost guards for side-effecting contract routes", () => {
+		for (const [route, contract] of Object.entries(contractRouteSideEffectMap)) {
+			if (contract.sideEffectful) {
+				expect(routeSurface.routeRecords[route]?.handlerHasRequirePostGuard).toBe(true);
+			}
 		}
 	});
 	it("must resolve publicness from known route wrappers", () => {

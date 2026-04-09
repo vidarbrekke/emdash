@@ -13,6 +13,9 @@ const contractRoutePublicMap = Object.fromEntries(
 const contractRouteCapabilitiesMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
 );
+const contractRouteSideEffectMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { sideEffectful: contract.sideEffectful }]),
+);
 
 describe("route contract to registered route alignment", () => {
 	it("must report the same route count from source and contracts", () => {
@@ -29,6 +32,13 @@ describe("route contract to registered route alignment", () => {
 	it("must keep capability wrapper usage aligned with contracts", () => {
 		for (const [route, contract] of Object.entries(contractRouteCapabilitiesMap)) {
 			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
+		}
+	});
+	it("must apply requirePost guards for side-effecting contract routes", () => {
+		for (const [route, contract] of Object.entries(contractRouteSideEffectMap)) {
+			if (contract.sideEffectful) {
+				expect(routeSurface.routeRecords[route]?.handlerHasRequirePostGuard).toBe(true);
+			}
 		}
 	});
 	it("must resolve publicness from known route wrappers", () => {
