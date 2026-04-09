@@ -8,6 +8,10 @@
  * responsible for that mapping; the kernel does not emit HTTP.
  */
 export const COMMERCE_ERRORS = {
+	// Generic route contract
+	BAD_REQUEST: { httpStatus: 400, retryable: false },
+	METHOD_NOT_ALLOWED: { httpStatus: 405, retryable: false },
+
 	// Inventory
 	INVENTORY_CHANGED: { httpStatus: 409, retryable: false },
 	INSUFFICIENT_STOCK: { httpStatus: 409, retryable: false },
@@ -70,6 +74,9 @@ export type CommerceErrorCode = keyof typeof COMMERCE_ERRORS;
 
 /** Wire-level / public API error code (snake_case), stable across versions. */
 export const COMMERCE_ERROR_WIRE_CODES = {
+	BAD_REQUEST: "bad_request",
+	METHOD_NOT_ALLOWED: "method_not_allowed",
+
 	INVENTORY_CHANGED: "inventory_changed",
 	INSUFFICIENT_STOCK: "insufficient_stock",
 	PRODUCT_UNAVAILABLE: "product_unavailable",

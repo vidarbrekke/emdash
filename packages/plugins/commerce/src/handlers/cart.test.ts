@@ -286,7 +286,7 @@ describe("cartUpsertHandler", () => {
 			requestMeta: { ip: "127.0.0.1" },
 			kv,
 		} as unknown as RouteContext<CartUpsertInput>;
-		await expect(cartUpsertHandler(ctx)).rejects.toMatchObject({ code: "METHOD_NOT_ALLOWED" });
+		await expect(cartUpsertHandler(ctx)).rejects.toMatchObject({ code: "method_not_allowed" });
 	});
 
 	it("enforces cart line item cap", async () => {
@@ -474,7 +474,7 @@ describe("cartGetHandler", () => {
 			requestMeta: { ip: "127.0.0.1" },
 			kv,
 		} as unknown as RouteContext<CartGetInput>;
-		await expect(cartGetHandler(ctx)).rejects.toMatchObject({ code: "METHOD_NOT_ALLOWED" });
+		await expect(cartGetHandler(ctx)).rejects.toMatchObject({ code: "method_not_allowed" });
 	});
 
 	it("returns cart contents for a known cartId when ownerToken matches", async () => {

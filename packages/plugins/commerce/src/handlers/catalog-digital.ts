@@ -1,9 +1,8 @@
-import { PluginRouteError } from "emdash";
 import type { RouteContext } from "emdash";
 
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type {
 	DigitalAssetCreateInput,
 	DigitalEntitlementCreateInput,
@@ -61,7 +60,7 @@ export async function handleCreateDigitalEntitlement(
 		throwCommerceApiError({ code: "VARIANT_UNAVAILABLE", message: "SKU not found" });
 	}
 	if (sku.status !== "active") {
-		throw PluginRouteError.badRequest(`Cannot attach entitlement to inactive SKU ${ctx.input.skuId}`);
+		throwBadRequest(`Cannot attach entitlement to inactive SKU ${ctx.input.skuId}`);
 	}
 
 	const digitalAsset = await productDigitalAssets.get(ctx.input.digitalAssetId);

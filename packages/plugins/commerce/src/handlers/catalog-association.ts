@@ -1,9 +1,7 @@
 import type { RouteContext } from "emdash";
-import { PluginRouteError } from "emdash";
-
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import { sortedImmutable } from "../lib/sort-immutable.js";
 import type {
 	CategoryCreateInput,
@@ -43,7 +41,7 @@ export async function handleCreateCategory(ctx: RouteContext<CategoryCreateInput
 	if (ctx.input.parentId) {
 		const parent = await categories.get(ctx.input.parentId);
 		if (!parent) {
-			throw PluginRouteError.badRequest(`Category parent not found: ${ctx.input.parentId}`);
+			throwBadRequest(`Category parent not found: ${ctx.input.parentId}`);
 		}
 	}
 
@@ -103,7 +101,7 @@ export async function handleCreateProductCategoryLink(
 	}
 	const category = await categories.get(ctx.input.categoryId);
 	if (!category) {
-		throw PluginRouteError.badRequest(`Category not found: ${ctx.input.categoryId}`);
+		throwBadRequest(`Category not found: ${ctx.input.categoryId}`);
 	}
 
 	const id = `prod_cat_link_${await randomHex(6)}`;
@@ -185,7 +183,7 @@ export async function handleCreateProductTagLink(ctx: RouteContext<ProductTagLin
 	}
 	const tag = await tags.get(ctx.input.tagId);
 	if (!tag) {
-		throw PluginRouteError.badRequest(`Tag not found: ${ctx.input.tagId}`);
+		throwBadRequest(`Tag not found: ${ctx.input.tagId}`);
 	}
 
 	const id = `prod_tag_link_${await randomHex(6)}`;

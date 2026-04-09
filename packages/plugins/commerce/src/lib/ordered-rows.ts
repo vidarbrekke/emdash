@@ -1,6 +1,6 @@
-import { PluginRouteError } from "emdash";
 import { sortedImmutable } from "./sort-immutable.js";
 import type { StorageCollection } from "emdash";
+import { throwBadRequest } from "../route-errors.js";
 
 type Collection<T> = StorageCollection<T>;
 
@@ -54,13 +54,13 @@ export function removeOrderedRow<T extends OrderedRow>(rows: T[], removedRowId: 
 export function moveOrderedRow<T extends OrderedRow>(rows: T[], rowId: string, requestedPosition: number): T[] {
 	const fromIndex = rows.findIndex((row) => row.id === rowId);
 	if (fromIndex === -1) {
-		throw PluginRouteError.badRequest("Ordered row not found in target list");
+		throwBadRequest("Ordered row not found in target list");
 	}
 
 	const nextOrder = [...rows];
 	const [moving] = nextOrder.splice(fromIndex, 1);
 	if (!moving) {
-		throw PluginRouteError.badRequest("Ordered row not found in target list");
+		throwBadRequest("Ordered row not found in target list");
 	}
 
 	const insertionIndex = Math.min(normalizeOrderedPosition(requestedPosition), rows.length - 1);
@@ -111,7 +111,7 @@ export async function mutateOrderedChildren<T extends OrderedRow>(params: {
 			const { rowId, requestedPosition } = mutation;
 			const fromIndex = rows.findIndex((candidate) => candidate.id === rowId);
 			if (fromIndex === -1) {
-				throw PluginRouteError.badRequest(mutation.notFoundMessage ?? "Ordered row not found in target list");
+				throwBadRequest(mutation.notFoundMessage ?? "Ordered row not found in target list");
 			}
 			normalized = moveOrderedRow(rows, rowId, requestedPosition);
 			break;

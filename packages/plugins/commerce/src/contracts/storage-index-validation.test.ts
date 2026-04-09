@@ -44,7 +44,139 @@ function includesIndex(
 	});
 }
 
+type QueryCoverageCollection = keyof typeof COMMERCE_STORAGE_CONFIG;
+
+type QueryCoverageEntry = {
+	collection: QueryCoverageCollection;
+	where: readonly string[];
+	orderBy?: readonly string[];
+};
+
+const QUERY_PATHS_WITH_INDEX_REQUIREMENTS: readonly QueryCoverageEntry[] = [
+	{
+		collection: "orders",
+		where: ["cartId", "paymentPhase"],
+	},
+	{
+		collection: "paymentAttempts",
+		where: ["orderId", "providerId", "status"],
+		orderBy: ["createdAt"],
+	},
+	{
+		collection: "paymentAttempts",
+		where: ["status"],
+	},
+	{
+		collection: "inventoryLedger",
+		where: ["referenceType", "referenceId"],
+	},
+	{
+		collection: "productAssetLinks",
+		where: ["targetType", "targetId"],
+	},
+	{
+		collection: "productAssetLinks",
+		where: ["targetType", "targetId", "role"],
+	},
+	{
+		collection: "productCategoryLinks",
+		where: ["productId"],
+	},
+	{
+		collection: "productCategoryLinks",
+		where: ["categoryId"],
+	},
+	{
+		collection: "productTagLinks",
+		where: ["productId"],
+	},
+	{
+		collection: "productTagLinks",
+		where: ["tagId"],
+	},
+	{
+		collection: "products",
+		where: ["slug"],
+	},
+	{
+		collection: "products",
+		where: ["type", "status", "visibility"],
+	},
+	{
+		collection: "productSlugHistory",
+		where: ["slug"],
+	},
+	{
+		collection: "productSkus",
+		where: ["productId"],
+	},
+	{
+		collection: "productAttributes",
+		where: ["productId"],
+	},
+	{
+		collection: "productAttributeValues",
+		where: ["attributeId"],
+	},
+	{
+		collection: "productSkuOptionValues",
+		where: ["skuId"],
+	},
+	{
+		collection: "digitalEntitlements",
+		where: ["skuId"],
+	},
+	{
+		collection: "bundleComponents",
+		where: ["bundleProductId"],
+	},
+	{
+		collection: "idempotencyKeys",
+		where: ["createdAt"],
+		orderBy: ["createdAt"],
+	},
+	{
+		collection: "categories",
+		where: ["parentId"],
+	},
+];
+
+function hasSingleFieldIndex(collection: QueryCoverageCollection, field: string): boolean {
+	return includesIndex(collection, [field]) || includesIndex(collection, [field], true);
+}
+
+function hasQuerySupport(collection: QueryCoverageCollection, where: readonly string[], orderBy: readonly string[] = []): boolean {
+	const allWhereIndexed = where.every((field) => hasSingleFieldIndex(collection, field));
+	if (!allWhereIndexed) return false;
+	if (!where.length) return true;
+	if (where.length > 1 && includesIndex(collection, where)) return true;
+	const allOrderByIndexed = orderBy.every((field) => hasSingleFieldIndex(collection, field));
+	return allOrderByIndexed;
+}
+
 describe("storage index contracts", () => {
+	it("supports every observed production query path with indexed predicates", () => {
+		const observedByCollection = new Map<QueryCoverageCollection, { where: Set<string>; orderBy: Set<string> }>();
+		for (const entry of QUERY_PATHS_WITH_INDEX_REQUIREMENTS) {
+			const bucket = observedByCollection.get(entry.collection) ?? { where: new Set(), orderBy: new Set() };
+			for (const field of entry.where) bucket.where.add(field);
+			for (const field of entry.orderBy ?? []) bucket.orderBy.add(field);
+			observedByCollection.set(entry.collection, bucket);
+		}
+
+		for (const [collection, usage] of observedByCollection.entries()) {
+			const whereFields = [...usage.where];
+			const orderByFields = [...usage.orderBy];
+			expect(hasQuerySupport(collection, whereFields, orderByFields), `collection ${collection} query patterns are not index-supported`).toBe(true);
+			for (const field of whereFields) {
+				expect(hasSingleFieldIndex(collection, field), `collection ${collection} query.where.${field} is indexed`).toBe(true);
+			}
+			for (const field of orderByFields) {
+				expect(hasSingleFieldIndex(collection, field), `collection ${collection} query.orderBy.${field} is indexed`).toBe(true);
+			}
+		}
+	});
+
 	it("supports payment attempt lookup path used by finalize/idempotency", () => {
 		expect(includesIndex("paymentAttempts", ["orderId", "providerId", "status"])).toBe(true);
 	});

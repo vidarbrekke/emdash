@@ -1,9 +1,7 @@
 import type { RouteContext } from "emdash";
-import { PluginRouteError } from "emdash";
-
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import {
 	mutateOrderedChildren,
 	normalizeOrderedChildren,
@@ -124,7 +122,7 @@ export async function handleLinkCatalogAsset(
 	if (role === "primary_image") {
 		const hasPrimary = links.some((link) => link.role === "primary_image");
 		if (hasPrimary) {
-			throw PluginRouteError.badRequest("Target already has a primary image");
+			throwBadRequest("Target already has a primary image");
 		}
 	}
 
@@ -169,7 +167,7 @@ export async function handleLinkCatalogAsset(
 
 	const created = normalized.find((candidate) => candidate.id === linkId);
 	if (!created) {
-		throw PluginRouteError.badRequest("Asset link not found after create");
+		throwBadRequest("Asset link not found after create");
 	}
 	return { link: created };
 }
@@ -227,7 +225,7 @@ export async function handleReorderCatalogAsset(
 
 	const updated = normalized.find((candidate) => candidate.id === ctx.input.linkId);
 	if (!updated) {
-		throw PluginRouteError.badRequest("Asset link not found after reorder");
+		throwBadRequest("Asset link not found after reorder");
 	}
 	return { link: updated };
 }

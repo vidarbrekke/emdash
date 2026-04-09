@@ -49,4 +49,22 @@ describe("toCommerceApiError", () => {
 		expect(error.retryable).toBe(false);
 		expect(error.httpStatus).toBe(COMMERCE_ERRORS.WEBHOOK_SIGNATURE_INVALID.httpStatus);
 	});
+
+	it("normalizes request and method contract errors consistently", () => {
+		const badRequest = toCommerceApiError({
+			code: "BAD_REQUEST",
+			message: "Bad request example",
+		});
+		expect(badRequest.code).toBe("bad_request");
+		expect(badRequest.httpStatus).toBe(COMMERCE_ERRORS.BAD_REQUEST.httpStatus);
+		expect(badRequest.retryable).toBe(COMMERCE_ERRORS.BAD_REQUEST.retryable);
+
+		const methodNotAllowed = toCommerceApiError({
+			code: "METHOD_NOT_ALLOWED",
+			message: "Only POST supported",
+		});
+		expect(methodNotAllowed.code).toBe("method_not_allowed");
+		expect(methodNotAllowed.httpStatus).toBe(COMMERCE_ERRORS.METHOD_NOT_ALLOWED.httpStatus);
+		expect(methodNotAllowed.retryable).toBe(COMMERCE_ERRORS.METHOD_NOT_ALLOWED.retryable);
+	});
 });

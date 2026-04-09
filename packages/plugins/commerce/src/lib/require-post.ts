@@ -1,9 +1,9 @@
 import type { RouteContext } from "emdash";
-import { PluginRouteError } from "emdash";
+import { throwMethodNotAllowed } from "../route-errors.js";
 
 /** Aligns with documented route pattern: mutate endpoints should reject GET/HEAD. */
 export function requirePost(ctx: RouteContext): void {
 	if (ctx.request.method !== "POST") {
-		throw new PluginRouteError("METHOD_NOT_ALLOWED", "Only POST is allowed", 405);
+		throwMethodNotAllowed("Only POST is allowed");
 	}
 }

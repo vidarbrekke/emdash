@@ -1,4 +1,4 @@
-import { PluginRouteError } from "emdash";
+import { throwBadRequest } from "../route-errors.js";
 
 import type {
 	StoredProduct,
@@ -39,7 +39,7 @@ export function applyProductUpdatePatch<T extends ProductPatch>(
 	for (const field of PRODUCT_IMMUTABLE_FIELDS) {
 		const proposed = patchMap[field];
 		if (proposed !== undefined && proposed !== existing[field]) {
-			throw PluginRouteError.badRequest(`Cannot update immutable field: ${field}`);
+		throwBadRequest(`Cannot update immutable field: ${field}`);
 		}
 	}
 
@@ -80,7 +80,7 @@ export function applyProductSkuUpdatePatch<T extends ProductSkuPatch>(
 	for (const field of PRODUCT_SKU_IMMUTABLE_FIELDS) {
 		const proposed = patchMap[field];
 		if (proposed !== undefined && proposed !== existing[field]) {
-			throw PluginRouteError.badRequest(`Cannot update immutable field: ${field}`);
+			throwBadRequest(`Cannot update immutable field: ${field}`);
 		}
 	}
 

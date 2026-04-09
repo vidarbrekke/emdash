@@ -39,6 +39,58 @@ function asCollection<T>(raw: unknown): Col<T> {
 	return raw as Col<T>;
 }
 
+function assertWebhookProviderString(value: string | undefined | null, label: string): string {
+	if (typeof value !== "string" || value.length === 0) {
+		throwCommerceApiError({
+			code: "PROVIDER_UNAVAILABLE",
+			message: `${label} must be a non-empty string`,
+		});
+	}
+	return value;
+}
+
+function assertWebhookProviderFinalizeInput(input: unknown): CommerceWebhookInput {
+	if (!input || typeof input !== "object" || Array.isArray(input)) {
+		throwCommerceApiError({
+			code: "PROVIDER_UNAVAILABLE",
+			message: "Webhook provider returned invalid finalize input",
+		});
+	}
+
+	const candidate = input as Partial<CommerceWebhookInput>;
+	if (
+		typeof candidate.orderId !== "string" ||
+		typeof candidate.externalEventId !== "string" ||
+		typeof candidate.finalizeToken !== "string"
+	) {
+		throwCommerceApiError({
+			code: "PROVIDER_UNAVAILABLE",
+			message: "Webhook provider returned finalize input with invalid field types",
+		});
+	}
+	if (candidate.orderId.length === 0 || candidate.externalEventId.length === 0 || candidate.finalizeToken.length === 0) {
+		throwCommerceApiError({
+			code: "PROVIDER_UNAVAILABLE",
+			message: "Webhook provider returned empty finalize input fields",
+		});
+	}
+
+	return {
+		orderId: candidate.orderId,
+		externalEventId: candidate.externalEventId,
+		finalizeToken: candidate.finalizeToken,
+	};
+}
+
+function assertWebhookAdapterMethod<TInput>(value: unknown, methodName: keyof CommerceWebhookAdapter<TInput>): void {
+	if (typeof value !== "function") {
+		throwCommerceApiError({
+			code: "PROVIDER_UNAVAILABLE",
+			message: `Webhook provider missing required method: ${String(methodName)}`,
+		});
+	}
+}
+
 export type WebhookProviderInput = CommerceWebhookInput;
 
 export type WebhookFinalizeResponse = CommerceWebhookFinalizeResponse;
@@ -93,20 +145,29 @@ export async function handlePaymentWebhook<TInput>(
 		}
 	}
 
+	const providerId = assertWebhookProviderString(adapter.providerId, "Webhook provider providerId");
+	assertWebhookAdapterMethod<TInput>(adapter.verifyRequest, "verifyRequest");
+	assertWebhookAdapterMethod<TInput>(adapter.buildFinalizeInput, "buildFinalizeInput");
+	assertWebhookAdapterMethod<TInput>(adapter.buildCorrelationId, "buildCorrelationId");
+	assertWebhookAdapterMethod<TInput>(adapter.buildRateLimitSuffix, "buildRateLimitSuffix");
+
 	await adapter.verifyRequest(ctx);
 
-	const input = adapter.buildFinalizeInput(ctx);
-	const inFlightKey = `${adapter.providerId}\0${input.orderId}\0${input.externalEventId}\0${input.finalizeToken}`;
+	const input = assertWebhookProviderFinalizeInput(adapter.buildFinalizeInput(ctx));
+	const correlationId = assertWebhookProviderString(adapter.buildCorrelationId(ctx), "Webhook provider correlation id");
+	const rateLimitSuffix = assertWebhookProviderString(adapter.buildRateLimitSuffix(ctx), "Webhook provider rate-limit suffix");
+
+	const inFlightKey = `${providerId}\0${input.orderId}\0${input.externalEventId}\0${input.finalizeToken}`;
 
 	let pending = inFlightWebhookFinalizeByKey.get(inFlightKey);
 	if (!pending) {
 		pending = (async () => {
 			try {
 				const nowMs = Date.now();
-				const ipHash = await buildRateLimitActorKey(ctx, `webhook:${adapter.buildRateLimitSuffix(ctx)}`);
+				const ipHash = await buildRateLimitActorKey(ctx, `webhook:${rateLimitSuffix}`);
 				const allowed = await consumeKvRateLimit({
 					kv: ctx.kv,
-					keySuffix: `webhook:${adapter.buildRateLimitSuffix(ctx)}:${ipHash}`,
+					keySuffix: `webhook:${rateLimitSuffix}:${ipHash}`,
 					limit: COMMERCE_LIMITS.defaultWebhookPerIpPerWindow,
 					windowMs: COMMERCE_LIMITS.defaultRateWindowMs,
 					nowMs,
@@ -120,8 +181,8 @@ export async function handlePaymentWebhook<TInput>(
 
 				const finalInput: FinalizeWebhookInput = {
 					...input,
-					providerId: adapter.providerId,
-					correlationId: adapter.buildCorrelationId(ctx),
+					providerId,
+					correlationId,
 				};
 				const result = await finalizePaymentFromWebhook(buildFinalizePorts(ctx), finalInput);
 				return toWebhookResult(result);

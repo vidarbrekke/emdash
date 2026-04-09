@@ -100,6 +100,12 @@ import {
 	removeDigitalEntitlementHandler,
 	getStorefrontProductBySlugHandler,
 } from "./catalog.js";
+import {
+	CATALOG_ADMIN_PRODUCT_KEYS,
+	CATALOG_ADMIN_PRODUCT_PRODUCT_KEYS,
+	CATALOG_STOREFRONT_LIST_ITEM_KEYS,
+	CATALOG_STOREFRONT_LIST_ITEM_PRODUCT_KEYS,
+} from "./response-contract-fixtures.js";
 
 const PRODUCT_ID_PREFIX = /^prod_/;
 const SKU_ID_PREFIX = /^sku_/;
@@ -436,7 +442,7 @@ describe("catalog product handlers", () => {
 			},
 			products,
 		);
-		await expect(createProductHandler(ctx)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(createProductHandler(ctx)).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("uses storage conflict on duplicate product slug insert", async () => {
@@ -476,7 +482,7 @@ describe("catalog product handlers", () => {
 		);
 
 		await expect(createProductHandler(ctx)).rejects.toMatchObject({
-			code: "BAD_REQUEST",
+			code: "bad_request",
 			message: "Product slug already exists: dup",
 		});
 	});
@@ -523,7 +529,7 @@ describe("catalog product handlers", () => {
 				products,
 			),
 		);
-		await expect(duplicate).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicate).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("creates variable products with variant attributes and values", async () => {
@@ -609,7 +615,7 @@ describe("catalog product handlers", () => {
 				products,
 			),
 		);
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("rejects variable products with duplicate attribute codes", async () => {
@@ -647,7 +653,7 @@ describe("catalog product handlers", () => {
 				products,
 			),
 		);
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("rejects duplicate value codes within a variable attribute", async () => {
@@ -681,7 +687,7 @@ describe("catalog product handlers", () => {
 				products,
 			),
 		);
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("auto-pauses existing variable SKUs after attribute updates", async () => {
@@ -1343,7 +1349,7 @@ describe("catalog product handlers", () => {
 				products,
 			),
 		);
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("rejects bundle discount fields on non-bundle product updates", async () => {
@@ -1371,7 +1377,7 @@ describe("catalog product handlers", () => {
 				bundleDiscountValueMinor: 100,
 			}, products),
 		);
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("sets product status transitions", async () => {
@@ -1654,6 +1660,61 @@ describe("catalog product handlers", () => {
 		expect("longDescription" in out.items[0]!.product).toBe(false);
 	});
 
+	it("locks down storefront list response contract keys", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_1", {
+			id: "prod_1",
+			type: "simple",
+			status: "active",
+			visibility: "public",
+			slug: "contract-product",
+			title: "Contract Product",
+			shortDescription: "",
+			longDescription: "should not leak",
+			brand: "Acme",
+			vendor: "Acme",
+			featured: false,
+			sortOrder: 1,
+			requiresShippingDefault: true,
+			taxClassDefault: "zero",
+			bundleDiscountType: "none",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+		await skus.put("sku_1", {
+			id: "sku_1",
+			productId: "prod_1",
+			skuCode: "SKU1",
+			status: "active",
+			unitPriceMinor: 999,
+			inventoryQuantity: 22,
+			inventoryVersion: 1,
+			requiresShipping: true,
+			isDigital: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		});
+
+		const out = await listStorefrontProductsHandler(
+			catalogCtx(
+				{
+					type: "simple",
+					limit: 10,
+				},
+				products,
+				skus,
+			),
+		);
+
+		expect(Object.keys(out).toSorted()).toEqual(["items"]);
+		expect(Object.keys(out.items[0]!).toSorted()).toEqual(CATALOG_STOREFRONT_LIST_ITEM_KEYS.toSorted());
+		expect(Object.keys(out.items[0]!.product).toSorted()).toEqual(
+			CATALOG_STOREFRONT_LIST_ITEM_PRODUCT_KEYS.toSorted(),
+		);
+		expect("longDescription" in out.items[0]!.product).toBe(false);
+	});
+
 	it("requires POST for storefront list APIs", async () => {
 		const products = new MemColl<StoredProduct>();
 		await products.put("prod_1", {
@@ -1851,6 +1912,58 @@ describe("catalog product handlers", () => {
 		});
 		expect("inventoryQuantity" in (storefrontSkuList.items[0] as object)).toBe(false);
 		expect("inventoryVersion" in (storefrontSkuList.items[0] as object)).toBe(false);
+	});
+
+	it("locks down admin product detail response contract keys", async () => {
+		const products = new MemColl<StoredProduct>();
+		const skus = new MemColl<StoredProductSku>();
+		await products.put("prod_admin", {
+			id: "prod_admin",
+			type: "simple",
+			status: "draft",
+			visibility: "hidden",
+			slug: "admin-contract-product",
+			currentSlug: "admin-contract-product",
+			title: "Admin Contract Product",
+			shortDescription: "for schema lock-down tests",
+			longDescription: "administrative metadata should stay admin-only",
+			brand: "Acme",
+			vendor: "Acme Co",
+			featured: true,
+			sortOrder: 3,
+			requiresShippingDefault: false,
+			taxClassDefault: "standard",
+			bundleDiscountType: "fixed_amount",
+			bundleDiscountValueMinor: 250,
+			bundleDiscountValueBps: 1250,
+			metadataJson: { launchRegion: "internal" },
+			createdAt: "2026-01-02T00:00:00.000Z",
+			updatedAt: "2026-01-02T00:00:00.000Z",
+		});
+		await skus.put("sku_admin", {
+			id: "sku_admin",
+			productId: "prod_admin",
+			skuCode: "ADM-1",
+			status: "active",
+			unitPriceMinor: 2100,
+			inventoryQuantity: 7,
+			inventoryVersion: 3,
+			requiresShipping: false,
+			isDigital: false,
+			createdAt: "2026-01-02T00:00:00.000Z",
+			updatedAt: "2026-01-02T00:00:00.000Z",
+		});
+
+		const adminDetail = await getProductHandler(catalogCtx({ productId: "prod_admin" }, products, skus));
+		expect(Object.keys(adminDetail).toSorted()).toEqual(CATALOG_ADMIN_PRODUCT_KEYS.toSorted());
+		expect(Object.keys(adminDetail.product).toSorted()).toEqual(
+			CATALOG_ADMIN_PRODUCT_PRODUCT_KEYS.toSorted(),
+		);
+		expect(adminDetail.product.longDescription).toBe("administrative metadata should stay admin-only");
+		expect(adminDetail.skus?.[0]).toMatchObject({
+			inventoryQuantity: 7,
+			inventoryVersion: 3,
+		});
 	});
 
 	it("resolves storefront products via slug with canonical hint", async () => {
@@ -2968,7 +3081,7 @@ describe("catalog SKU handlers", () => {
 			),
 		);
 
-		await expect(second).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(second).rejects.toMatchObject({ code: "bad_request" });
 		expect(skus.rows.size).toBe(1);
 	});
 
@@ -3395,7 +3508,7 @@ describe("catalog SKU handlers", () => {
 				productSkuOptionValues,
 			),
 		);
-		await expect(missing).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(missing).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("rejects option mappings on non-variable products", async () => {
@@ -3435,7 +3548,7 @@ describe("catalog SKU handlers", () => {
 			),
 		);
 
-		await expect(out).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(out).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("rejects duplicate and duplicate-combination SKU option mappings for variable products", async () => {
@@ -3505,7 +3618,7 @@ describe("catalog SKU handlers", () => {
 				productSkuOptionValues,
 			),
 		);
-		await expect(duplicateAttributeValue).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicateAttributeValue).rejects.toMatchObject({ code: "bad_request" });
 
 		await createProductSkuHandler(
 			catalogCtx<ProductSkuCreateInput>(
@@ -3552,7 +3665,7 @@ describe("catalog SKU handlers", () => {
 				productSkuOptionValues,
 			),
 		);
-		await expect(duplicateCombination).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicateCombination).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("batches variable SKU validation reads for better scalability", async () => {
@@ -3829,7 +3942,7 @@ describe("catalog SKU handlers", () => {
 				productSkuOptionValues,
 			),
 		);
-		await expect(duplicateAttempt).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicateAttempt).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("updates SKU fields without changing immutable identifiers", async () => {
@@ -3952,7 +4065,7 @@ describe("catalog SKU handlers", () => {
 				skus,
 			),
 		);
-		await expect(duplicate).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicate).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("sets SKU active/inactive state", async () => {
@@ -4229,7 +4342,7 @@ describe("catalog asset handlers", () => {
 				productAssetLinks,
 			),
 		);
-		await expect(duplicatePrimary).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(duplicatePrimary).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("links asset rows to SKU targets and supports reordering", async () => {
@@ -4601,7 +4714,7 @@ describe("catalog digital entitlement handlers", () => {
 					digitalEntitlements,
 				),
 			),
-		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		).rejects.toMatchObject({ code: "bad_request" });
 	});
 
 	it("returns digital_asset_not_found when creating entitlements for missing digital asset", async () => {
@@ -5585,7 +5698,7 @@ describe("catalog bundle handlers", () => {
 					bundleComponents,
 				),
 			),
-		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		).rejects.toMatchObject({ code: "bad_request" });
 
 		await products.put("prod_simple", {
 			id: "prod_simple",
@@ -5652,7 +5765,7 @@ describe("catalog bundle handlers", () => {
 					bundleComponents,
 				),
 			),
-		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		).rejects.toMatchObject({ code: "bad_request" });
 		expect(bundleComponentAddInputSchema.safeParse({
 			bundleProductId: "prod_bundle",
 			componentSkuId: "sku_simple",

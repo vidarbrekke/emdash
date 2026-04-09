@@ -7,9 +7,11 @@ import type { RouteContext } from "emdash";
 
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
 import { hmacSha256HexAsync, constantTimeEqualHexAsync } from "../lib/crypto-adapter.js";
+import { COMMERCE_SETTINGS_KEYS } from "../settings-keys.js";
 import { STRIPE_WEBHOOK_SIGNATURE } from "../services/commerce-provider-contracts.js";
 import { throwCommerceApiError } from "../route-errors.js";
 import type { StripeWebhookEventInput, StripeWebhookInput } from "../schemas.js";
+import { resolveWebhookCommerceSettings } from "../settings-validation.js";
 import { handlePaymentWebhook, type CommerceWebhookAdapter } from "./webhook-handler.js";
 
 const MAX_WEBHOOK_BODY_BYTES = COMMERCE_LIMITS.maxWebhookBodyBytes;
@@ -153,13 +155,7 @@ async function isWebhookSignatureValid(
 async function ensureValidStripeWebhookSignature(
 	ctx: RouteContext<StripeWebhookInput>,
 ): Promise<void> {
-	const secret = await ctx.kv.get("settings:stripeWebhookSecret");
-	if (typeof secret !== "string" || secret.length === 0) {
-		throwCommerceApiError({
-			code: "PROVIDER_UNAVAILABLE",
-			message: "Missing Stripe webhook signature secret",
-		});
-	}
+	const { stripeWebhookSecret: secret } = await resolveWebhookCommerceSettings(ctx);
 
 	const rawBody = await ctx.request.clone().text();
 	const tolerance = await resolveWebhookSignatureToleranceSeconds(ctx);
@@ -179,7 +175,7 @@ async function ensureValidStripeWebhookSignature(
 }
 
 async function resolveWebhookSignatureToleranceSeconds(ctx: RouteContext<StripeWebhookInput>): Promise<number> {
-	const setting = await ctx.kv.get<unknown>("settings:stripeWebhookToleranceSeconds");
+	const setting = await ctx.kv.get<unknown>(COMMERCE_SETTINGS_KEYS.stripeWebhookToleranceSeconds);
 	if (typeof setting === "number") {
 		return clampStripeTolerance(setting);
 	}

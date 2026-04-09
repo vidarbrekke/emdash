@@ -13,3 +13,11 @@ export function throwCommerceApiError(input: CommerceApiErrorInput): never {
 		details: e.details,
 	});
 }
+
+export function throwBadRequest(message: string): never {
+	throwCommerceApiError({ code: "BAD_REQUEST", message });
+}
+
+export function throwMethodNotAllowed(message: string): never {
+	throwCommerceApiError({ code: "METHOD_NOT_ALLOWED", message });
+}

@@ -1,10 +1,9 @@
 import type { RouteContext } from "emdash";
-import { PluginRouteError } from "emdash";
 
 import { normalizeOrderedChildren, normalizeOrderedPosition, mutateOrderedChildren, sortOrderedRowsByPosition } from "../lib/ordered-rows.js";
 import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import { hydrateSkusWithInventoryStock, isStorefrontProductVisible } from "./catalog-read-model.js";
 import { computeBundleSummary } from "../lib/catalog-bundles.js";
 import type {
@@ -57,7 +56,7 @@ export async function handleAddBundleComponent(
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Bundle product not found" });
 	}
 	if (bundleProduct.type !== "bundle") {
-		throw PluginRouteError.badRequest("Target product is not a bundle");
+		throwBadRequest("Target product is not a bundle");
 	}
 
 	const componentSku = await productSkus.get(ctx.input.componentSkuId);
@@ -65,14 +64,14 @@ export async function handleAddBundleComponent(
 		throwCommerceApiError({ code: "VARIANT_UNAVAILABLE", message: "Component SKU not found" });
 	}
 	if (componentSku.productId === bundleProduct.id) {
-		throw PluginRouteError.badRequest("Bundle cannot include component from itself");
+		throwBadRequest("Bundle cannot include component from itself");
 	}
 	const componentProduct = await products.get(componentSku.productId);
 	if (!componentProduct) {
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Component product not found" });
 	}
 	if (componentProduct.type === "bundle") {
-		throw PluginRouteError.badRequest("Bundle cannot include component products that are themselves bundles");
+		throwBadRequest("Bundle cannot include component products that are themselves bundles");
 	}
 
 	const existingComponents = await queryBundleComponentsForProduct(bundleComponents, bundleProduct.id);
@@ -111,7 +110,7 @@ export async function handleAddBundleComponent(
 
 	const added = normalized.find((candidate) => candidate.id === componentId);
 	if (!added) {
-		throw PluginRouteError.badRequest("Bundle component not found after add");
+		throwBadRequest("Bundle component not found after add");
 	}
 	return { component: added };
 }
@@ -168,7 +167,7 @@ export async function handleReorderBundleComponent(
 
 	const updated = normalized.find((row) => row.id === ctx.input.bundleComponentId);
 	if (!updated) {
-		throw PluginRouteError.badRequest("Bundle component not found after reorder");
+		throwBadRequest("Bundle component not found after reorder");
 	}
 	return { component: updated };
 }
@@ -187,7 +186,7 @@ export async function handleBundleCompute(
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not found" });
 	}
 	if (product.type !== "bundle") {
-		throw PluginRouteError.badRequest("Product is not a bundle");
+		throwBadRequest("Product is not a bundle");
 	}
 
 	const components = await queryBundleComponentsForProduct(bundleComponents, product.id);

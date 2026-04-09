@@ -1,5 +1,5 @@
 import type { RouteContext } from "emdash";
-import { PluginRouteError } from "emdash";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 
 import { applyProductSkuUpdatePatch, applyProductStatusTransition, applyProductUpdatePatch } from "../lib/catalog-domain.js";
 import {
@@ -43,7 +43,6 @@ import { randomHex } from "../lib/crypto-adapter.js";
 import { requirePost } from "../lib/require-post.js";
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
 import { sortedImmutable } from "../lib/sort-immutable.js";
-import { throwCommerceApiError } from "../route-errors.js";
 import type {
 	ProductResponse,
 	ProductSkuListResponse,
@@ -188,7 +187,7 @@ function assertBundleDiscountPatchForProduct(product: StoredProduct, patch: Bund
 	const effectiveType = patch.bundleDiscountType ?? product.bundleDiscountType ?? "none";
 
 	if (product.type !== "bundle" && (hasType || hasMinorValue || hasBpsValue)) {
-		throw PluginRouteError.badRequest("Bundle discount fields are only supported for bundle products");
+		throwBadRequest("Bundle discount fields are only supported for bundle products");
 	}
 
 	if (product.type !== "bundle") {
@@ -196,10 +195,10 @@ function assertBundleDiscountPatchForProduct(product: StoredProduct, patch: Bund
 	}
 
 	if (hasMinorValue && effectiveType !== "fixed_amount") {
-		throw PluginRouteError.badRequest("bundleDiscountValueMinor can only be used with fixed_amount bundles");
+		throwBadRequest("bundleDiscountValueMinor can only be used with fixed_amount bundles");
 	}
 	if (hasBpsValue && effectiveType !== "percentage") {
-		throw PluginRouteError.badRequest("bundleDiscountValueBps can only be used with percentage bundles");
+		throwBadRequest("bundleDiscountValueBps can only be used with percentage bundles");
 	}
 }
 
@@ -208,7 +207,7 @@ function assertSimpleProductSkuCapacity(product: StoredProduct, existingSkuCount
 		return;
 	}
 	if (existingSkuCount > 0) {
-		throw PluginRouteError.badRequest("Simple products can have at most one SKU");
+		throwBadRequest("Simple products can have at most one SKU");
 	}
 }
 
@@ -216,18 +215,18 @@ function validateProductAttributePatch(attributes: ProductAttributeInput[]): voi
 	const attributeCodes = new Set<string>();
 	for (const attribute of attributes) {
 		if (attributeCodes.has(attribute.code)) {
-			throw PluginRouteError.badRequest(`Duplicate attribute code: ${attribute.code}`);
+			throwBadRequest(`Duplicate attribute code: ${attribute.code}`);
 		}
 		attributeCodes.add(attribute.code);
 
 		if (attribute.values.length === 0) {
-			throw PluginRouteError.badRequest(`Attribute ${attribute.code} must have at least one value`);
+			throwBadRequest(`Attribute ${attribute.code} must have at least one value`);
 		}
 
 		const valueCodes = new Set<string>();
 		for (const value of attribute.values) {
 			if (valueCodes.has(value.code)) {
-				throw PluginRouteError.badRequest(`Duplicate value code ${value.code} for attribute ${attribute.code}`);
+				throwBadRequest(`Duplicate value code ${value.code} for attribute ${attribute.code}`);
 			}
 			valueCodes.add(value.code);
 		}
@@ -664,29 +663,29 @@ export async function handleCreateProduct(ctx: RouteContext<ProductCreateInput>)
 	const id = `prod_${await randomHex(6)}`;
 
 	if (type !== "variable" && inputAttributes.length > 0) {
-		throw PluginRouteError.badRequest("Only variable products can define attributes");
+		throwBadRequest("Only variable products can define attributes");
 	}
 
 	if (type === "variable" && inputAttributes.length === 0) {
-		throw PluginRouteError.badRequest("Variable products must define at least one attribute");
+		throwBadRequest("Variable products must define at least one attribute");
 	}
 
 	const variantAttributeCount = inputAttributes.filter((attribute) => attribute.kind === "variant_defining").length;
 	if (type === "variable" && variantAttributeCount === 0) {
-		throw PluginRouteError.badRequest("Variable products must include at least one variant-defining attribute");
+		throwBadRequest("Variable products must include at least one variant-defining attribute");
 	}
 
 	const attributeCodes = new Set<string>();
 	for (const attribute of inputAttributes) {
 		if (attributeCodes.has(attribute.code)) {
-			throw PluginRouteError.badRequest(`Duplicate attribute code: ${attribute.code}`);
+			throwBadRequest(`Duplicate attribute code: ${attribute.code}`);
 		}
 		attributeCodes.add(attribute.code);
 
 		const valueCodes = new Set<string>();
 		for (const value of attribute.values) {
 			if (valueCodes.has(value.code)) {
-				throw PluginRouteError.badRequest(`Duplicate value code ${value.code} for attribute ${attribute.code}`);
+				throwBadRequest(`Duplicate value code ${value.code} for attribute ${attribute.code}`);
 			}
 			valueCodes.add(value.code);
 		}
@@ -776,14 +775,14 @@ export async function handleUpdateProduct(ctx: RouteContext<ProductUpdateInput>)
 	const hasAttributePatch = attributes !== undefined;
 	if (hasAttributePatch) {
 		if (existing.type !== "variable") {
-			throw PluginRouteError.badRequest("Only variable products can define attributes");
+			throwBadRequest("Only variable products can define attributes");
 		}
 		if (attributes.length === 0) {
-			throw PluginRouteError.badRequest("Variable products must define at least one attribute");
+			throwBadRequest("Variable products must define at least one attribute");
 		}
 		validateProductAttributePatch(attributes);
 		if (!hasVariantDefiningAttribute(attributes)) {
-			throw PluginRouteError.badRequest("Variable products must include at least one variant-defining attribute");
+			throwBadRequest("Variable products must include at least one variant-defining attribute");
 		}
 	}
 
@@ -1087,7 +1086,7 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 		throwCommerceApiError({ code: "PRODUCT_UNAVAILABLE", message: "Product not found" });
 	}
 	if (product.status === "archived") {
-		throw PluginRouteError.badRequest("Cannot add SKUs to an archived product");
+		throwBadRequest("Cannot add SKUs to an archived product");
 	}
 
 	const existingSkus = await queryAllPages((cursor) => productSkus.query({ where: { productId: product.id }, cursor, limit: 100 }));
@@ -1095,7 +1094,7 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 	assertSimpleProductSkuCapacity(product, existingSkuCount);
 
 	if (product.type !== "variable" && inputOptionValues.length > 0) {
-		throw PluginRouteError.badRequest("Option values are only allowed for variable products");
+		throwBadRequest("Option values are only allowed for variable products");
 	}
 
 	if (product.type === "variable") {
@@ -1104,7 +1103,7 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 			attributesResult.map((row) => row.data),
 		);
 		if (variantAttributes.length === 0) {
-			throw PluginRouteError.badRequest(`Product ${product.id} has no variant-defining attributes`);
+			throwBadRequest(`Product ${product.id} has no variant-defining attributes`);
 		}
 
 		const attributeIds = variantAttributes.map((attribute) => attribute.id);

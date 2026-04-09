@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { COMMERCE_MANIFEST, withFetch, withKV } from "./commerce-plugin-factory.js";
-import { commercePlugin, createPlugin } from "./index.js";
+import { COMMERCE_ROUTE_CAPABILITIES, commercePlugin, createPlugin } from "./index.js";
 
 const ROOT = resolve(import.meta.dirname, ".");
 const INDEX_TS_PATH = resolve(ROOT, "index.ts");
@@ -24,6 +24,12 @@ function readPackageJson(): Record<string, unknown> {
 function getCapabilities(value: unknown): string[] {
 	if (!Array.isArray(value)) return [];
 	return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+function getKvRouteKeys(): string[] {
+	return Object.entries(COMMERCE_ROUTE_CAPABILITIES)
+		.filter(([, options]) => options.requiresKV)
+		.map(([routeKey]) => routeKey);
 }
 
 describe("EmDash guide compliance: manifest contract", () => {
@@ -173,51 +179,13 @@ describe("EmDash guide compliance: source-level contract", () => {
 		).rejects.toMatchObject({ message: "[CommercePlugin] Fetch capability missing" });
 	});
 
-	it("enforces KV capability on storage-backed storefront routes", async () => {
+	it("enforces KV capability only on declared KV-dependent routes", async () => {
 		const plugin = createPlugin() as {
 			routes: Record<string, { handler?: unknown }>;
 		};
 
 		const routes = plugin.routes ?? {};
-		const storageBackedRoutes = [
-			"cart/upsert",
-			"cart/get",
-			"bundle/compute",
-			"catalog/product/get",
-			"catalog/product/get-by-slug",
-			"catalog/category/list",
-			"catalog/tag/list",
-			"catalog/products",
-			"catalog/sku/list",
-			"checkout",
-			"checkout/get-order",
-			"webhooks/stripe",
-			"admin/catalog/product/get",
-			"product-assets/register",
-			"catalog/asset/link",
-			"catalog/asset/unlink",
-			"catalog/asset/reorder",
-			"bundle-components/add",
-			"bundle-components/remove",
-			"bundle-components/reorder",
-			"digital-assets/create",
-			"digital-entitlements/create",
-			"digital-entitlements/remove",
-			"catalog/product/create",
-			"catalog/product/update",
-			"catalog/product/state",
-			"catalog/category/create",
-			"catalog/category/link",
-			"catalog/category/unlink",
-			"catalog/tag/create",
-			"catalog/tag/link",
-			"catalog/tag/unlink",
-			"admin/catalog/products",
-			"catalog/sku/create",
-			"catalog/sku/update",
-			"catalog/sku/state",
-			"admin/catalog/sku/list",
-		] as const;
+		const storageBackedRoutes = getKvRouteKeys();
 
 		for (const routeKey of storageBackedRoutes) {
 			const route = routes[routeKey];
@@ -230,6 +198,24 @@ describe("EmDash guide compliance: source-level contract", () => {
 					storage: {},
 				}),
 			).rejects.toMatchObject({ message: "[CommercePlugin] KV capability missing" });
+		}
+	});
+
+	it("derives runtime KV checks from explicit route capability metadata", () => {
+		const routeKeysWithFetch = Object.entries(COMMERCE_ROUTE_CAPABILITIES)
+			.filter(([, options]) => options.requiresFetch)
+			.map(([routeKey]) => routeKey);
+		expect(routeKeysWithFetch).toHaveLength(0);
+
+		const plugin = createPlugin() as {
+			routes: Record<string, { handler?: unknown }>;
+		};
+
+		const kvRouteKeys = getKvRouteKeys().sort();
+		const pluginRouteKeys = Object.keys(plugin.routes ?? {}).sort();
+		expect(kvRouteKeys).toEqual(["cart/upsert", "checkout", "webhooks/stripe"].sort());
+		for (const routeKey of kvRouteKeys) {
+			expect(pluginRouteKeys).toContain(routeKey);
 		}
 	});
 });

@@ -315,6 +315,55 @@ describe("stripe webhook signature helpers", () => {
 		);
 	});
 
+	it("rejects webhook requests when webhook secret setting is missing", async () => {
+		const webhookSecret = "whsec_live_test";
+		const body = rawStripeEventBody;
+		const testTimestamp = 1_760_000_999;
+		const sig = `t=${testTimestamp},v1=${await hashWithSecret(webhookSecret, testTimestamp, body)}`;
+		const clock = vi.spyOn(Date, "now").mockReturnValue(testTimestamp * 1000);
+
+		try {
+			await expect(
+				stripeWebhookHandler({
+					request: new Request("https://example.test/webhooks/stripe", {
+						method: "POST",
+						body,
+						headers: {
+							"content-length": String(body.length),
+							"Stripe-Signature": sig,
+						},
+					}),
+					input: JSON.parse(rawStripeEventBody),
+					storage: {
+						orders: {},
+						webhookReceipts: {},
+						paymentAttempts: {},
+						inventoryLedger: {},
+						inventoryStock: {},
+					},
+					kv: {
+						get: vi.fn(async (key: string) => {
+							if (key === "settings:stripeWebhookToleranceSeconds") return "300";
+							return null;
+						}),
+					},
+					requestMeta: { ip: "127.0.0.1" },
+					log: {
+						info: () => undefined,
+						warn: () => undefined,
+						error: () => undefined,
+						debug: () => undefined,
+					},
+				} as never),
+			).rejects.toMatchObject({
+				code: "provider_unavailable",
+				message: expect.stringContaining("stripeWebhookSecret is required"),
+			});
+		} finally {
+			clock.mockRestore();
+		}
+	});
+
 	it("rejects legacy direct payload shape now that webhook compatibility mode is removed", async () => {
 		const webhookSecret = "whsec_live_test";
 		const legacyBody = JSON.stringify({

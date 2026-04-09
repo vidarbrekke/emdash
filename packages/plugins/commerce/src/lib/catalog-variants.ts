@@ -1,4 +1,4 @@
-import { PluginRouteError } from "emdash";
+import { throwBadRequest } from "../route-errors.js";
 
 import type { StoredProductAttribute, StoredProductAttributeValue } from "../types.js";
 import { sortedImmutableNoCompare } from "./sort-immutable.js";
@@ -50,7 +50,7 @@ export function validateVariableSkuOptions({
 	const expectedAttributeIds = Array.from(variantAttributes, (attribute) => attribute.id);
 	const expectedCount = expectedAttributeIds.length;
 	if (optionValues.length !== expectedCount) {
-		throw PluginRouteError.badRequest(
+		throwBadRequest(
 			`Product ${productId} requires exactly ${expectedCount} option values for variable SKUs`,
 		);
 	}
@@ -63,36 +63,36 @@ export function validateVariableSkuOptions({
 
 	for (const option of optionValues) {
 		if (!expectedSet.has(option.attributeId)) {
-			throw PluginRouteError.badRequest(`Option attribute ${option.attributeId} is not variant-defining`);
+			throwBadRequest(`Option attribute ${option.attributeId} is not variant-defining`);
 		}
 		if (usedAttributeIds.has(option.attributeId)) {
-			throw PluginRouteError.badRequest(`Duplicate option for attribute ${option.attributeId}`);
+			throwBadRequest(`Duplicate option for attribute ${option.attributeId}`);
 		}
 		usedAttributeIds.add(option.attributeId);
 
 		const allowedValues = allowedValuesByAttribute.get(option.attributeId);
 		if (!allowedValues || !allowedValues.has(option.attributeValueId)) {
-			throw PluginRouteError.badRequest(
+			throwBadRequest(
 				`Option value ${option.attributeValueId} is not defined for attribute ${option.attributeId}`,
 			);
 		}
 
 		const pair = `${option.attributeId}:${option.attributeValueId}`;
 		if (seenValuePairs.has(pair)) {
-			throw PluginRouteError.badRequest(`Duplicate option assignment pair ${pair}`);
+			throwBadRequest(`Duplicate option assignment pair ${pair}`);
 		}
 		seenValuePairs.add(pair);
 	}
 
 	if (usedAttributeIds.size !== expectedAttributeIds.length) {
-		throw PluginRouteError.badRequest(
+		throwBadRequest(
 			`Missing option values for product ${productId}: expected ${expectedAttributeIds.join(", ")}`,
 		);
 	}
 
 	const signature = normalizeSkuOptionSignature(optionValues);
 	if (existingSignatures.has(signature)) {
-		throw PluginRouteError.badRequest(`Duplicate variant combination for product ${productId}`);
+		throwBadRequest(`Duplicate variant combination for product ${productId}`);
 	}
 
 	return signature;

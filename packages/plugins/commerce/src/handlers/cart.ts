@@ -19,7 +19,6 @@
  */
 
 import type { RouteContext, StorageCollection } from "emdash";
-import { PluginRouteError } from "emdash";
 
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
 import { validateLineItemsStockForCheckout } from "../lib/checkout-inventory-validation.js";
@@ -29,7 +28,7 @@ import { validateCartLineItems } from "../lib/cart-validation.js";
 import { randomHex, sha256HexAsync } from "../lib/crypto-adapter.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type { CartGetInput, CartUpsertInput } from "../schemas.js";
 import type { StoredBundleComponent, StoredCart, StoredInventoryStock, StoredProduct, StoredProductSku } from "../types.js";
 
@@ -105,7 +104,7 @@ export async function cartUpsertHandler(
 	}
 	const lineItemValidationMessage = validateCartLineItems(ctx.input.lineItems);
 	if (lineItemValidationMessage) {
-		throw PluginRouteError.badRequest(lineItemValidationMessage);
+		throwBadRequest(lineItemValidationMessage);
 	}
 
 	const inventoryStock = asCollection<StoredInventoryStock>(ctx.storage.inventoryStock);

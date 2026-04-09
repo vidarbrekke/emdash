@@ -1,5 +1,5 @@
 import type { StorageCollection } from "emdash";
-import { PluginRouteError } from "emdash";
+import { throwBadRequest } from "../route-errors.js";
 
 export type Collection<T> = StorageCollection<T>;
 
@@ -74,7 +74,7 @@ export const isUniqueConstraintViolation = (error: unknown, seen = new Set<unkno
 };
 
 const throwConflict = (message: string): never => {
-	throw PluginRouteError.badRequest(message);
+	throwBadRequest(message);
 };
 
 export async function assertNoConflict<T extends object>(

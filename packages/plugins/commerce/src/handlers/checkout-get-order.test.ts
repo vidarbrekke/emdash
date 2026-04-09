@@ -5,6 +5,7 @@ import { sha256HexAsync } from "../lib/crypto-adapter.js";
 import type { CheckoutGetOrderInput } from "../schemas.js";
 import type { StoredOrder } from "../types.js";
 import { checkoutGetOrderHandler } from "./checkout-get-order.js";
+import { CHECKOUT_GET_ORDER_RESPONSE_KEYS } from "./response-contract-fixtures.js";
 
 type MemColl<T extends object> = {
 	get(id: string): Promise<T | null>;
@@ -75,6 +76,32 @@ describe("checkoutGetOrderHandler", () => {
 			createdAt: order.createdAt,
 			updatedAt: order.updatedAt,
 		});
+		expect("finalizeTokenHash" in out.order).toBe(false);
+	});
+
+	it("locks down checkout get-order public response keys", async () => {
+		const orderId = "ord_snapshot";
+		const tokenValue = "snapshot-token";
+		const tokenHash = await sha256HexAsync(tokenValue);
+		const order: StoredOrder = {
+			...orderBase,
+			cartId: "cart_snapshot",
+			totalMinor: 150,
+			createdAt: "2026-04-08T12:00:00.000Z",
+			updatedAt: "2026-04-08T12:00:00.000Z",
+			finalizeTokenHash: tokenHash,
+			lineItems: [
+				{ productId: "p1", quantity: 1, inventoryVersion: 2, unitPriceMinor: 150 },
+			],
+		};
+		const mem = new MemCollImpl(new Map([[orderId, order]]));
+		const out = await checkoutGetOrderHandler({
+			...ctxFor(orderId, tokenValue),
+			storage: { orders: mem },
+		} as unknown as RouteContext<CheckoutGetOrderInput>);
+
+		const keys = Object.keys(out.order).toSorted();
+		expect(keys).toEqual(CHECKOUT_GET_ORDER_RESPONSE_KEYS.toSorted());
 		expect("finalizeTokenHash" in out.order).toBe(false);
 	});
 

@@ -4,7 +4,6 @@
  */
 
 import type { RouteContext, StorageCollection } from "emdash";
-import { PluginRouteError } from "emdash";
 
 import { validateIdempotencyKey } from "../kernel/idempotency-key.js";
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
@@ -20,7 +19,7 @@ import { mergeLineItemsBySku } from "../lib/merge-line-items.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
 import { buildRateLimitActorKey } from "../lib/rate-limit-identity.js";
 import { requirePost } from "../lib/require-post.js";
-import { throwCommerceApiError } from "../route-errors.js";
+import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type { CheckoutInput } from "../schemas.js";
 import type {
 	StoredCart,
@@ -293,7 +292,7 @@ export async function checkoutHandler(
 	const bodyKey = ctx.input.idempotencyKey?.trim() || undefined;
 
 	if (headerKey && bodyKey && headerKey !== bodyKey) {
-		throw PluginRouteError.badRequest(
+		throwBadRequest(
 			"Idempotency-Key conflict: header and body values must match when both are supplied",
 		);
 	}
@@ -301,7 +300,7 @@ export async function checkoutHandler(
 	const idempotencyKey = bodyKey ?? headerKey;
 
 	if (!validateIdempotencyKey(idempotencyKey)) {
-		throw PluginRouteError.badRequest(
+		throwBadRequest(
 			"Idempotency-Key is required (header or body) and must be 16–128 printable ASCII characters",
 		);
 	}
@@ -340,7 +339,7 @@ export async function checkoutHandler(
 	}
 	const lineItemValidationMessage = validateCartLineItems(cart.lineItems);
 	if (lineItemValidationMessage) {
-		throw PluginRouteError.badRequest(lineItemValidationMessage);
+		throwBadRequest(lineItemValidationMessage);
 	}
 
 	const fingerprint = cartContentFingerprint(cart.lineItems);
@@ -451,7 +450,7 @@ export async function checkoutHandler(
 		try {
 			orderLineItems = mergeLineItemsBySku(projectCartLineItemsForStorage(cart.lineItems));
 		} catch {
-			throw PluginRouteError.badRequest(
+		throwBadRequest(
 				"Cart has duplicate SKUs with conflicting price or inventory version snapshots",
 			);
 		}

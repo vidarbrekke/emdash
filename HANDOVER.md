@@ -1,76 +1,39 @@
 # HANDOVER
 
 ## 1) Big-picture purpose and current problem
-`@emdash-cms/plugin-dashing-commerce` is the EmDash commerce plugin that powers checkout, catalog reads/writes, cart operations, and webhook-backed order finalization.
+`@emdash-cms/plugin-dashing-commerce` is the EmDash commerce backend plugin for catalog APIs, cart operations, checkout initiation, webhook-backed payment finalization, and scheduled operations.
 
-The current objective is governance hardening, not feature expansion. The plugin needed to be moved to a strict contract-first pattern (`createCommercePlugin`) so manifest definition, lifecycle behavior, capability usage, and route exposure are enforceable and hard to regress.
+The current problem is backend contract hardening before front-end work resumes. The codebase is now aligned to an explicit runtime-capability model so that route behavior, plugin manifest, and storage access are enforceable and prevent frontend-driven regressions.
 
 ## 2) Completed work and outcomes
-`createCommercePlugin` is now used from `index.ts`, with `COMMERCE_MANIFEST` as the canonical manifest source and no alternate manifest duplication.
-`commerce-plugin-factory.ts` now normalizes lifecycle and route behavior:
+`createCommercePlugin` is now implemented in the package source at `packages/plugins/commerce/src/commerce-plugin-factory.ts` and used by `packages/plugins/commerce/src/index.ts`; root `commerce-plugin-factory.ts` is a compatibility re-export to keep external import paths stable.
 
-- `onInstall`, `onActivate`, and `onDeactivate` require `kv`.
-- `onActivate` requires `http.fetch`.
-- `onActivate` enforces `cron` capability explicitly and schedules `idempotency-cleanup`.
-- `wrapRouteEntry` preserves route metadata (`public`, `input`) while wrapping handlers.
-- Route and manifest tests were updated so they validate behavior and contract invariants instead of relying on function identity.
+Route registration now uses explicit route capability metadata in `COMMERCE_ROUTE_CAPABILITIES`; `withKV(...)` is applied only for `cart/upsert`, `checkout`, and `webhooks/stripe`, while fetch capability remains opt-in via `withFetch(...)` for future route requirements.
 
-Compliance tests and route tests were adjusted to the new wrapper behavior and all modified suites pass.
-Observed local validation:
-- `pnpm -C packages/plugins/commerce test src/index.test.ts` passed (`11/11`)
-- `pnpm -C packages/plugins/commerce test commerce-guide-compliance.test.ts` passed (`12/12`)
-- `pnpm -C packages/plugins/commerce test` passed (`33/33`, `358/358`)
-Git status:
-- Commit `7afe7ed` was created on top of `main` and pushed.
+Factory and runtime validations were tightened for manifest correctness (required capabilities and canonical plugin id), plus network policy constraints (no protocol, no path, no wildcard hostnames). Compliance coverage now includes stricter route-capsule checks and inventory edge-case coverage for stale ledger reconciliation.
+
+CI hardening was added so `pnpm --filter @emdash-cms/plugin-dashing-commerce run check` runs in `test-smoke`; this ties lint/typechecks/tests to the repo-wide pipeline for future merges.
+
+Commit state: `92aa5b3` on `main` (`feat(commerce): tighten route capability enforcement`) is pushed and includes this hardening pass.
 
 ## 3) Failures, open issues, and lessons learned
-No new functional regressions were found after this hardening phase.
-One resolved failure pattern was brittle tests asserting raw route handler equality after wrapping, fixed by asserting handler functionality and route metadata (`public`) instead.
-One unresolved process gap is one doc file that is not yet part of the pushed commit (`commerce-plugin-authoritative-guide.md`) and should be intentionally handled before release or archiving.
-Lessons are explicit:
-- Treat compliance contract, tests, and docs as one unit of change.
-- Keep wrapped handler assertions metadata/behavior-centric.
-- Never bypass declared capability checks in lifecycle logic.
+No functional regressions were introduced by this pass in the validated package check run. A key resolved issue was test fragility caused by wrapped route handler identity; tests now validate behavior contracts and route metadata (`public`) instead of raw function equality.
+
+The hardening pass did not complete all back-end readiness conditions required before frontend scaling; the unresolved work is explicitly tracked in `pre-frontend-backend-hardening.md`: auth boundary verification, strict settings validation policy, response-shape freeze strategy, deeper idempotency/concurrency stress cases, and end-to-end error taxonomy consistency.
+
+Lessons are strict and repeatable: capability requirements should be declared at the route edge, contract tests should verify invariants not implementation details, and route surface behavior should be protected by CI.
 
 ## 4) Files changed, key insights, and gotchas
-Primary changed files in this phase:
-- `commerce-plugin-factory.ts`
-- `packages/plugins/commerce/src/index.ts`
-- `packages/plugins/commerce/src/index.test.ts`
-- `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
-- `guide-compliance-ci-checklist.md`
-- `guide-compliance-diff-patch-plan.md`
-- `commerce-plugin-auto-enforcement.md`
-- `commerce-plugin-contracts.md`
-- `commerce-plugin-developer-execution.md`
-- `commerce-plugin-factory.md`
-- `commerce-plugin-governance-index.md`
-- `commerce-plugin-spec.md`
-- `emdash-platform-gap-analysis.md`
-- `README.md`
+Primary files changed in this phase: `/.github/workflows/ci.yml`, `/commerce-plugin-factory.md`, `/commerce-plugin-factory.ts`, `/packages/plugins/commerce/src/index.ts`, `/packages/plugins/commerce/src/commerce-guide-compliance.test.ts`, `/packages/plugins/commerce/src/commerce-plugin-factory.ts`, `/packages/plugins/commerce/src/orchestration/finalize-payment-inventory.ts`, `/packages/plugins/commerce/src/orchestration/finalize-payment-inventory.test.ts`.
 
-Key insights:
-- The factory wrapper changes runtime handler identities; direct equality checks on route handlers are no longer stable.
-- Compliance tests should check contract shape and outcomes, not implementation references.
-- Do not introduce broad API behavior changes in the same commit as contract migration unless tests are updated in the same PR.
+Key insight for future work: do not add tests that assert function identity across wrapped routes; assert contract shape, metadata flags, and thrown capability errors.
+
+Gotcha to avoid: adding storage-backed routes without updating `COMMERCE_ROUTE_CAPABILITIES` and capability handling will create runtime guard drift.
 
 ## 5) Key files and directories
-Authoritative files for next developer onboarding:
-- `HANDOVER.md`
-- `commerce-plugin-spec.md`
-- `commerce-plugin-contracts.md`
-- `commerce-plugin-factory.ts`
-- `guide-compliance-ci-checklist.md`
-- `guide-compliance-diff-patch-plan.md`
-- `packages/plugins/commerce/src/index.ts`
-- `packages/plugins/commerce/src/index.test.ts`
-- `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
-- `packages/plugins/commerce/package.json`
+Authoritative handoff files: `HANDOVER.md`, `pre-frontend-backend-hardening.md`, `commerce-plugin-spec.md`, `commerce-plugin-contracts.md`, `commerce-plugin-governance-index.md`, `commerce-plugin-factory.md`, `commerce-plugin-developer-execution.md`.
 
-Main directories:
-- `packages/plugins/commerce/src`
-- `packages/plugins/commerce/src/handlers`
-- `packages/plugins/commerce/src/orchestration`
-- `packages/plugins/commerce/src/kernel`
-- `packages/plugins/commerce/src/lib`
+Primary code review files: `packages/plugins/commerce/src/index.ts`, `packages/plugins/commerce/src/commerce-plugin-factory.ts`, `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.test.ts`.
+
+Primary directories: `packages/plugins/commerce/src`, `packages/plugins/commerce/src/handlers`, `packages/plugins/commerce/src/orchestration`, `packages/plugins/commerce/src/kernel`, `packages/plugins/commerce/src/lib`.
 

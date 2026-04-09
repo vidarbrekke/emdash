@@ -88,13 +88,78 @@ describe("payment webhook seam", () => {
 		expect(out).toEqual({ ok: true, replay: false, orderId: "order_1" });
 	});
 
+it("rejects adapters with a missing provider id", async () => {
+	const malformedAdapter = {
+		...adapter,
+		providerId: "",
+	};
+
+	await expect(createPaymentWebhookRoute(malformedAdapter as never)(ctx())).rejects.toMatchObject({
+		code: "provider_unavailable",
+		message: expect.stringContaining("providerId"),
+	});
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+});
+
+it("rejects adapters with non-function provider hooks", async () => {
+	const malformedAdapter = {
+		...adapter,
+		verifyRequest: 0 as never,
+	};
+
+	await expect(createPaymentWebhookRoute(malformedAdapter as never)(ctx())).rejects.toMatchObject({
+		code: "provider_unavailable",
+		message: expect.stringContaining("missing required method"),
+	});
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+});
+
+it("rejects adapters returning malformed finalize input", async () => {
+	const malformedAdapter = {
+		...adapter,
+		buildFinalizeInput: vi.fn(
+			() =>
+				({
+					orderId: "order_1",
+					externalEventId: "evt_1",
+				}) as never,
+		),
+	};
+
+	await expect(createPaymentWebhookRoute(malformedAdapter as never)(ctx())).rejects.toMatchObject({
+		code: "provider_unavailable",
+		message: expect.stringContaining("invalid field types"),
+	});
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+});
+
+it("rejects adapters returning empty finalize input fields", async () => {
+	const malformedAdapter = {
+		...adapter,
+		buildFinalizeInput: vi.fn(
+			() =>
+				({
+					orderId: "",
+					externalEventId: "evt_1",
+					finalizeToken: "tok",
+				}) as never,
+		),
+	};
+
+	await expect(createPaymentWebhookRoute(malformedAdapter as never)(ctx())).rejects.toMatchObject({
+		code: "provider_unavailable",
+		message: expect.stringContaining("empty finalize input fields"),
+	});
+	expect(finalizePaymentFromWebhook).toHaveBeenCalledTimes(0);
+});
+
 	it("rejects non-POST webhook requests", async () => {
 		await expect(
 			createPaymentWebhookRoute(adapter)({
 				...(ctx() as ReturnType<typeof ctx>),
 				request: new Request("https://example.test/webhooks/stripe", { method: "GET" }),
 			} as never),
-		).rejects.toMatchObject({ code: "METHOD_NOT_ALLOWED" });
+		).rejects.toMatchObject({ code: "method_not_allowed" });
 	});
 
 	it("rejects oversized webhook payload by header cap", async () => {
@@ -209,7 +274,7 @@ it("propagates malformed rate-limit suffix values to rate limiter input", async 
 	finalizePaymentFromWebhook.mockResolvedValue({ kind: "completed", orderId: "order_1" });
 	await createPaymentWebhookRoute(localAdapter)(ctx());
 
-	expect(localAdapter.buildRateLimitSuffix).toHaveBeenCalledTimes(2);
+	expect(localAdapter.buildRateLimitSuffix).toHaveBeenCalledTimes(1);
 	expect(consumeKvRateLimit).toHaveBeenCalledTimes(1);
 	expect(consumeKvRateLimit).toHaveBeenCalledWith(
 		expect.objectContaining({

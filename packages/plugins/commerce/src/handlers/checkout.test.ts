@@ -22,6 +22,7 @@ import type {
 	StoredPaymentAttempt,
 } from "../types.js";
 import { checkoutHandler } from "./checkout.js";
+import { CHECKOUT_CLIENT_RESPONSE_KEYS } from "./response-contract-fixtures.js";
 import {
 	CHECKOUT_ROUTE,
 	computeCheckoutReplayIntegrity,
@@ -765,7 +766,7 @@ describe("checkout route guardrails", () => {
 			requestMethod: "GET",
 			ownerToken,
 		});
-		await expect(checkoutHandler(ctx)).rejects.toMatchObject({ code: "METHOD_NOT_ALLOWED" });
+		await expect(checkoutHandler(ctx)).rejects.toMatchObject({ code: "method_not_allowed" });
 	});
 
 	it("validates cart content bounds before processing", async () => {
@@ -1752,7 +1753,7 @@ describe("checkout route guardrails", () => {
 			requestMeta: { ip: "127.0.0.1" },
 			kv: new MemKv(),
 		} as unknown as RouteContext<CheckoutInput>;
-		await expect(checkoutHandler(ctx)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		await expect(checkoutHandler(ctx)).rejects.toMatchObject({ code: "bad_request" });
 	});
 });
 
@@ -2542,9 +2543,7 @@ describe("consumer checkout response contract", () => {
 
 		const publicKeys = Object.keys(first);
 		expect(publicKeys).not.toContain("replayIntegrity");
-		expect(publicKeys).toEqual(
-			expect.arrayContaining(["orderId", "paymentAttemptId", "paymentPhase", "totalMinor", "currency", "finalizeToken"]),
-		);
+		expect(publicKeys).toEqual(expect.arrayContaining([...CHECKOUT_CLIENT_RESPONSE_KEYS]));
 
 		const second = await checkoutHandler(baseContext);
 		expect(second).toEqual(first);
