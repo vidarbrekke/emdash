@@ -115,3 +115,33 @@ Action needed:
   - `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
 - ZIP builder: `scripts/build-commerce-external-review-zip.sh`
 
+## 6) What the next developer should run first (self-serve handoff checks)
+
+Before touching code, verify you can execute and trust this handoff file in the current branch:
+
+1. Confirm the active branch/checkpoint:
+   - `git rev-parse --short HEAD`
+   - `git status --short` (must be clean before changing files)
+2. Re-run the hard evidence checks from this snapshot:
+   - `pnpm --silent lint:json`
+   - `pnpm --filter @emdash-cms/plugin-dashing-commerce run check`
+3. Rebuild a fresh review bundle:
+   - `bash scripts/build-commerce-external-review-zip.sh`
+   - `ls -l commerce-plugin-external-review-*.zip`
+4. Validate the bundle contains the files the handover references:
+   - `unzip -l <zip-path> | rg "HANDOVER.md|docs/compliance-source-of-truth.md|GOVERNANCE_INDEX.md|docs/archive/2026-04-commerce-hardening|scripts/generate-commerce-route-compliance-snapshot.mjs|pre-frontend-backend-hardening.md"`
+
+Do not proceed to implementation work until gaps are narrowed and this output aligns with `HANDOVER.md`.
+
+### Ready-to-implement work items (no ambiguity)
+- **Artifact completeness**: either include every file listed in section 3(A) in the ZIP build OR remove/replace references to missing files so the bundle becomes internally complete.
+- **CAS/token contract**: in checkout lock flow, replace timestamp-as-version CAS inputs with explicit lock-version metadata and a clearly typed protocol.
+- **Auth boundary proof**: add/adjust tests that prove non-public routes are blocked without platform auth context or capture a tested, platform-level assertion in a durable suite.
+- **Bundle truthfulness**: keep all docs in `docs/compliance.md`, `COMMERCE_DOCS_INDEX.md`, `COMMERCE_EXTENSION_SURFACE.md`, and `HANDOVER.md` aligned with what is actually shipped in the archive.
+
+### Suggested acceptance criteria for each item
+- **Artifact is self-contained**: `rg` scan of archive returns all files referenced by handoff/compliance docs, and `package.json` check path points to scripts present inside the archive.
+- **CAS protocol is explicit**: any CAS call in checkout lock/write paths uses a protocol field distinct from `createdAt/updatedAt` in data model and test coverage.
+- **Auth assertion exists**: at least one package-level test demonstrates rejection of non-public/admin route invocation without auth context.
+- **No claim drift**: no handoff or compliance document points to non-archived/unbundled files.
+
