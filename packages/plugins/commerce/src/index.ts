@@ -25,6 +25,7 @@ import {
 	createCommercePlugin,
 	withKV,
 	withFetch,
+	type CommerceRouteEntry,
 	requireCron,
 } from "./commerce-plugin-factory.js";
 
@@ -123,7 +124,7 @@ import {
 } from "./schemas.js";
 import { createRecommendationsRoute } from "./services/commerce-extension-seams.js";
 import { COMMERCE_STORAGE_CONFIG, type CommerceStorage } from "./storage.js";
-import { COMMERCE_ROUTE_CAPABILITIES } from "./contracts/route-contracts.js";
+import { COMMERCE_ROUTE_CAPABILITIES, type CommerceRouteContracts } from "./contracts/route-contracts.js";
 
 /**
  * The EmDash `definePlugin` route handler type requires handlers typed against
@@ -131,11 +132,8 @@ import { COMMERCE_ROUTE_CAPABILITIES } from "./contracts/route-contracts.js";
  * generic `PluginDescriptor`. All casts are isolated here so they do not
  * spread into handler files.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyHandler = (ctx: RouteContext<unknown>) => Promise<unknown>;
-
-function asRouteHandler(fn: AnyHandler): never {
-	return fn as never;
+function asRouteHandler<T>(fn: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute<T>["handler"] {
+	return fn as PluginRoute<T>["handler"];
 }
 
 function withRouteMethodGuard<T>(route: PluginRoute<T>): PluginRoute {
@@ -152,33 +150,41 @@ function withRouteMethodGuard<T>(route: PluginRoute<T>): PluginRoute {
  * Route helper constructors to keep public/private registration explicit and avoid
  * accidental exposure of mutation endpoints.
  */
-function adminRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
+function adminRoute<T>(
+	input: PluginRoute<T>["input"],
+	handler: (ctx: RouteContext<T>) => Promise<unknown>,
+): PluginRoute {
 	return withRouteMethodGuard({
 		input,
-		handler: asRouteHandler(handler as AnyHandler),
+		handler: asRouteHandler(handler),
 	});
 }
 
-function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
+function publicRoute<T>(
+	input: PluginRoute<T>["input"],
+	handler: (ctx: RouteContext<T>) => Promise<unknown>,
+): PluginRoute {
 	return withRouteMethodGuard({
 		public: true,
 		input,
-		handler: asRouteHandler(handler as AnyHandler),
+		handler: asRouteHandler(handler),
 	});
 }
 
-function withRouteCapabilities<T>(routeKey: string, route: PluginRoute<T>): PluginRoute<T> {
-	const capabilities = COMMERCE_ROUTE_CAPABILITIES[routeKey as keyof typeof COMMERCE_ROUTE_CAPABILITIES];
+type CommerceRouteKey = keyof CommerceRouteContracts;
+
+function withRouteCapabilities<TRoute extends CommerceRouteKey>(routeKey: TRoute, route: PluginRoute): PluginRoute {
+	const capabilities = COMMERCE_ROUTE_CAPABILITIES[routeKey];
 	if (!capabilities) return route;
 
-	let wrappedRoute = route as PluginRoute<T>;
+	let wrappedRoute: CommerceRouteEntry = route;
 	if (capabilities.requiresKV) {
-		wrappedRoute = withKV(wrappedRoute as never) as PluginRoute<T>;
+		wrappedRoute = withKV(wrappedRoute);
 	}
 	if (capabilities.requiresFetch) {
-		wrappedRoute = withFetch(wrappedRoute as never) as PluginRoute<T>;
+		wrappedRoute = withFetch(wrappedRoute);
 	}
-	return wrappedRoute;
+	return wrappedRoute as PluginRoute;
 }
 
 /**
