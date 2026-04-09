@@ -1,102 +1,52 @@
 # HANDOVER
 
-## 1) Purpose and current state
-`@emdash-cms/plugin-dashing-commerce` is the commerce plugin that owns catalog, cart, checkout orchestration, and payment-finalization behavior for EmDash storefront/admin flows. The current branch is now transitioning from admin/UI phase groundwork into the full platform layer.
+## 1) Purpose and current problem statement
+This repository currently drives the EmDash commerce plugin and platform integration layer. The active work is on marketplace extension lifecycle hardening: implementing and stabilizing a secure installation path (`permissions → pricing → confirm`), validating manifest compatibility at runtime and activation boundaries, and preventing trust-boundary drift between install handlers and runtime loading.
 
-The immediate technical problem is to continue the implementation plan without regressing contract-first architecture: backend remains authoritative, frontend remains thin, and all extension lifecycle/activation changes must be schema- and capability-validated before running.
+The current contract is explicit: frontend is presentational only, backend handlers are authoritative, and no marketplace plugin may become active unless validation, licensing assumptions, and identity checks pass consistently across install, update, and runtime refresh paths.
 
 ## 2) Completed work and outcomes
-Checkout and payment finalization were aligned to the new state machine (`initiated`, `processing`, `finalized`, `failed`) by updating handler behavior and kernel decision logic. Duplicate checkout prevention now scans `initiated`, `processing`, and `authorized` in-progress order rows; `paymentPhase` naming in checkout/finalize paths is updated to remove legacy `payment_pending` and `paid` references.
+The marketplace platform pass is now implemented through `packages/core` and backed by focused regression tests. `handleMarketplacePricing` and `handleMarketplaceInstallConfirm` are in place with temporary state stored in `OptionsRepository`, short-lived one-time `installToken` handling, and confirm-path enforcement. The API surface now includes `POST /_emdash/api/admin/plugins/marketplace/[id]/pricing` and `POST /_emdash/api/admin/plugins/marketplace/[id]/confirm`.
 
-Route registration and capability wiring remain explicit in the commerce package index and core plugin route wrappers. `packages/core/tests/unit/plugins/plugin-route-auth.test.ts` confirms non-public plugin routes are blocked without auth context.
+Activation hardening is now centralized: `PluginManager` supports a `validateOnActivate` callback, runtime startup/load and refresh paths validate bundle identity through shared logic, and `marketplace` plugin state is deactivated when bundle identity checks fail. A shared helper now handles manifest identity checks (`id`/`version`) to prevent divergent logic in handler and runtime code paths.
 
-Contract, testing, and reproducibility assets are updated: route-contract fixtures were regenerated, checkout response contracts were updated for the new phase model, and `scripts/build-commerce-external-review-zip.sh` remains configured for reviewer-ready snapshots.
-
-Current test status:
-- `pnpm test` (workspace-wide) completed successfully; key package suites reported passing.
-- `packages/core` and `packages/cloudflare` tests pass in that run.
+Targeted tests were added/updated to lock these outcomes: marketplace pricing + confirm flow (including token replay/invalidation), `validateOnActivate` behavior, and runtime validation for missing/malformed/mismatched marketplace bundles.
 
 ## 3) Failures, open issues, and lessons learned
-`pnpm check` still reports unrelated, pre-existing `packages/core` type issues in areas outside this feature scope (manifest/OpenAPI/Kysely typing surface). Treat these as contextual noise unless your work intentionally expands core stabilization.
+Recent hard failures observed during implementation were mostly integration-test related and were resolved before merge: incorrect body parser choice in confirm flow, inline manifest validation duplication, wrong import path after moving shared validation, and mocked marketplace response ordering/fixture shape mismatches. The resulting fixes are now stable in the current branch.
 
-Commerce fixture/data shape gotchas are active: idempotency lock rows now carry `lockVersion`, and fixture sets that skip this field cause test/type failures.
+Current open issues are known and scoped by `project-review-next-steps-strict.md`: version compatibility enforcement, bounded bundle extraction, rollback-safe install/update persistence, stable persisted installation identity, explicit downgrade policy, identity collision hardening, stronger authenticity checks, stale script cleanup, and source-of-truth docs consolidation.
 
-A few tests intentionally write to stderr for capability enforcement and unsafe input logging; this is diagnostic output, not test failure.
-
-Phase gap to close next:
-- implement the Marketplace flow (`permissions → pricing → confirm`) and extension validation-on-activation path from the delta platform plan.
+Known residual risk for confidence: full repo-wide `pnpm typecheck` and lint history have reported unrelated or pre-existing issues outside this marketplace lane; rerun with current local baseline before claiming global green before broader merge activity.
 
 ## 4) Files changed, key insights, and gotchas
-Primary changed areas for continuity:
-- `packages/plugins/commerce/src/handlers/checkout.ts`
-- `packages/plugins/commerce/src/handlers/checkout-state.ts`
-- `packages/plugins/commerce/src/handlers/checkout-state.test.ts`
-- `packages/plugins/commerce/src/handlers/checkout-get-order.test.ts`
-- `packages/plugins/commerce/src/handlers/checkout.test.ts`
-- `packages/plugins/commerce/src/handlers/cart.test.ts`
-- `packages/plugins/commerce/src/kernel/finalize-decision.ts`
-- `packages/plugins/commerce/src/kernel/finalize-decision.test.ts`
-- `packages/plugins/commerce/src/orchestration/finalize-payment.ts`
-- `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
-- `packages/plugins/commerce/src/orchestration/finalize-payment-status.ts`
-- `packages/plugins/commerce/src/contracts/route-contracts.ts`
-- `packages/plugins/commerce/src/contracts/route-contract-surface.generated.json`
-- `packages/plugins/commerce/src/contracts/route-compliance.generated.json`
-- `packages/plugins/commerce/src/types.ts`
-- `packages/plugins/commerce/src/index.ts`
-- `packages/plugins/commerce/src/schemas.ts`
-- `packages/plugins/commerce/src/handlers/admin.ts` (new route handler file)
-- `packages/core/src/astro/routes/api/plugins/route-handler.ts`
+Core continuity files are:
+`packages/core/src/api/handlers/marketplace.ts`, `packages/core/src/astro/routes/api/admin/plugins/marketplace/[id]/pricing.ts`, `packages/core/src/astro/routes/api/admin/plugins/marketplace/[id]/confirm.ts`, `packages/core/src/api/handlers/index.ts`, `packages/core/src/emdash-runtime.ts`, `packages/core/src/plugins/manager.ts`, and `packages/core/src/plugins/marketplace.ts`.
 
-Key insights:
-- Keep lock/version semantics centralized to prevent divergent persistence logic.
-- Preserve frontend thinness: hooks and UI should never own pricing/inventory/checkout decisions.
-- Treat in-progress payment rows as conflict states in checkout and avoid creating parallel orders for the same cart.
+Test and spec closure currently relies on:
+`packages/core/tests/unit/api/marketplace-handlers.test.ts`, `packages/core/tests/unit/plugins/manager.test.ts`, and `packages/core/tests/unit/emdash-runtime-marketplace.test.ts`.
 
-Gotchas:
-- Search/replace old phase literals (`payment_pending`, `paid`) is mostly complete, but any new code paths must follow the new enum set.
-- Test fixtures should preserve `lockVersion` where lock rows are modeled.
-- Generated contract files should be regenerated if route signatures change.
+Key gotchas:
+- Do not reintroduce inline manifest `id`/`version` checks in handler or runtime files; route through the shared identity helper.
+- Keep confirm flow idempotent by consuming install tokens once and clearing stored state immediately on success/failure.
+- Keep install/update telemetry/reporting after successful state commitment only.
+- Preserve `lockVersion` and version/phase contracts in commerce fixtures if touched during follow-up work.
+- Any new bundle surface changes must be mirrored by deterministic tests, not snapshot-heavy assertions.
 
-## 5) Key files and directories
-- `dc_full_platform_handoff/IMPLEMENTATION_PLAN.md`
-- `dc_full_platform_handoff/ARCHITECTURE.md`
-- `dc_full_platform_handoff/FRONTEND_RULES.md`
-- `dc_full_platform_handoff/MARKETPLACE.md`
-- `dc_full_platform_handoff/EXTENSIONS.md`
-- `dc_full_platform_handoff/EXTENSION_SDK.md`
-- `dc_full_platform_handoff/MARKETPLACE_BACKEND.md`
-- `dc_full_platform_handoff/BILLING_AND_LICENSING.md`
-- `packages/plugins/commerce/src/` (active implementation area)
-- `packages/plugins/commerce/src/contracts/` (API surface and compliance artifacts)
-- `packages/plugins/commerce/src/handlers/`
-- `packages/plugins/commerce/src/orchestration/`
-- `packages/plugins/commerce/src/kernel/`
-- `packages/core/src/astro/routes/api/plugins/route-handler.ts`
-- `scripts/build-commerce-external-review-zip.sh`
-- `docs/compliance.md`
+Documentation and governance files used during transfer are also in scope for continuity: `dc_full_platform_handoff/*`, `docs/compliance.md`, `docs/compliance-source-of-truth.md`.
 
-## Continuation prompt (verbatim)
-You are now building the platform layer (not just UI).
+## 5) Key files, directories, and next-step plan
+New developer entry points: `HANDOVER.md`, `project-review-next-steps-strict.md`, and `dc_full_platform_handoff/00_START_HERE.md` for architectural context.
 
-Follow the documents in order. Do not skip ahead.
+Execution scope is hardening-only and must follow this strict order without reordering unless dependency blocks force it:
+1) compatibility enforcement, 2) bounded bundle extraction, 3) rollback-safe install/update, 4) stable installation identity, 5) explicit downgrade policy, 6) plugin identity collision policy, 7) expanded verification/tests, 8) stale script cleanup, 9) docs consolidation.
 
-Critical rules:
-	•	Frontend must remain thin
-	•	Backend is the source of truth
-	•	No extension runs without validation and license
+For each item above, implement tests before release and keep behavior deterministic. Prioritized acceptance targets are: incompatible marketplace versions rejected, bounded extraction enforced, old plugin state preserved on failed updates, old/new version policy made explicit (`DOWNGRADE_NOT_ALLOWED` default), collision errors deterministic, and stale workspace scripts removed.
 
-Apply the implementation plan phase-by-phase.
-
-If anything is unclear, stop and ask before proceeding.
-
-Key files: @dc_full_platform_handoff
-
-Recommended first commands:
+Useful first commands before code:
 - `git rev-parse --short HEAD`
 - `git status --short`
-- `pnpm test`
-- `pnpm --filter ./packages/plugins/commerce test`
-- `pnpm --filter ./packages/plugins/commerce typecheck`
-- `pnpm --filter ./packages/create-emdash typecheck`
+- `pnpm --silent lint:quick`
+- `pnpm typecheck`
+- `pnpm test -- --runInBand`
 - `bash scripts/build-commerce-external-review-zip.sh`

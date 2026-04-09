@@ -2,7 +2,7 @@
 
 ## Operations and support
 
-For current execution context, use `../../../HANDOVER.md` plus `../../../README.md`/`../../../AGENTS.md` as the active entrypoint.
+For current execution context, use `../../../HANDOVER.md`, `../../../project-review-next-steps-strict.md`, and `../../../README.md`/`../../../AGENTS.md` as the active entrypoint.
 
 ### Pre-merge release gates (review-response work)
 

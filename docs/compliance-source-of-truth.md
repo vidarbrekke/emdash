@@ -27,3 +27,11 @@ The following commerce-specific narrative documents are kept for history and con
 
 If two documents conflict, prefer the canonical chain above and treat these archived files
 as historical references only.
+
+## Marketplace hardening execution order
+
+For the active marketplace platform hardening lane, follow this sequence after the canonical chain:
+
+1. `../HANDOVER.md`
+2. `../project-review-next-steps-strict.md`
+3. `../dc_full_platform_handoff/*` (architecture, extension SDK, billing, marketplace backend)
