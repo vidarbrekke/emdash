@@ -331,10 +331,21 @@ function canTakeClaim(existing: StoredWebhookReceipt, nowIso: string): { canTake
 	}
 }
 
+function parseClaimLeaseVersion(version: string): number | null {
+	const parsed = Date.parse(version);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getValidClaimVersion(receipt: StoredWebhookReceipt): string | null {
+	const version = receipt.claimVersion;
+	if (typeof version !== "string") return null;
+	if (parseClaimLeaseVersion(version) === null) return null;
+	return version;
+}
+
 function withClaimedMetadata(
 	receipt: StoredWebhookReceipt,
 	claimContext: ReturnType<typeof createClaimContext>,
-	expectedVersion: string,
 	nowIso: string,
 ): StoredWebhookReceipt {
 	return {
@@ -342,7 +353,7 @@ function withClaimedMetadata(
 		claimState: "claimed",
 		claimOwner: claimContext.claimOwner,
 		claimToken: claimContext.claimToken,
-		claimVersion: expectedVersion,
+		claimVersion: claimContext.claimVersion,
 		claimExpiresAt: claimContext.claimExpiresAt,
 		updatedAt: nowIso,
 	};
@@ -419,10 +430,18 @@ async function claimWebhookReceipt({
 		};
 	}
 
-	const claimedExistingReceipt = withClaimedMetadata(existing, claimContext, existing.updatedAt, nowIso);
+	const existingClaimVersion = getValidClaimVersion(existing);
+	if (!existingClaimVersion) {
+		return {
+			kind: "replay",
+			result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED },
+		};
+	}
+
+	const claimedExistingReceipt = withClaimedMetadata(existing, claimContext, nowIso);
 	const stolen = await ports.webhookReceipts.compareAndSwap(
 		receiptId,
-		existing.updatedAt,
+		existingClaimVersion,
 		claimedExistingReceipt,
 	);
 	if (!stolen) {
@@ -495,24 +514,38 @@ async function persistReceiptStatus(
 		updatedAt: nowIso,
 	};
 
+	const existingVersion = getValidClaimVersion(receipt);
+	if (!existingVersion) {
+		return false;
+	}
+
 	if (!ports.webhookReceipts.compareAndSwap) {
 		return false;
 	}
 
-	return await ports.webhookReceipts.compareAndSwap(receiptId, receipt.updatedAt, persisted);
+	return await ports.webhookReceipts.compareAndSwap(receiptId, existingVersion, persisted);
 }
 
 function getActiveClaim(receipt: StoredWebhookReceipt):
 	| { claimOwner: string; claimToken: string; claimVersion: string; claimExpiresAt?: string }
 	| null {
-	if (receipt.claimState !== "claimed" || !receipt.claimOwner || !receipt.claimToken || !receipt.claimVersion) {
+	if (receipt.claimState !== "claimed") {
+		return null;
+	}
+
+	if (!receipt.claimOwner || !receipt.claimToken) {
+		return null;
+	}
+
+	const claimVersion = getValidClaimVersion(receipt);
+	if (!claimVersion) {
 		return null;
 	}
 
 	return {
 		claimOwner: receipt.claimOwner,
 		claimToken: receipt.claimToken,
-		claimVersion: receipt.claimVersion,
+		claimVersion,
 		claimExpiresAt: receipt.claimExpiresAt,
 	};
 }
@@ -554,6 +587,9 @@ async function assertAndRefreshClaim(
 
 	const activeClaim = getActiveClaim(pendingReceipt);
 	if (!activeClaim) {
+		if (pendingReceipt.claimState === "claimed") {
+			return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
+		}
 		return { kind: "acquired", receipt: pendingReceipt };
 	}
 
@@ -569,9 +605,14 @@ async function assertAndRefreshClaim(
 		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
 	}
 
+	const activeVersion = getValidClaimVersion(pendingReceipt);
+	if (!activeVersion) {
+		return { kind: "replay", result: { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED } };
+	}
+
 	const refreshedReceipt = await compareAndSwap(
 		receiptId,
-		pendingReceipt.updatedAt,
+		activeVersion,
 		refreshed,
 	);
 	if (!refreshedReceipt) {
@@ -588,7 +629,12 @@ async function assertClaimStillActive(
 	nowIso: string,
 ): Promise<FinalizeWebhookResult | null> {
 	const activeClaim = getActiveClaim(claimedReceipt);
-	if (!activeClaim) return null;
+	if (!activeClaim) {
+		if (claimedReceipt.claimState === "claimed") {
+			return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
+		}
+		return null;
+	}
 
 	const liveReceipt = await ports.webhookReceipts.get(receiptId);
 	if (!liveReceipt) {

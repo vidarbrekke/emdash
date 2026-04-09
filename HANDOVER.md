@@ -57,14 +57,13 @@ Action needed:
 - Mirror the same explicitness for webhook receipt claims (document comments + typed shape).
 
 ### C) Auth boundary still partly trust-based at package level (medium-high)
-`adminRoute(...)` currently enforces route registration + method, but does not itself assert package-local authorization semantics; it assumes platform runtime guarantees for non-public route protection.
+`adminRoute(...)` is now backed by a package-level middleware proof in the core suite: non-public plugin routes return `UNAUTHORIZED` before handler execution (`packages/core/tests/unit/plugins/plugin-route-auth.test.ts`).
 
 Impact:
-- Boundary posture is not fully proven inside this package alone.
+- Boundary posture is now proven at middleware layer via package-level non-public-route regression tests.
 
 Action needed:
-- Add package-local checks/integration tests proving non-public routes are inaccessible without auth context, or
-- Document and validate the exact EmDash guarantee with a dedicated suite in this package’s verification path.
+- Keep assertions focused on the same core middleware contract and expand only if route surface changes.
 
 ### D) Documentation truthfulness drift (medium)
 Several handoff/docs claims still describe CI artifacts, historical governance, or compatibility states that are not present in the exported artifact.
@@ -82,7 +81,7 @@ Action needed:
 - Decide explicit scope: either bundle the minimum root tooling/doc dependencies needed for reproducibility, or clearly state limitations and required external validation steps.
 
 ## 4) Next developer execution plan
-1. Make review artifact reproducible:
+1. Make review artifact reproducible with monorepo-local validation context:
    - Include all source-of-truth references referenced from handoff/compliance docs in `scripts/build-commerce-external-review-zip.sh`, or rewrite those references to only include files inside the artifact.
    - Include `scripts/generate-commerce-route-compliance-snapshot.mjs` and the exact commands in the package check path.
    - Confirm zip self-validates with the same claims used in `HANDOVER.md`.
@@ -110,6 +109,7 @@ Action needed:
   - `packages/plugins/commerce/src/contracts/route-compliance-generated.test.ts`
   - `packages/plugins/commerce/src/contracts/route-contract-surface.generated.test.ts`
   - `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
+  - `packages/core/tests/unit/plugins/plugin-route-auth.test.ts`
   - `packages/plugins/commerce/src/orchestration/finalize-payment.ts`
   - `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.ts`
   - `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
@@ -142,7 +142,7 @@ Do not proceed to implementation work until gaps are narrowed and this output al
 ### Suggested acceptance criteria for each item
 - **Artifact is self-contained**: `rg` scan of archive returns all files referenced by handoff/compliance docs, and `package.json` check path points to scripts present inside the archive.
 - **CAS protocol is explicit**: any CAS call in checkout lock/write paths uses a protocol field distinct from `createdAt/updatedAt` in data model and test coverage.
-- **Auth assertion exists**: at least one package-level test demonstrates rejection of non-public/admin route invocation without auth context.
+- **Auth assertion exists**: route middleware test suite includes a non-public route rejection assertion in `packages/core/tests/unit/plugins/plugin-route-auth.test.ts` (handler is not invoked when auth is absent).
 - **No claim drift**: no handoff or compliance document points to non-archived/unbundled files.
 
 ## 7) Exact implementation map for next developer (copy/paste starting points)
@@ -169,7 +169,7 @@ Do not proceed to implementation work until gaps are narrowed and this output al
    - Remove/replace references to files missing from zip if you choose not to include them.
    - Ensure every “authoritative” file chain points to a file guaranteed in artifact.
 
-### B) Tighten CAS/version protocol (checkout lock)
+### B) Tighten CAS/version protocol (checkout lock + webhook)
 
 1. `packages/plugins/commerce/src/handlers/checkout.ts`
    - Locate lock acquisition/release helpers (search: `compareAndSwap(`, `checkout-lock:`, `createdAt: now`, `updatedAt`).

@@ -117,6 +117,7 @@ type MemCollectionWithAtomicOps<T extends object> = MemCollection<T> & {
 	compareAndSwap: (id: string, expectedVersion: string, data: T) => Promise<boolean>;
 	putIfAbsentCalled?: boolean;
 	compareAndSwapCalled?: boolean;
+	compareAndSwapVersions?: string[];
 };
 
 class MemCollWithAtomicOps<T extends object> extends MemColl<T> implements MemCollectionWithAtomicOps<T> {
@@ -138,11 +139,17 @@ class MemCollWithAtomicOps<T extends object> extends MemColl<T> implements MemCo
 		return true;
 	}
 
+	compareAndSwapVersions: string[] = [];
+
 	async compareAndSwap(id: string, expectedVersion: string, data: T): Promise<boolean> {
 		this.compareAndSwapCalled = true;
+		this.compareAndSwapVersions.push(expectedVersion);
 		const current = this.rows.get(id);
 		if (!current) return false;
-		if ((current as Record<string, unknown>).createdAt !== expectedVersion) return false;
+		if ((current as Record<string, unknown>).createdAt !== expectedVersion &&
+			(current as { lockVersion?: string }).lockVersion !== expectedVersion) {
+			return false;
+		}
 		await this.put(id, data);
 		return true;
 	}
@@ -924,6 +931,7 @@ describe("checkout route guardrails", () => {
 					route: "checkout-cart-lock",
 					keyHash: lockFingerprint,
 					httpStatus: 409,
+					lockVersion: "1",
 					responseBody: {
 						kind: "checkout_cart_lock",
 						cartId,
@@ -992,6 +1000,7 @@ describe("checkout route guardrails", () => {
 					route: "checkout-cart-lock",
 					keyHash: lockFingerprint,
 					httpStatus: 409,
+					lockVersion: "1",
 					responseBody: {
 						kind: "checkout_cart_lock",
 						cartId,
@@ -1114,10 +1123,154 @@ describe("checkout route guardrails", () => {
 		});
 		expect(idempotencyKeys.putIfAbsentCalled).toBe(true);
 		expect(idempotencyKeys.compareAndSwapCalled).toBe(true);
+		expect(idempotencyKeys.compareAndSwapVersions).toEqual(["1", "2"]);
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
 
 		expectReleasedCheckoutLock(await idempotencyKeys.get(lockId));
+	});
+
+	it("rejects stale checkout lock rows missing explicit lock version", async () => {
+		const cartId = "cart_atomic_checkout_lock_missing_version";
+		const now = new Date().toISOString();
+		const ownerToken = "owner-token-atomic-checkout-missing-version";
+		const idempotencyKey = "idem-key-atomic-checkout-missing-version";
+		const cart: StoredCart = {
+			currency: "USD",
+			lineItems: [{ productId: "p1", quantity: 1, inventoryVersion: 1, unitPriceMinor: 100 }],
+			ownerTokenHash: await sha256HexAsync(ownerToken),
+			createdAt: now,
+			updatedAt: now,
+		};
+
+		const lockFingerprint = await sha256HexAsync(`checkout-cart-lock|${cartId}`);
+		const lockId = `checkout-lock:${lockFingerprint}`;
+		const existingLockRows = new Map<string, StoredIdempotencyKey>([
+			[
+				lockId,
+				{
+					route: "checkout-cart-lock",
+					keyHash: lockFingerprint,
+					httpStatus: 409,
+					responseBody: {
+						kind: "checkout_cart_lock",
+						cartId,
+						requestId: "other-checkout-request",
+						expiresAt: new Date(Date.parse(now) - 60_000).toISOString(),
+					},
+					createdAt: now,
+				},
+			],
+		]);
+		const idempotencyKeys = new MemCollWithAtomicOps(existingLockRows);
+		const orders = new MemColl<StoredOrder>();
+		const paymentAttempts = new MemColl<StoredPaymentAttempt>();
+		const inventoryStock = new MemColl(
+			new Map([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 1,
+						quantity: 20,
+						updatedAt: now,
+					},
+				],
+			]),
+		);
+		const kv = new MemKv();
+
+		await expect(
+			checkoutHandler(
+				contextFor({
+					idempotencyKeys,
+					orders,
+					paymentAttempts,
+					carts: new MemColl(new Map([[cartId, cart]])),
+					inventoryStock,
+					kv,
+					idempotencyKey,
+					cartId,
+					ownerToken,
+				}),
+			),
+		).rejects.toMatchObject({ code: "order_state_conflict" });
+		expect(orders.rows.size).toBe(0);
+		expect(paymentAttempts.rows.size).toBe(0);
+		expect(idempotencyKeys.compareAndSwapCalled).toBe(false);
+	});
+
+	it("rejects stale checkout lock rows with malformed version tokens", async () => {
+		const cartId = "cart_atomic_checkout_lock_bad_version";
+		const now = new Date().toISOString();
+		const ownerToken = "owner-token-atomic-checkout-bad-version";
+		const idempotencyKey = "idem-key-atomic-checkout-bad-version";
+		const cart: StoredCart = {
+			currency: "USD",
+			lineItems: [{ productId: "p1", quantity: 1, inventoryVersion: 1, unitPriceMinor: 100 }],
+			ownerTokenHash: await sha256HexAsync(ownerToken),
+			createdAt: now,
+			updatedAt: now,
+		};
+
+		const lockFingerprint = await sha256HexAsync(`checkout-cart-lock|${cartId}`);
+		const lockId = `checkout-lock:${lockFingerprint}`;
+		const existingLockRows = new Map<string, StoredIdempotencyKey>([
+			[
+				lockId,
+				{
+					route: "checkout-cart-lock",
+					keyHash: lockFingerprint,
+					httpStatus: 409,
+					lockVersion: "not-a-number",
+					responseBody: {
+						kind: "checkout_cart_lock",
+						cartId,
+						requestId: "other-checkout-request",
+						expiresAt: new Date(Date.parse(now) - 60_000).toISOString(),
+					},
+					createdAt: now,
+				},
+			],
+		]);
+		const idempotencyKeys = new MemCollWithAtomicOps(existingLockRows);
+		const orders = new MemColl<StoredOrder>();
+		const paymentAttempts = new MemColl<StoredPaymentAttempt>();
+		const inventoryStock = new MemColl(
+			new Map([
+				[
+					inventoryStockDocId("p1", ""),
+					{
+						productId: "p1",
+						variantId: "",
+						version: 1,
+						quantity: 20,
+						updatedAt: now,
+					},
+				],
+			]),
+		);
+		const kv = new MemKv();
+
+		await expect(
+			checkoutHandler(
+				contextFor({
+					idempotencyKeys,
+					orders,
+					paymentAttempts,
+					carts: new MemColl(new Map([[cartId, cart]])),
+					inventoryStock,
+					kv,
+					idempotencyKey,
+					cartId,
+					ownerToken,
+				}),
+			),
+		).rejects.toMatchObject({ code: "order_state_conflict" });
+		expect(orders.rows.size).toBe(0);
+		expect(paymentAttempts.rows.size).toBe(0);
+		expect(idempotencyKeys.compareAndSwapCalled).toBe(false);
 	});
 
 	it("requires atomic lock ops for checkout under hardened mode", async () => {
@@ -1197,6 +1350,7 @@ describe("checkout route guardrails", () => {
 					route: "checkout-cart-lock",
 					keyHash: lockFingerprint,
 					httpStatus: 409,
+					lockVersion: "1",
 					responseBody: {
 						kind: "checkout_cart_lock",
 						cartId,
@@ -1323,6 +1477,7 @@ describe("checkout route guardrails", () => {
 			route: "checkout-cart-lock",
 			keyHash: lockFingerprint,
 			httpStatus: 409,
+					lockVersion: "1",
 			responseBody: {
 				kind: "checkout_cart_lock",
 				cartId,
@@ -1402,6 +1557,7 @@ describe("checkout route guardrails", () => {
 			route: "checkout-cart-lock",
 			keyHash: lockFingerprint,
 			httpStatus: 409,
+					lockVersion: "1",
 			responseBody: {
 				kind: "checkout_cart_lock",
 				cartId,
@@ -1483,6 +1639,7 @@ describe("checkout route guardrails", () => {
 					route: "checkout-cart-lock",
 					keyHash: lockFingerprint,
 					httpStatus: 409,
+					lockVersion: "1",
 					responseBody: "malformed-lock-payload",
 					createdAt: now,
 				},

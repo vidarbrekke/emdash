@@ -2,7 +2,7 @@
 
 ## Operations and support
 
-For current execution context, use `HANDOVER.md` plus `README.md`/`AGENTS.md` as the active entrypoint.
+For current execution context, use `../../HANDOVER.md` plus `../../README.md`/`../../AGENTS.md` as the active entrypoint.
 
 ### Pre-merge release gates (review-response work)
 
@@ -26,19 +26,19 @@ For current execution context, use `HANDOVER.md` plus `README.md`/`AGENTS.md` as
 
 - `AI-EXTENSIBILITY.md` — future vector/LLM/MCP design notes
 - `COMMERCE_AI_ROADMAP.md` — post-MVP LLM/AI feature roadmap (5 scoped items)
-- `../HANDOVER.md` — current execution handoff and stage context
+- `../../HANDOVER.md` — current execution handoff and stage context
 - `COMMERCE_EXTENSION_SURFACE.md` — architecture contracts and extension rules
 - `FINALIZATION_REVIEW_AUDIT.md` — pending receipt state transitions and replay safety audit
 - `CI_REGRESSION_CHECKLIST.md` — regression gates for follow-on tickets
-- `../docs/compliance.md` — guide compliance workflow and active artifacts
-- `../guide-compliance-diff-patch-plan.md` — patch plan for guide compliance
-- `../guide-compliance-ci-checklist.md` — CI gate and enforcement checklist
-- `../commerce-guide-compliance.test.ts` — executable guide-compliance tests
-- `../dashcommerce-extension-architecture-spec.md` — authoritative module/extensibility contract (root)
-- `../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
-- `../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
-- `../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
-- `../docs/archive/2026-04-commerce-hardening/README.md` — historical hardening planning references
+- `../../docs/compliance.md` — guide compliance workflow and active artifacts
+- `../../guide-compliance-diff-patch-plan.md` — patch plan for guide compliance
+- `../../guide-compliance-ci-checklist.md` — CI gate and enforcement checklist
+- `../../packages/plugins/commerce/commerce-guide-compliance.test.ts` — executable guide-compliance tests
+- `../../dashcommerce-extension-architecture-spec.md` — authoritative module/extensibility contract (root)
+- `../../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
+- `../../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
+- `../../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
+- `../../docs/archive/2026-04-commerce-hardening/README.md` — historical hardening planning references
 
 ### Strategy A (Contract Drift Hardening) status
 
@@ -91,7 +91,7 @@ Use this when opening follow-up work:
 
 ## UI smoke readiness before admin/consumer manual tests
 
-- `ADMIN_CONSUMER_UI_SMOKE_READINESS.md` is the prerequisite gate for initial UI validation.
+- `../../ADMIN_CONSUMER_UI_SMOKE_READINESS.md` is the prerequisite gate for initial UI validation.
 - Required pre-check commands:
   - `pnpm readiness:commerce-backend:strict`
   - `pnpm --silent lint:quick`

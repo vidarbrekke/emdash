@@ -72,9 +72,49 @@ type CheckoutCartLock = {
 	expiresAt: string;
 };
 
+type CheckoutCartLockRecord = StoredIdempotencyKey & {
+	lockVersion: string;
+};
+
 const CHECKOUT_CART_LOCK_ROUTE = "checkout-cart-lock";
 const CHECKOUT_CART_LOCK_KIND = "checkout_cart_lock";
 const CHECKOUT_CART_LOCK_TTL_MS = 30_000;
+const CHECKOUT_CART_LOCK_INITIAL_VERSION = "1";
+
+function parseCheckoutCartLockVersion(rawVersion: unknown): number | null {
+	if (typeof rawVersion === "number") {
+		if (!Number.isFinite(rawVersion) || !Number.isInteger(rawVersion) || rawVersion < 0) {
+			return null;
+		}
+		return rawVersion;
+	}
+
+	if (typeof rawVersion === "string") {
+		const parsed = Number(rawVersion);
+		if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+			return null;
+		}
+		return parsed;
+	}
+
+	return null;
+}
+
+function checkoutCartLockVersion(rawVersion: unknown): string | null {
+	const parsed = parseCheckoutCartLockVersion(rawVersion);
+	if (parsed === null) {
+		return null;
+	}
+	return String(parsed);
+}
+
+function bumpCheckoutCartLockVersion(rawVersion: string): string {
+	const parsed = parseCheckoutCartLockVersion(rawVersion);
+	if (parsed === null) {
+		return CHECKOUT_CART_LOCK_INITIAL_VERSION;
+	}
+	return String(parsed + 1);
+}
 
 function assertAtomicMoneyPathSupport(args: CheckoutAtomicSupportArgs): void {
 	if (!args.hasPutIfAbsent || !args.hasCompareAndSwap) {
@@ -103,7 +143,7 @@ async function buildCheckoutCartLockRecord(args: {
 	nowIso: string;
 	nowMs: number;
 	expiresMs: number;
-}): Promise<{ lockId: string; lockRecord: StoredIdempotencyKey }> {
+}): Promise<{ lockId: string; lockRecord: CheckoutCartLockRecord }> {
 	const lockKeyHash = await sha256HexAsync(`checkout-cart-lock|${args.cartId}`);
 	return {
 		lockId: checkoutCartLockId(lockKeyHash),
@@ -111,6 +151,7 @@ async function buildCheckoutCartLockRecord(args: {
 			route: CHECKOUT_CART_LOCK_ROUTE,
 			keyHash: lockKeyHash,
 			httpStatus: 409,
+			lockVersion: CHECKOUT_CART_LOCK_INITIAL_VERSION,
 			responseBody: {
 				kind: CHECKOUT_CART_LOCK_KIND,
 				cartId: args.cartId,
@@ -185,7 +226,16 @@ async function claimCheckoutCartLock(args: {
 				await args.locks.put(lockId, staged);
 				return lockId;
 			}
-			const stolen = await args.locks.compareAndSwap(lockId, existing.createdAt, staged);
+
+			const existingVersion = checkoutCartLockVersion((existing as { lockVersion?: unknown }).lockVersion);
+			if (!existingVersion) {
+				throwCheckoutCartLockConflict({ cartId: args.cartId });
+			}
+			const staleReplaced = {
+				...staged,
+				lockVersion: bumpCheckoutCartLockVersion(existingVersion),
+			};
+			const stolen = await args.locks.compareAndSwap(lockId, existingVersion, staleReplaced);
 			if (!stolen) {
 				throwCheckoutCartLockConflict({ cartId: args.cartId });
 			}
@@ -225,8 +275,13 @@ async function releaseCheckoutCartLock(args: {
 	const parsed = parseCheckoutCartLock(existing.responseBody);
 	if (!parsed || parsed.requestId !== args.requestId) return;
 
-	const releasedLockRecord: StoredIdempotencyKey = {
+	const existingVersion = checkoutCartLockVersion((existing as { lockVersion?: unknown }).lockVersion);
+	if (!existingVersion) {
+		return;
+	}
+	const releasedLockRecord: CheckoutCartLockRecord = {
 		...existing,
+		lockVersion: bumpCheckoutCartLockVersion(existingVersion),
 		responseBody: {
 			kind: CHECKOUT_CART_LOCK_KIND,
 			cartId: parsed.cartId,
@@ -236,7 +291,7 @@ async function releaseCheckoutCartLock(args: {
 	};
 	const compareAndSwapLock = args.locks.compareAndSwap;
 	if (!compareAndSwapLock) return;
-	const released = await compareAndSwapLock.call(args.locks, args.lockId, existing.createdAt, releasedLockRecord);
+	const released = await compareAndSwapLock.call(args.locks, args.lockId, existingVersion, releasedLockRecord);
 	if (!released) {
 		return;
 	}
