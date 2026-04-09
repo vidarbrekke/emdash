@@ -1,0 +1,497 @@
+{
+  "routeCount": 38,
+  "routeKeys": [
+    "admin/catalog/product/get",
+    "admin/catalog/products",
+    "admin/catalog/sku/list",
+    "bundle-components/add",
+    "bundle-components/remove",
+    "bundle-components/reorder",
+    "bundle/compute",
+    "cart/get",
+    "cart/upsert",
+    "catalog/asset/link",
+    "catalog/asset/reorder",
+    "catalog/asset/unlink",
+    "catalog/category/create",
+    "catalog/category/link",
+    "catalog/category/list",
+    "catalog/category/unlink",
+    "catalog/product/create",
+    "catalog/product/get",
+    "catalog/product/get-by-slug",
+    "catalog/product/state",
+    "catalog/product/update",
+    "catalog/products",
+    "catalog/sku/create",
+    "catalog/sku/list",
+    "catalog/sku/state",
+    "catalog/sku/update",
+    "catalog/tag/create",
+    "catalog/tag/link",
+    "catalog/tag/list",
+    "catalog/tag/unlink",
+    "checkout",
+    "checkout/get-order",
+    "digital-assets/create",
+    "digital-entitlements/create",
+    "digital-entitlements/remove",
+    "product-assets/register",
+    "recommendations",
+    "webhooks/stripe"
+  ],
+  "routeRecords": {
+    "admin/catalog/product/get": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "admin/catalog/products": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "admin/catalog/sku/list": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "bundle-components/add": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "bundle-components/remove": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "bundle-components/reorder": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "bundle/compute": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "cart/get": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "cart/upsert": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": true,
+      "requiresFetch": false,
+      "sideEffectful": true,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [
+        "carts"
+      ],
+      "hasFixtures": false
+    },
+    "catalog/asset/link": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/asset/reorder": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/asset/unlink": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/category/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/category/link": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/category/list": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/category/unlink": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/product/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/product/get": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/product/get-by-slug": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/product/state": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/product/update": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/products": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/sku/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/sku/list": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/sku/state": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/sku/update": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/tag/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/tag/link": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/tag/list": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "catalog/tag/unlink": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "checkout": {
+      "method": "POST",
+      "replay": "idempotency_key",
+      "requiresKV": true,
+      "requiresFetch": false,
+      "sideEffectful": true,
+      "requiresIdempotencyKey": true,
+      "mutationCollections": [
+        "carts",
+        "idempotencyKeys",
+        "orders",
+        "paymentAttempts",
+        "webhookReceipts"
+      ],
+      "hasFixtures": true
+    },
+    "checkout/get-order": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "digital-assets/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "digital-entitlements/create": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "digital-entitlements/remove": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "product-assets/register": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "recommendations": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
+    "webhooks/stripe": {
+      "method": "POST",
+      "replay": "webhook_event",
+      "requiresKV": true,
+      "requiresFetch": false,
+      "sideEffectful": true,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [
+        "orders",
+        "paymentAttempts",
+        "webhookReceipts"
+      ],
+      "hasFixtures": true
+    }
+  },
+  "replayStrategies": {
+    "none": [
+      "admin/catalog/product/get",
+      "admin/catalog/products",
+      "admin/catalog/sku/list",
+      "bundle-components/add",
+      "bundle-components/remove",
+      "bundle-components/reorder",
+      "bundle/compute",
+      "cart/get",
+      "cart/upsert",
+      "catalog/asset/link",
+      "catalog/asset/reorder",
+      "catalog/asset/unlink",
+      "catalog/category/create",
+      "catalog/category/link",
+      "catalog/category/list",
+      "catalog/category/unlink",
+      "catalog/product/create",
+      "catalog/product/get",
+      "catalog/product/get-by-slug",
+      "catalog/product/state",
+      "catalog/product/update",
+      "catalog/products",
+      "catalog/sku/create",
+      "catalog/sku/list",
+      "catalog/sku/state",
+      "catalog/sku/update",
+      "catalog/tag/create",
+      "catalog/tag/link",
+      "catalog/tag/list",
+      "catalog/tag/unlink",
+      "checkout/get-order",
+      "digital-assets/create",
+      "digital-entitlements/create",
+      "digital-entitlements/remove",
+      "product-assets/register",
+      "recommendations"
+    ],
+    "idempotency_key": [
+      "checkout"
+    ],
+    "webhook_event": [
+      "webhooks/stripe"
+    ]
+  },
+  "requiresKVRoutes": [
+    "cart/upsert",
+    "checkout",
+    "webhooks/stripe"
+  ],
+  "requiresFetchRoutes": [],
+  "sideEffectfulRoutes": [
+    "cart/upsert",
+    "checkout",
+    "webhooks/stripe"
+  ],
+  "requiresIdempotencyKeyRoutes": [
+    "checkout"
+  ]
+}

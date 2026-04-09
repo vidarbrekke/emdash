@@ -31,7 +31,7 @@ Key insight for future work: do not add tests that assert function identity acro
 Gotcha to avoid: adding storage-backed routes without updating `COMMERCE_ROUTE_CAPABILITIES` and capability handling will create runtime guard drift.
 
 ## 5) Key files and directories
-Authoritative handoff files: `HANDOVER.md`, `pre-frontend-backend-hardening.md`, `commerce-plugin-spec.md`, `commerce-plugin-contracts.md`, `commerce-plugin-governance-index.md`, `commerce-plugin-factory.md`, `commerce-plugin-developer-execution.md`.
+Authoritative handoff files: `HANDOVER.md`, `pre-frontend-backend-hardening.md`, `GOVERNANCE_INDEX.md`, and `docs/compliance-source-of-truth.md`. Historical commerce plugin narratives now live under `docs/archived-commerce-governance/`.
 
 Primary code review files: `packages/plugins/commerce/src/index.ts`, `packages/plugins/commerce/src/commerce-plugin-factory.ts`, `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.ts`, `packages/plugins/commerce/src/orchestration/finalize-payment-inventory.test.ts`.
 

@@ -16,12 +16,17 @@
 	},
 	"files": ["src"],
 	"scripts": {
-		"check": "pnpm run typecheck && pnpm run lint && pnpm run test:guide-compliance && pnpm run test:webhook-receipt-reason-guard && pnpm run test src/orchestration/finalize-payment.test.ts",
+		"check": "pnpm run typecheck && pnpm run lint && pnpm run verify:route-compliance-snapshot && pnpm run test:route-compliance-snapshot && pnpm run test:route-contract-rules && pnpm run test:route-contract-surface && pnpm run test:guide-compliance && pnpm run test:webhook-receipt-reason-guard && pnpm run test src/orchestration/finalize-payment.test.ts",
 		"test": "vitest run",
 		"test:guide-compliance": "vitest run src/commerce-guide-compliance.test.ts",
+		"test:route-compliance-snapshot": "vitest run src/contracts/route-compliance-generated.test.ts",
+		"test:route-contract-rules": "vitest run src/contracts/route-contract-rules.generated.test.ts",
+		"test:route-contract-surface": "vitest run src/contracts/route-contract-surface.generated.test.ts",
 		"test:webhook-receipt-reason-guard": "vitest run src/orchestration/finalize-receipt-reason-literals.test.ts",
 		"typecheck": "tsc --noEmit",
-		"lint": "oxlint"
+		"lint": "oxlint",
+		"verify:route-compliance-snapshot": "node ../../../scripts/generate-commerce-route-compliance-snapshot.mjs --check",
+		"generate:route-compliance-snapshot": "node ../../../scripts/generate-commerce-route-compliance-snapshot.mjs"
 	},
 	"dependencies": {
 		"ulidx": "^2.4.1"

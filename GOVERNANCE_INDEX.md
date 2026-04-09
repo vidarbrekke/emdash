@@ -57,6 +57,8 @@ Use it for:
 
 Do NOT start here.
 
+For implementation and review work, start from `GOVERNANCE_INDEX.md` and `emdash-dashingcommerce-repo-governance.md`, then verify against `docs/compliance-source-of-truth.md`.
+
 ---
 
 # 3. Mental model (keep this in your head)

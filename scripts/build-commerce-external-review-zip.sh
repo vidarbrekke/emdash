@@ -29,6 +29,7 @@ REVIEW_FILES=(
   "gdpr-plugin-implementation-spec.md"
   "emdash-commerce-gdpr-extension-authoritative-guide.md"
   "eu-selling-marketing-gdpr-guide.md"
+  "docs/compliance-source-of-truth.md"
   "docs/archive/2026-04-commerce-hardening/README.md"
   "docs/archive/2026-04-commerce-hardening/dashing-commerce-diff-patch-update.md"
   "docs/archive/2026-04-commerce-hardening/dashing-commerce-diff-style-patch-plan.md"

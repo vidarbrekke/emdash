@@ -54,8 +54,21 @@ describe("EmDash guide compliance: manifest contract", () => {
 
 		const descriptorCapabilities = getCapabilities(descriptor.capabilities);
 		const pluginCapabilities = getCapabilities(pluginManifest.capabilities);
+		const knownPluginCapabilities = new Set(["storage:kv", "cron:schedule", "admin:ui"]);
+		const routeFetchNeeded = Object.values(COMMERCE_ROUTE_CAPABILITIES).some((capability) => capability?.requiresFetch);
+		const expectedCapabilities = routeFetchNeeded
+			? ["storage:kv", "cron:schedule", "admin:ui", "network:fetch"]
+			: ["storage:kv", "cron:schedule", "admin:ui"];
+		if (routeFetchNeeded) {
+			knownPluginCapabilities.add("network:fetch");
+		}
 
-		const expectedCapabilities = ["network:fetch", "storage:kv", "cron:schedule", "admin:ui"];
+		for (const capability of descriptorCapabilities) {
+			expect(knownPluginCapabilities.has(capability)).toBe(true);
+		}
+		for (const capability of pluginCapabilities) {
+			expect(knownPluginCapabilities.has(capability)).toBe(true);
+		}
 
 		expect(descriptorCapabilities).toEqual(expect.arrayContaining(expectedCapabilities));
 		expect(pluginCapabilities).toEqual(expect.arrayContaining(expectedCapabilities));
@@ -163,6 +176,32 @@ describe("EmDash guide compliance: source-level contract", () => {
 			expect(typedRoute.public).toBeUndefined();
 			}
 		expect(typeof typedRoute.handler).toBe("function");
+		}
+	});
+
+	it("captures side-effect contracts and idempotency intent", () => {
+		const checkoutContract = COMMERCE_ROUTE_CONTRACTS.checkout;
+		expect(checkoutContract?.sideEffectful).toBe(true);
+		expect(checkoutContract?.requiresIdempotencyKey).toBe(true);
+		expect(checkoutContract?.mutationCollections).toEqual(
+			expect.arrayContaining(["carts", "orders", "paymentAttempts", "idempotencyKeys"]),
+		);
+
+		const webhookContract = COMMERCE_ROUTE_CONTRACTS["webhooks/stripe"];
+		expect(webhookContract?.sideEffectful).toBe(true);
+		expect(webhookContract?.mutationCollections).toEqual(
+			expect.arrayContaining(["orders", "paymentAttempts", "webhookReceipts"]),
+		);
+	});
+
+	it("keeps replay-sensitive route contract fixtures explicit", () => {
+		for (const [routeKey, contract] of Object.entries(COMMERCE_ROUTE_CONTRACTS)) {
+			if (contract.replay === "none") continue;
+			const fixtures = contract.fixtures;
+			expect(fixtures?.valid).toEqual(expect.any(Array));
+			expect(fixtures?.invalid).toEqual(expect.any(Array));
+			expect(fixtures?.replay).toEqual(expect.any(Array));
+			expect(routeKey).toBeTruthy();
 		}
 	});
 

@@ -1,0 +1,160 @@
+{
+  "routeCount": 38,
+  "routeKeys": [
+    "admin/catalog/product/get",
+    "admin/catalog/products",
+    "admin/catalog/sku/list",
+    "bundle-components/add",
+    "bundle-components/remove",
+    "bundle-components/reorder",
+    "bundle/compute",
+    "cart/get",
+    "cart/upsert",
+    "catalog/asset/link",
+    "catalog/asset/reorder",
+    "catalog/asset/unlink",
+    "catalog/category/create",
+    "catalog/category/link",
+    "catalog/category/list",
+    "catalog/category/unlink",
+    "catalog/product/create",
+    "catalog/product/get",
+    "catalog/product/get-by-slug",
+    "catalog/product/state",
+    "catalog/product/update",
+    "catalog/products",
+    "catalog/sku/create",
+    "catalog/sku/list",
+    "catalog/sku/state",
+    "catalog/sku/update",
+    "catalog/tag/create",
+    "catalog/tag/link",
+    "catalog/tag/list",
+    "catalog/tag/unlink",
+    "checkout",
+    "checkout/get-order",
+    "digital-assets/create",
+    "digital-entitlements/create",
+    "digital-entitlements/remove",
+    "product-assets/register",
+    "recommendations",
+    "webhooks/stripe"
+  ],
+  "routeRecords": {
+    "admin/catalog/product/get": {
+      "public": false
+    },
+    "admin/catalog/products": {
+      "public": false
+    },
+    "admin/catalog/sku/list": {
+      "public": false
+    },
+    "bundle-components/add": {
+      "public": false
+    },
+    "bundle-components/remove": {
+      "public": false
+    },
+    "bundle-components/reorder": {
+      "public": false
+    },
+    "bundle/compute": {
+      "public": true
+    },
+    "cart/get": {
+      "public": true
+    },
+    "cart/upsert": {
+      "public": true
+    },
+    "catalog/asset/link": {
+      "public": false
+    },
+    "catalog/asset/reorder": {
+      "public": false
+    },
+    "catalog/asset/unlink": {
+      "public": false
+    },
+    "catalog/category/create": {
+      "public": false
+    },
+    "catalog/category/link": {
+      "public": false
+    },
+    "catalog/category/list": {
+      "public": true
+    },
+    "catalog/category/unlink": {
+      "public": false
+    },
+    "catalog/product/create": {
+      "public": false
+    },
+    "catalog/product/get": {
+      "public": true
+    },
+    "catalog/product/get-by-slug": {
+      "public": true
+    },
+    "catalog/product/state": {
+      "public": false
+    },
+    "catalog/product/update": {
+      "public": false
+    },
+    "catalog/products": {
+      "public": true
+    },
+    "catalog/sku/create": {
+      "public": false
+    },
+    "catalog/sku/list": {
+      "public": true
+    },
+    "catalog/sku/state": {
+      "public": false
+    },
+    "catalog/sku/update": {
+      "public": false
+    },
+    "catalog/tag/create": {
+      "public": false
+    },
+    "catalog/tag/link": {
+      "public": false
+    },
+    "catalog/tag/list": {
+      "public": true
+    },
+    "catalog/tag/unlink": {
+      "public": false
+    },
+    "checkout": {
+      "public": true
+    },
+    "checkout/get-order": {
+      "public": true
+    },
+    "digital-assets/create": {
+      "public": false
+    },
+    "digital-entitlements/create": {
+      "public": false
+    },
+    "digital-entitlements/remove": {
+      "public": false
+    },
+    "product-assets/register": {
+      "public": false
+    },
+    "recommendations": {
+      "public": true
+    },
+    "webhooks/stripe": {
+      "public": true
+    }
+  },
+  "unknownPublicRoutes": []
+}

@@ -40,6 +40,12 @@ export type CommerceRouteMethod = "POST";
 
 export type CommerceRouteReplayStrategy = "none" | "idempotency_key" | "webhook_event";
 
+type CommerceRouteFixtureSet = {
+	readonly valid?: readonly unknown[];
+	readonly invalid?: readonly unknown[];
+	readonly replay?: readonly unknown[];
+};
+
 export type CommerceRouteContract = {
 	readonly public: boolean;
 	readonly method: CommerceRouteMethod;
@@ -47,6 +53,13 @@ export type CommerceRouteContract = {
 	readonly requiresFetch: boolean;
 	readonly replay: CommerceRouteReplayStrategy;
 	readonly inputSchema: unknown;
+	readonly responseSchema?: unknown;
+	readonly sideEffectful?: true;
+	readonly requiresIdempotencyKey?: true;
+	readonly mutationCollections?: readonly string[];
+	readonly orderedChildSensitivity?: true;
+	readonly entitlementAware?: true;
+	readonly fixtures?: CommerceRouteFixtureSet;
 };
 
 export type CommerceRouteContracts = {
@@ -107,6 +120,8 @@ export const COMMERCE_ROUTE_CONTRACTS = {
 		requiresFetch: false,
 		replay: "none",
 		inputSchema: cartUpsertInputSchema,
+		sideEffectful: true,
+		mutationCollections: ["carts"],
 	},
 	"cart/get": {
 		public: true,
@@ -179,6 +194,15 @@ export const COMMERCE_ROUTE_CONTRACTS = {
 		requiresFetch: false,
 		replay: "idempotency_key",
 		inputSchema: checkoutInputSchema,
+		sideEffectful: true,
+		requiresIdempotencyKey: true,
+		mutationCollections: ["carts", "orders", "paymentAttempts", "idempotencyKeys", "webhookReceipts"],
+		orderedChildSensitivity: true,
+		fixtures: {
+			valid: [{ cartId: "cart-1", ownerToken: "owner-token-123456" }],
+			invalid: [{ cartId: "", ownerToken: "short" }],
+			replay: [{ cartId: "cart-1", ownerToken: "owner-token-123456", idempotencyKey: "idem-route-16chars" }],
+		},
 	},
 	"checkout/get-order": {
 		public: true,
@@ -203,6 +227,33 @@ export const COMMERCE_ROUTE_CONTRACTS = {
 		requiresFetch: false,
 		replay: "webhook_event",
 		inputSchema: stripeWebhookInputSchema,
+		sideEffectful: true,
+		mutationCollections: ["orders", "paymentAttempts", "webhookReceipts"],
+		orderedChildSensitivity: true,
+		fixtures: {
+			valid: [
+				{
+					id: "evt_1",
+					type: "payment_intent.succeeded",
+					data: {
+						object: {
+							id: "pi_1",
+							metadata: { orderId: "ord_1" },
+						},
+					},
+				},
+			],
+			invalid: [{}],
+			replay: [
+				{
+					id: "evt_1",
+					type: "payment_intent.succeeded",
+					data: {
+						object: { id: "pi_1", metadata: { orderId: "ord_1" } },
+					},
+				},
+			],
+		},
 	},
 	"admin/catalog/product/get": {
 		public: false,
