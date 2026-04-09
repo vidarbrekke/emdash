@@ -3,7 +3,7 @@
 ## Source of truth
 
 - Runtime route surface: `src/index.ts routes` (authoritative for what is currently exposed).
-- Platform status: `HANDOVER.md`.
+- Platform status: `../../../HANDOVER.md`.
 - Stability contracts: this file and `src/catalog-extensibility.ts` for extension types.
 
 ## Closed-kernel rules

@@ -2,7 +2,7 @@
 
 ## Operations and support
 
-For current execution context, use `../../HANDOVER.md` plus `../../README.md`/`../../AGENTS.md` as the active entrypoint.
+For current execution context, use `../../../HANDOVER.md` plus `../../../README.md`/`../../../AGENTS.md` as the active entrypoint.
 
 ### Pre-merge release gates (review-response work)
 
@@ -10,7 +10,7 @@ For current execution context, use `../../HANDOVER.md` plus `../../README.md`/`.
 - `pnpm --filter ./packages/plugins/commerce typecheck` (required plugin scope)
 - `pnpm --filter ./packages/plugins/commerce test` (required plugin scope)
 - `pnpm --filter ./packages/core typecheck` (optional full-core guardrail; known baseline typing debt is tracked in core)
-- `HANDOVER.md` + external feedback checklist updated for each completed item
+- `../../../HANDOVER.md` + external feedback checklist updated for each completed item
 - Capture commit hash + summary before handoff
 
 - Latest automated proof for this pass:
@@ -26,19 +26,19 @@ For current execution context, use `../../HANDOVER.md` plus `../../README.md`/`.
 
 - `AI-EXTENSIBILITY.md` — future vector/LLM/MCP design notes
 - `COMMERCE_AI_ROADMAP.md` — post-MVP LLM/AI feature roadmap (5 scoped items)
-- `../../HANDOVER.md` — current execution handoff and stage context
+- `../../../HANDOVER.md` — current execution handoff and stage context
 - `COMMERCE_EXTENSION_SURFACE.md` — architecture contracts and extension rules
 - `FINALIZATION_REVIEW_AUDIT.md` — pending receipt state transitions and replay safety audit
 - `CI_REGRESSION_CHECKLIST.md` — regression gates for follow-on tickets
-- `../../docs/compliance.md` — guide compliance workflow and active artifacts
-- `../../guide-compliance-diff-patch-plan.md` — patch plan for guide compliance
-- `../../guide-compliance-ci-checklist.md` — CI gate and enforcement checklist
-- `../../packages/plugins/commerce/commerce-guide-compliance.test.ts` — executable guide-compliance tests
-- `../../dashcommerce-extension-architecture-spec.md` — authoritative module/extensibility contract (root)
-- `../../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
-- `../../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
-- `../../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
-- `../../docs/archive/2026-04-commerce-hardening/README.md` — historical hardening planning references
+- `../../../docs/compliance.md` — guide compliance workflow and active artifacts
+- `../../../guide-compliance-diff-patch-plan.md` — patch plan for guide compliance
+- `../../../guide-compliance-ci-checklist.md` — CI gate and enforcement checklist
+- `./src/commerce-guide-compliance.test.ts` — executable guide-compliance tests
+- `../../../dashcommerce-extension-architecture-spec.md` — authoritative module/extensibility contract (root)
+- `../../../gdpr-plugin-implementation-spec.md` — GDPR module v1 implementation contract (root)
+- `../../../emdash-commerce-gdpr-extension-authoritative-guide.md` — authoritative GDPR extension build guide
+- `../../../eu-selling-marketing-gdpr-guide.md` — practical EU marketing/compliance implementation playbook
+- `../../../docs/archive/2026-04-commerce-hardening/README.md` — historical hardening planning references
 
 ### Strategy A (Contract Drift Hardening) status
 
@@ -80,18 +80,18 @@ Use this when opening follow-up work:
    - `COMMERCE_DOCS_INDEX.md`
    - `COMMERCE_EXTENSION_SURFACE.md`
    - `AI-EXTENSIBILITY.md`
-   - `HANDOVER.md`
+  - `../../../HANDOVER.md`
    - `FINALIZATION_REVIEW_AUDIT.md`
 4) Run proof commands:
-   - `pnpm --filter @emdash-cms/plugin-dashing-commerce test services/commerce-provider-contracts.test.ts`
-   - `pnpm --filter @emdash-cms/plugin-dashing-commerce test`
+- `pnpm --filter ./packages/plugins/commerce test services/commerce-provider-contracts.test.ts`
+- `pnpm --filter ./packages/plugins/commerce test`
 5) Proof artifacts for strict lease rollout:
   - `COMMERCE_USE_LEASED_FINALIZE` is retained for replay parity and evidence reruns when needed; strict claim-lease checks are otherwise canonical.
   - Runbooks and proof outputs are now captured directly in this repo’s regression log trail.
 
 ## UI smoke readiness before admin/consumer manual tests
 
-- `../../ADMIN_CONSUMER_UI_SMOKE_READINESS.md` is the prerequisite gate for initial UI validation.
+- `../../../ADMIN_CONSUMER_UI_SMOKE_READINESS.md` is the prerequisite gate for initial UI validation.
 - Required pre-check commands:
   - `pnpm readiness:commerce-backend:strict`
   - `pnpm --silent lint:quick`
@@ -136,7 +136,7 @@ reliability-support-catalog extension backlog.
 
 ## Diagnostics and runbook surfaces
 
-- `queryFinalizationState` (via `src/services/commerce-extension-seams.ts`) for runbook and MCP reads — applies per-IP rate limit, ~10s KV cache, and in-isolate in-flight coalescing (see `COMMERCE_LIMITS` / `finalization-diagnostics-readthrough.ts`).
+- `queryFinalizationState` (via `src/services/commerce-extension-seams.ts`) for runbook and MCP reads — applies per-IP rate limit, ~10s KV cache, and in-isolate in-flight coalescing (see `COMMERCE_LIMITS` / `src/lib/finalization-diagnostics-readthrough.ts`).
 - `queryFinalizationStatus` (via `src/orchestration/finalize-payment.ts`) returns the same shape but **without** those guards; prefer `queryFinalizationState` for HTTP/MCP polling unless you are in a controlled test or internal path.
 
 All routes mount under `/_emdash/api/plugins/dashing-commerce/<route>`.

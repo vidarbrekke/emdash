@@ -10,7 +10,7 @@ Backend hardening and external-review readiness are substantially complete for t
 
 A package-level middleware proof now shows non-public plugin routes are rejected without auth context: `packages/core/tests/unit/plugins/plugin-route-auth.test.ts`.
 
-Checkout and webhook paths now use shared, explicit optimistic-lock token helpers in `packages/plugins/commerce/src/lib/optimistic-lock.ts`, with updates in `handlers/checkout.ts` and `orchestration/finalize-payment.ts` to use explicit version tokens rather than timestamp-only CAS assumptions.
+Checkout and webhook paths now use shared, explicit optimistic-lock token helpers in `packages/plugins/commerce/src/lib/optimistic-lock.ts`, with updates in `packages/plugins/commerce/src/handlers/checkout.ts` and `packages/plugins/commerce/src/orchestration/finalize-payment.ts` to use explicit version tokens rather than timestamp-only CAS assumptions.
 
 The external review ZIP build process was updated (`scripts/build-commerce-external-review-zip.sh`) so root monorepo context files used for reproducibility are included. The most recent generated archive is `commerce-plugin-external-review-20260409-160045.zip`.
 
@@ -83,7 +83,6 @@ Gotchas:
 - `packages/plugins/commerce/src/lib/`
 - `packages/plugins/commerce/src/orchestration/`
 - `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
-- `packages/plugins/commerce/src/checkout-state.ts`
 
 ### Auth boundary and core integration
 - `packages/core/src/astro/routes/api/plugins/route-handler.ts`
@@ -93,8 +92,8 @@ Gotchas:
 - `scripts/build-commerce-external-review-zip.sh`
 - `docs/compliance.md`
 - `docs/compliance-source-of-truth.md`
-- `COMMERCE_DOCS_INDEX.md`
-- `COMMERCE_EXTENSION_SURFACE.md`
+- `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
+- `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
 - `package.json`
 - `pnpm-workspace.yaml`
 - `pnpm-lock.yaml`
