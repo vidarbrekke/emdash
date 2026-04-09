@@ -187,6 +187,11 @@ export interface StoredIdempotencyKey {
 	httpStatus: number;
 	responseBody: unknown;
 	createdAt: string;
+	/**
+	 * Internal optimistic-lock token used by checkout lock records when the storage
+	 * row is used as a short-lived mutex.
+	 */
+	lockVersion?: string;
 }
 
 /** Append-only movement row; materialized quantity lives in {@link StoredInventoryStock}. */

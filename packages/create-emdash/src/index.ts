@@ -118,7 +118,7 @@ async function selectTemplate(platform: Platform): Promise<TemplateConfig> {
 			p.cancel("Operation cancelled.");
 			process.exit(0);
 		}
-		return NODE_TEMPLATES[key];
+		return NODE_TEMPLATES[key as NodeTemplate];
 	}
 	const key = await p.select<CloudflareTemplate>({
 		message: "Which template?",
@@ -129,7 +129,7 @@ async function selectTemplate(platform: Platform): Promise<TemplateConfig> {
 		p.cancel("Operation cancelled.");
 		process.exit(0);
 	}
-	return CLOUDFLARE_TEMPLATES[key];
+	return CLOUDFLARE_TEMPLATES[key as CloudflareTemplate];
 }
 
 async function main() {
@@ -138,7 +138,7 @@ async function main() {
 	console.log(`\n  ${pc.bold(pc.cyan("— E M D A S H —"))}\n`);
 	p.intro("Create a new EmDash project");
 
-	const projectName = await p.text({
+	const projectNameResult = await p.text({
 		message: "Project name?",
 		placeholder: "my-site",
 		defaultValue: "my-site",
@@ -150,27 +150,29 @@ async function main() {
 		},
 	});
 
-	if (p.isCancel(projectName)) {
+	if (p.isCancel(projectNameResult)) {
 		p.cancel("Operation cancelled.");
 		process.exit(0);
 	}
+	const projectName = projectNameResult as string;
 
 	const projectDir = resolve(process.cwd(), projectName);
 
 	if (existsSync(projectDir)) {
-		const overwrite = await p.confirm({
+		const overwriteResult = await p.confirm({
 			message: `Directory ${projectName} already exists. Overwrite?`,
 			initialValue: false,
 		});
+		const overwrite = overwriteResult as boolean;
 
-		if (p.isCancel(overwrite) || !overwrite) {
+		if (p.isCancel(overwriteResult) || !overwrite) {
 			p.cancel("Operation cancelled.");
 			process.exit(0);
 		}
 	}
 
 	// Step 1: pick platform
-	const platform = await p.select<Platform>({
+	const platformResult = await p.select<Platform>({
 		message: "Where will you deploy?",
 		options: [
 			{
@@ -187,17 +189,18 @@ async function main() {
 		initialValue: "cloudflare",
 	});
 
-	if (p.isCancel(platform)) {
+	if (p.isCancel(platformResult)) {
 		p.cancel("Operation cancelled.");
 		process.exit(0);
 	}
+	const platform = platformResult as Platform;
 
 	// Step 2: pick template
 	const templateConfig = await selectTemplate(platform);
 
 	// Step 3: pick package manager
 	const detectedPm = detectPackageManager();
-	const pm = await p.select<PackageManager>({
+	const pmResult = await p.select<PackageManager>({
 		message: "Which package manager?",
 		options: [
 			{ value: "pnpm", label: "pnpm" },
@@ -208,21 +211,23 @@ async function main() {
 		initialValue: detectedPm,
 	});
 
-	if (p.isCancel(pm)) {
+	if (p.isCancel(pmResult)) {
 		p.cancel("Operation cancelled.");
 		process.exit(0);
 	}
+	const pm = pmResult as PackageManager;
 
 	// Step 4: install dependencies?
-	const shouldInstall = await p.confirm({
+	const shouldInstallResult = await p.confirm({
 		message: "Install dependencies?",
 		initialValue: true,
 	});
 
-	if (p.isCancel(shouldInstall)) {
+	if (p.isCancel(shouldInstallResult)) {
 		p.cancel("Operation cancelled.");
 		process.exit(0);
 	}
+	const shouldInstall = shouldInstallResult as boolean;
 
 	const installCmd = `${pm} install`;
 	const runCmd = (script: string) => (pm === "npm" ? `npm run ${script}` : `${pm} ${script}`);
