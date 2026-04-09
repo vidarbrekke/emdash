@@ -122,6 +122,28 @@ function deriveRoutePublicness(node, unsupportedWrappers = new Set()) {
 	return undefined;
 }
 
+function collectRouteWrappers(node, wrappers = new Set()) {
+	const expression = unwrapExpression(node);
+	if (ts.isCallExpression(expression)) {
+		const callee = getCalleeName(expression.expression);
+		if (callee) wrappers.add(callee);
+		for (const argument of expression.arguments) {
+			collectRouteWrappers(argument, wrappers);
+		}
+		return wrappers;
+	}
+
+	if (ts.isObjectLiteralExpression(expression)) {
+		for (const property of expression.properties) {
+			if (!ts.isPropertyAssignment(property)) continue;
+			collectRouteWrappers(property.initializer, wrappers);
+		}
+		return wrappers;
+	}
+
+	return wrappers;
+}
+
 function findPluginRoutesObject() {
 	let routeObject = null;
 
@@ -251,7 +273,7 @@ function snapshotRoutes() {
 	};
 }
 
-function snapshotRouteSurfaceRoutes() {
+function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 	const routeObject = findPluginRoutesObject();
 	if (!routeObject) {
 		throw new Error("Could not locate plugin routes object literal.");
@@ -268,13 +290,20 @@ function snapshotRouteSurfaceRoutes() {
 
 		const routeUnsupportedWrappers = new Set();
 		const publicness = deriveRoutePublicness(entry.initializer, routeUnsupportedWrappers);
+		const routeWrappers = [...collectRouteWrappers(entry.initializer)].sort();
 		if (routeUnsupportedWrappers.size > 0) {
 			unsupportedRouteWrappers[route] = [...routeUnsupportedWrappers].sort();
 		}
 		if (publicness === undefined) {
 			unknownPublicRoutes.push(route);
 		}
-		routeRecords[route] = { public: publicness ?? false };
+		const contractMetadata = routeContractRecords[route] ?? {};
+		routeRecords[route] = {
+			public: publicness ?? false,
+			wrappers: routeWrappers,
+			hasRouteCapabilitiesWrapper: routeWrappers.includes("withRouteCapabilities"),
+			needsRouteCapabilities: contractMetadata.requiresKV || contractMetadata.requiresFetch,
+		};
 	}
 
 	if (Object.keys(unsupportedRouteWrappers).length > 0) {
@@ -474,6 +503,9 @@ const contractRouteKeys = routeEntries.map(([route]) => route);
 const contractRoutePublicMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { public: contract.public }]),
 );
+const contractRouteCapabilitiesMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
+);
 
 describe("route contract to registered route alignment", () => {
 	it("must report the same route count from source and contracts", () => {
@@ -483,7 +515,14 @@ describe("route contract to registered route alignment", () => {
 		expect(routeSurface.routeKeys).toEqual(contractRouteKeys);
 	});
 	it("must preserve public contract from index registration", () => {
-		expect(routeSurface.routeRecords).toEqual(contractRoutePublicMap);
+		for (const [route, contract] of Object.entries(contractRoutePublicMap)) {
+			expect(routeSurface.routeRecords[route]).toMatchObject(contract);
+		}
+	});
+	it("must keep capability wrapper usage aligned with contracts", () => {
+		for (const [route, contract] of Object.entries(contractRouteCapabilitiesMap)) {
+			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
+		}
 	});
 	it("must resolve publicness from known route wrappers", () => {
 		expect(routeSurface.unknownPublicRoutes).toEqual([]);
@@ -493,8 +532,9 @@ describe("route contract to registered route alignment", () => {
 }
 
 
+
 const payload = snapshotRoutes();
-const surfacePayload = snapshotRouteSurfaceRoutes();
+const surfacePayload = snapshotRouteSurfaceRoutes(payload.routeRecords);
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 writeFileSync(SURFACE_OUTPUT_PATH, `${JSON.stringify(surfacePayload, null, 2)}\n`, "utf8");
 writeFileSync(TEST_OUTPUT_PATH, `${generateComplianceTestSource()}\n`, "utf8");

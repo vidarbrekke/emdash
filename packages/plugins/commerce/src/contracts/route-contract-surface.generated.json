@@ -42,118 +42,311 @@
   ],
   "routeRecords": {
     "admin/catalog/product/get": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "admin/catalog/products": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "admin/catalog/sku/list": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "bundle-components/add": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "bundle-components/remove": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "bundle-components/reorder": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "bundle/compute": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "cart/get": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "cart/upsert": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute",
+        "withRouteCapabilities"
+      ],
+      "hasRouteCapabilitiesWrapper": true,
+      "needsRouteCapabilities": true
     },
     "catalog/asset/link": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/asset/reorder": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/asset/unlink": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/category/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/category/link": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/category/list": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/category/unlink": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/product/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/product/get": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/product/get-by-slug": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/product/state": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/product/update": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/products": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/sku/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/sku/list": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/sku/state": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/sku/update": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/tag/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/tag/link": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/tag/list": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "catalog/tag/unlink": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "checkout": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute",
+        "withRouteCapabilities"
+      ],
+      "hasRouteCapabilitiesWrapper": true,
+      "needsRouteCapabilities": true
     },
     "checkout/get-order": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "digital-assets/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "digital-entitlements/create": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "digital-entitlements/remove": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "product-assets/register": {
-      "public": false
+      "public": false,
+      "wrappers": [
+        "adminRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "recommendations": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute"
+      ],
+      "hasRouteCapabilitiesWrapper": false,
+      "needsRouteCapabilities": false
     },
     "webhooks/stripe": {
-      "public": true
+      "public": true,
+      "wrappers": [
+        "publicRoute",
+        "withRouteCapabilities"
+      ],
+      "hasRouteCapabilitiesWrapper": true,
+      "needsRouteCapabilities": true
     }
   },
   "unknownPublicRoutes": []

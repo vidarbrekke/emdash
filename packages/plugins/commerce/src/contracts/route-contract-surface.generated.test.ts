@@ -10,6 +10,9 @@ const contractRouteKeys = routeEntries.map(([route]) => route);
 const contractRoutePublicMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { public: contract.public }]),
 );
+const contractRouteCapabilitiesMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
+);
 
 describe("route contract to registered route alignment", () => {
 	it("must report the same route count from source and contracts", () => {
@@ -19,7 +22,14 @@ describe("route contract to registered route alignment", () => {
 		expect(routeSurface.routeKeys).toEqual(contractRouteKeys);
 	});
 	it("must preserve public contract from index registration", () => {
-		expect(routeSurface.routeRecords).toEqual(contractRoutePublicMap);
+		for (const [route, contract] of Object.entries(contractRoutePublicMap)) {
+			expect(routeSurface.routeRecords[route]).toMatchObject(contract);
+		}
+	});
+	it("must keep capability wrapper usage aligned with contracts", () => {
+		for (const [route, contract] of Object.entries(contractRouteCapabilitiesMap)) {
+			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
+		}
 	});
 	it("must resolve publicness from known route wrappers", () => {
 		expect(routeSurface.unknownPublicRoutes).toEqual([]);
