@@ -27,6 +27,7 @@ import { assertCartOwnerToken } from "../lib/cart-owner-token.js";
 import { validateCartLineItems } from "../lib/cart-validation.js";
 import { randomHex, sha256HexAsync } from "../lib/crypto-adapter.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
+import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type { CartGetInput, CartUpsertInput } from "../schemas.js";
 import type { StoredBundleComponent, StoredCart, StoredInventoryStock, StoredProduct, StoredProductSku } from "../types.js";
@@ -55,6 +56,7 @@ export type CartUpsertResponse = {
 export async function cartUpsertHandler(
 	ctx: RouteContext<CartUpsertInput>,
 ): Promise<CartUpsertResponse> {
+	requirePost(ctx);
 	const nowMs = Date.now();
 	const nowIso = new Date(nowMs).toISOString();
 
@@ -148,6 +150,7 @@ export type CartGetResponse = {
 };
 
 export async function cartGetHandler(ctx: RouteContext<CartGetInput>): Promise<CartGetResponse> {
+	requirePost(ctx);
 
 	const carts = asCollection<StoredCart>(ctx.storage.carts);
 	const cart = await carts.get(ctx.input.cartId);

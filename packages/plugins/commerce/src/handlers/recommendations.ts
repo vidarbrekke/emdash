@@ -7,6 +7,7 @@
 
 import type { RouteContext } from "emdash";
 
+import { requirePost } from "../lib/require-post.js";
 import type { CommerceRecommendationResolver } from "../catalog-extensibility.js";
 import type {
 	CommerceRecommendationResult,
@@ -102,6 +103,7 @@ export function createRecommendationsHandler(
 	return async function handleRecommendations(
 		ctx: RouteContext<RecommendationsInput>,
 	): Promise<RecommendationsResponse> {
+		requirePost(ctx);
 		const input = toInput(ctx.input);
 		if (!options.resolver) {
 			return DISABLED_PROVIDER_RESPONSE;

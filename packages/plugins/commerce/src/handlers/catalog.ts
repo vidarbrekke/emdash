@@ -62,6 +62,7 @@ import {
 	handleRemoveProductTagLink,
 	handleListTags,
 } from "./catalog-association.js";
+import { requirePost } from "../lib/require-post.js";
 import type {
 	ProductCreateInput,
 	ProductAssetLinkInput,
@@ -286,6 +287,7 @@ export type ProductTagLinkUnlinkResponse = {
 
 
 export async function createProductHandler(ctx: RouteContext<ProductCreateInput>): Promise<ProductResponse> {
+	requirePost(ctx);
 	return handleCreateProduct(ctx);
 }
 
@@ -360,6 +362,7 @@ export async function updateProductSkuHandler(
 export async function setSkuStatusHandler(
 	ctx: RouteContext<ProductSkuStateInput>,
 ): Promise<ProductSkuResponse> {
+	requirePost(ctx);
 	return handleSetSkuStatus(ctx);
 }
 
@@ -372,24 +375,28 @@ export async function listProductSkusHandler(
 export async function getStorefrontProductHandler(
 	ctx: RouteContext<ProductGetInput>,
 ): Promise<StorefrontProductDetail> {
+	requirePost(ctx);
 	return handleGetStorefrontProduct(ctx);
 }
 
 export async function getStorefrontProductBySlugHandler(
 	ctx: RouteContext<ProductGetBySlugInput>,
 ): Promise<StorefrontProductDetail> {
+	requirePost(ctx);
 	return handleGetStorefrontProductBySlug(ctx);
 }
 
 export async function listStorefrontProductsHandler(
 	ctx: RouteContext<ProductListInput>,
 ): Promise<StorefrontProductListResponse> {
+	requirePost(ctx);
 	return handleListStorefrontProducts(ctx);
 }
 
 export async function listStorefrontProductSkusHandler(
 	ctx: RouteContext<ProductSkuListInput>,
 ): Promise<StorefrontSkuListResponse> {
+	requirePost(ctx);
 	return handleListStorefrontProductSkus(ctx);
 }
 
@@ -442,6 +449,7 @@ export async function bundleComputeHandler(
 export async function bundleComputeStorefrontHandler(
 	ctx: RouteContext<BundleComputeInput>,
 ): Promise<StorefrontBundleComputeResponse> {
+	requirePost(ctx);
 	const internal = await handleBundleComputeStorefront(ctx);
 	return toStorefrontBundleComputeResponse(internal);
 }

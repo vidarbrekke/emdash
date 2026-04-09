@@ -23,6 +23,7 @@ import {
 	type FinalizePaymentPorts,
 } from "../orchestration/finalize-payment.js";
 import { throwCommerceApiError } from "../route-errors.js";
+import { requirePost } from "../lib/require-post.js";
 import type {
 	StoredInventoryLedgerEntry,
 	StoredInventoryStock,
@@ -122,6 +123,7 @@ export async function handlePaymentWebhook<TInput>(
 	ctx: RouteContext<TInput>,
 	adapter: CommerceWebhookAdapter<TInput>,
 ): Promise<WebhookFinalizeResponse> {
+	requirePost(ctx);
 
 	const contentLength = ctx.request.headers.get("content-length");
 	const n = contentLength !== null && contentLength !== "" ? Number(contentLength) : Number.NaN;

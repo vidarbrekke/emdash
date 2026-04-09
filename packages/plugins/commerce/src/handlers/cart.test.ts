@@ -97,10 +97,20 @@ function withAtomicIdempotencyKeys<T extends object>(collection: MemColl<T>): Me
 		compareAndSwap: async (id: string, expectedVersion: string, data: T): Promise<boolean> => {
 			const current = collection.rows.get(id);
 			if (!current) return false;
-			const version = (current as Record<string, unknown>).createdAt;
-			if (typeof version !== "string" || version !== expectedVersion) return false;
+			const record = current as Record<string, unknown>;
+			const lockVersion = typeof record.lockVersion === "string" ? record.lockVersion : null;
+			const createdAt = typeof record.createdAt === "string" ? record.createdAt : null;
+			if (lockVersion === null && createdAt === null) return false;
+			if (lockVersion !== null && expectedVersion === lockVersion) {
+				await collection.put(id, data);
+				return true;
+			}
+			if (lockVersion === null && createdAt === expectedVersion) {
+				await collection.put(id, data);
+				return true;
+			}
 			await collection.put(id, data);
-			return true;
+			return false;
 		},
 	} as MemCollectionWithAtomicOps<T>;
 }
