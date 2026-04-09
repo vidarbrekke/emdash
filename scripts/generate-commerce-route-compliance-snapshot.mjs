@@ -172,7 +172,7 @@ function assertVisibilityWrappersRequirePost() {
 	if (missingWrappers.length > 0) {
 		throw new Error(
 			`Route wrappers that should invoke withRouteMethodGuard are missing enforcement: ${
-				missingWrappers.sort().join(", ")
+				missingWrappers.toSorted().join(", ")
 			}`,
 		);
 	}
@@ -387,12 +387,12 @@ function snapshotRoutes() {
 			requiresFetch,
 			sideEffectful,
 			requiresIdempotencyKey,
-			mutationCollections: (mutationCollections ?? []).sort(),
+			mutationCollections: (mutationCollections ?? []).toSorted(),
 			hasFixtures,
 		};
 	}
 
-	const routeKeys = Object.keys(routeRecords).sort();
+	const routeKeys = Object.keys(routeRecords).toSorted();
 	const sortedRouteRecords = Object.fromEntries(
 		routeKeys.map((route) => [route, routeRecords[route]]),
 	);
@@ -403,7 +403,7 @@ function snapshotRoutes() {
 		replayGroups[strategy].push(route);
 	}
 	for (const strategy of Object.keys(replayGroups)) {
-		replayGroups[strategy].sort();
+		replayGroups[strategy] = replayGroups[strategy].toSorted();
 	}
 
 	return {
@@ -411,10 +411,10 @@ function snapshotRoutes() {
 		routeKeys,
 		routeRecords: sortedRouteRecords,
 		replayStrategies: replayGroups,
-		requiresKVRoutes: routeKeys.filter((route) => routeRecords[route].requiresKV).sort(),
-		requiresFetchRoutes: routeKeys.filter((route) => routeRecords[route].requiresFetch).sort(),
-		sideEffectfulRoutes: routeKeys.filter((route) => routeRecords[route].sideEffectful).sort(),
-		requiresIdempotencyKeyRoutes: routeKeys.filter((route) => routeRecords[route].requiresIdempotencyKey).sort(),
+		requiresKVRoutes: routeKeys.filter((route) => routeRecords[route].requiresKV).toSorted(),
+		requiresFetchRoutes: routeKeys.filter((route) => routeRecords[route].requiresFetch).toSorted(),
+		sideEffectfulRoutes: routeKeys.filter((route) => routeRecords[route].sideEffectful).toSorted(),
+		requiresIdempotencyKeyRoutes: routeKeys.filter((route) => routeRecords[route].requiresIdempotencyKey).toSorted(),
 	};
 }
 
@@ -436,7 +436,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 
 		const routeUnsupportedWrappers = new Set();
 		const publicness = deriveRoutePublicness(entry.initializer, routeUnsupportedWrappers);
-		const routeWrappers = [...collectRouteWrappers(entry.initializer)].sort();
+		const routeWrappers = [...collectRouteWrappers(entry.initializer)].toSorted();
 		const routeHandlerNode = deriveRouteHandlerNode(entry.initializer);
 		const routeHandlerName = handlerNameFromNode(routeHandlerNode);
 		const methodGuarded = routeWrappers.some((wrapper) => ["publicRoute", "adminRoute"].includes(wrapper));
@@ -445,7 +445,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 		}
 		const handlerHasRequirePostGuard = routeHandlerName ? hasHandlerRequirePostGuard(routeHandlerName) : undefined;
 		if (routeUnsupportedWrappers.size > 0) {
-			unsupportedRouteWrappers[route] = [...routeUnsupportedWrappers].sort();
+			unsupportedRouteWrappers[route] = [...routeUnsupportedWrappers].toSorted();
 		}
 		if (publicness === undefined) {
 			unknownPublicRoutes.push(route);
@@ -464,7 +464,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 
 	if (unknownHandlerRoutes.length > 0) {
 		throw new Error(
-			`Unable to resolve handler function symbol for routes: ${unknownHandlerRoutes.sort().join(", ")}`,
+			`Unable to resolve handler function symbol for routes: ${unknownHandlerRoutes.toSorted().join(", ")}`,
 		);
 	}
 
@@ -477,14 +477,14 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 		);
 	}
 
-	const routeKeys = Object.keys(routeRecords).sort();
+	const routeKeys = Object.keys(routeRecords).toSorted();
 	const sortedRouteRecords = Object.fromEntries(routeKeys.map((route) => [route, routeRecords[route]]));
 
 	return {
 		routeCount: routeKeys.length,
 		routeKeys,
 		routeRecords: sortedRouteRecords,
-		unknownPublicRoutes: unknownPublicRoutes.sort(),
+		unknownPublicRoutes: unknownPublicRoutes.toSorted(),
 	};
 }
 
@@ -793,7 +793,7 @@ if (CHECK_MODE) {
 		if (status.length > 0) {
 			throw new Error("untracked-or-modified");
 		}
-	} catch (error) {
+	} catch {
 		console.error(
 			"Compliance snapshot drift detected. Re-run:\n  pnpm run generate:commerce-route-compliance-snapshot",
 		);
