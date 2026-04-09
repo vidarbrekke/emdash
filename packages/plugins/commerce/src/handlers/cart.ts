@@ -148,7 +148,6 @@ export type CartGetResponse = {
 };
 
 export async function cartGetHandler(ctx: RouteContext<CartGetInput>): Promise<CartGetResponse> {
-	requirePost(ctx);
 
 	const carts = asCollection<StoredCart>(ctx.storage.carts);
 	const cart = await carts.get(ctx.input.cartId);

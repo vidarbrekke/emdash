@@ -11,7 +11,6 @@ import type { RouteContext, StorageCollection } from "emdash";
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
 import { buildRateLimitActorKey } from "../lib/rate-limit-identity.js";
-import { requirePost } from "../lib/require-post.js";
 import type {
 	CommerceWebhookAdapter,
 	CommerceWebhookFinalizeResponse,
@@ -123,7 +122,6 @@ export async function handlePaymentWebhook<TInput>(
 	ctx: RouteContext<TInput>,
 	adapter: CommerceWebhookAdapter<TInput>,
 ): Promise<WebhookFinalizeResponse> {
-	requirePost(ctx);
 
 	const contentLength = ctx.request.headers.get("content-length");
 	const n = contentLength !== null && contentLength !== "" ? Number(contentLength) : Number.NaN;

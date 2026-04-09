@@ -1,6 +1,5 @@
 import type { RouteContext } from "emdash";
 import { randomHex } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import {
 	mutateOrderedChildren,
@@ -66,7 +65,6 @@ async function loadCatalogTargetExists(
 export async function handleRegisterProductAsset(
 	ctx: RouteContext<ProductAssetRegisterInput>,
 ): Promise<ProductAssetResponse> {
-	requirePost(ctx);
 	const productAssets = asCollection<StoredProductAsset>(ctx.storage.productAssets);
 	const nowIso = getNowIso();
 
@@ -99,7 +97,6 @@ export async function handleRegisterProductAsset(
 export async function handleLinkCatalogAsset(
 	ctx: RouteContext<ProductAssetLinkInput>,
 ): Promise<ProductAssetLinkResponse> {
-	requirePost(ctx);
 	const role = ctx.input.role ?? "gallery_image";
 	const position = ctx.input.position ?? 0;
 	const nowIso = getNowIso();
@@ -175,7 +172,6 @@ export async function handleLinkCatalogAsset(
 export async function handleUnlinkCatalogAsset(
 	ctx: RouteContext<ProductAssetUnlinkInput>,
 ): Promise<ProductAssetUnlinkResponse> {
-	requirePost(ctx);
 	const nowIso = getNowIso();
 	const productAssetLinks = asCollection<StoredProductAssetLink>(ctx.storage.productAssetLinks);
 	const existing = await productAssetLinks.get(ctx.input.linkId);
@@ -200,7 +196,6 @@ export async function handleUnlinkCatalogAsset(
 export async function handleReorderCatalogAsset(
 	ctx: RouteContext<ProductAssetReorderInput>,
 ): Promise<ProductAssetLinkResponse> {
-	requirePost(ctx);
 	const productAssetLinks = asCollection<StoredProductAssetLink>(ctx.storage.productAssetLinks);
 	const nowIso = getNowIso();
 

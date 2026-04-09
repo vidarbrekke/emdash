@@ -40,7 +40,6 @@ import type {
 } from "../types.js";
 import { computeBundleSummary } from "../lib/catalog-bundles.js";
 import { randomHex } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { COMMERCE_LIMITS } from "../kernel/limits.js";
 import { sortedImmutable } from "../lib/sort-immutable.js";
 import type {
@@ -637,7 +636,6 @@ async function collectLinkedProductIds(links: Collection<{ productId: string }>,
 }
 
 export async function handleCreateProduct(ctx: RouteContext<ProductCreateInput>): Promise<ProductResponse> {
-	requirePost(ctx);
 
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productAttributes = asCollection<StoredProductAttribute>(ctx.storage.productAttributes);
@@ -754,7 +752,6 @@ export async function handleCreateProduct(ctx: RouteContext<ProductCreateInput>)
 }
 
 export async function handleUpdateProduct(ctx: RouteContext<ProductUpdateInput>): Promise<ProductResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productAttributes = asCollection<StoredProductAttribute>(ctx.storage.productAttributes);
 	const productAttributeValues = asCollection<StoredProductAttributeValue>(ctx.storage.productAttributeValues);
@@ -828,7 +825,6 @@ export async function handleUpdateProduct(ctx: RouteContext<ProductUpdateInput>)
 }
 
 export async function handleSetProductState(ctx: RouteContext<ProductStateInput>): Promise<ProductResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const nowIso = getNowIso();
 
@@ -843,7 +839,6 @@ export async function handleSetProductState(ctx: RouteContext<ProductStateInput>
 }
 
 export async function handleGetProduct(ctx: RouteContext<ProductGetInput>): Promise<ProductResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);
@@ -968,7 +963,6 @@ export async function handleGetProduct(ctx: RouteContext<ProductGetInput>): Prom
 }
 
 export async function handleListProducts(ctx: RouteContext<ProductListInput>): Promise<ProductListResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);
@@ -1072,7 +1066,6 @@ export async function handleListProducts(ctx: RouteContext<ProductListInput>): P
 }
 
 export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateInput>): Promise<ProductSkuResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);
@@ -1210,7 +1203,6 @@ export async function handleCreateProductSku(ctx: RouteContext<ProductSkuCreateI
 }
 
 export async function handleUpdateProductSku(ctx: RouteContext<ProductSkuUpdateInput>): Promise<ProductSkuResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);
@@ -1257,7 +1249,6 @@ export async function handleUpdateProductSku(ctx: RouteContext<ProductSkuUpdateI
 }
 
 export async function handleSetSkuStatus(ctx: RouteContext<ProductSkuStateInput>): Promise<ProductSkuResponse> {
-	requirePost(ctx);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const nowIso = getNowIso();
 
@@ -1281,7 +1272,6 @@ export async function handleSetSkuStatus(ctx: RouteContext<ProductSkuStateInput>
 }
 
 export async function handleListProductSkus(ctx: RouteContext<ProductSkuListInput>): Promise<ProductSkuListResponse> {
-	requirePost(ctx);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 
 	const skus = await queryAllPages((cursor) =>

@@ -7,7 +7,6 @@
 import type { RouteContext, StorageCollection } from "emdash";
 
 import { equalSha256HexDigestAsync, sha256HexAsync } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError } from "../route-errors.js";
 import type { CheckoutGetOrderInput } from "../schemas.js";
 import type { StoredOrder } from "../types.js";
@@ -28,7 +27,6 @@ function toPublicOrder(order: StoredOrder): CheckoutGetOrderResponse["order"] {
 export async function checkoutGetOrderHandler(
 	ctx: RouteContext<CheckoutGetOrderInput>,
 ): Promise<CheckoutGetOrderResponse> {
-	requirePost(ctx);
 
 	const orders = asCollection<StoredOrder>(ctx.storage.orders);
 	const order = await orders.get(ctx.input.orderId);

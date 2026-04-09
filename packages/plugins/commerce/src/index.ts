@@ -141,9 +141,9 @@ function asRouteHandler(fn: AnyHandler): never {
 function withRouteMethodGuard<T>(route: PluginRoute<T>): PluginRoute {
 	return {
 		...route,
-		handler: asRouteHandler(async (ctx: RouteContext<T>) => {
+		handler: asRouteHandler(async (ctx: RouteContext<unknown>) => {
 			requirePost(ctx);
-			return route.handler(ctx);
+			return route.handler(ctx as RouteContext<T>);
 		}),
 	};
 }
@@ -332,6 +332,7 @@ export type {
 	CommerceRouteMethod,
 	CommerceRouteReplayStrategy,
 } from "./contracts/route-contracts.js";
+export { COMMERCE_MANIFEST_CAPABILITIES } from "./contracts/route-contracts.js";
 export { COMMERCE_SETTINGS_KEYS } from "./settings-keys.js";
 export {
 	COMMERCE_EXTENSION_HOOKS,

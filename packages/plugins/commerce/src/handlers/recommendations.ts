@@ -12,7 +12,6 @@ import type {
 	CommerceRecommendationResult,
 	CommerceRecommendationInput,
 } from "../catalog-extensibility.js";
-import { requirePost } from "../lib/require-post.js";
 import type { RecommendationsInput } from "../schemas.js";
 
 export interface RecommendationsResponseBase {
@@ -103,7 +102,6 @@ export function createRecommendationsHandler(
 	return async function handleRecommendations(
 		ctx: RouteContext<RecommendationsInput>,
 	): Promise<RecommendationsResponse> {
-		requirePost(ctx);
 		const input = toInput(ctx.input);
 		if (!options.resolver) {
 			return DISABLED_PROVIDER_RESPONSE;

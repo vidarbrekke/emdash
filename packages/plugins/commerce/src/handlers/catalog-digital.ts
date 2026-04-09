@@ -1,7 +1,6 @@
 import type { RouteContext } from "emdash";
 
 import { randomHex } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type {
 	DigitalAssetCreateInput,
@@ -17,7 +16,6 @@ import type {
 import { asCollection, getNowIso, putWithConflictHandling } from "./catalog-conflict.js";
 
 export async function handleCreateDigitalAsset(ctx: RouteContext<DigitalAssetCreateInput>): Promise<DigitalAssetResponse> {
-	requirePost(ctx);
 	const provider = ctx.input.provider ?? "media";
 	const isManualOnly = ctx.input.isManualOnly ?? false;
 	const isPrivate = ctx.input.isPrivate ?? true;
@@ -49,7 +47,6 @@ export async function handleCreateDigitalAsset(ctx: RouteContext<DigitalAssetCre
 export async function handleCreateDigitalEntitlement(
 	ctx: RouteContext<DigitalEntitlementCreateInput>,
 ): Promise<DigitalEntitlementResponse> {
-	requirePost(ctx);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const productDigitalAssets = asCollection<StoredDigitalAsset>(ctx.storage.digitalAssets);
 	const productDigitalEntitlements = asCollection<StoredDigitalEntitlement>(ctx.storage.digitalEntitlements);
@@ -87,7 +84,6 @@ export async function handleCreateDigitalEntitlement(
 export async function handleRemoveDigitalEntitlement(
 	ctx: RouteContext<DigitalEntitlementRemoveInput>,
 ): Promise<DigitalEntitlementUnlinkResponse> {
-	requirePost(ctx);
 	const productDigitalEntitlements = asCollection<StoredDigitalEntitlement>(ctx.storage.digitalEntitlements);
 
 	const existing = await productDigitalEntitlements.get(ctx.input.entitlementId);

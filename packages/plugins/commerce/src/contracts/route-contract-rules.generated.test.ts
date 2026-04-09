@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 // generated: do not edit directly
 
 import { COMMERCE_ROUTE_CONTRACTS } from "./route-contracts.js";
+import type { CommerceRouteContract } from "./route-contracts.js";
 
-const routeEntries = Object.entries(COMMERCE_ROUTE_CONTRACTS).sort(([a], [b]) => a.localeCompare(b));
+const routeEntries = Object.entries(COMMERCE_ROUTE_CONTRACTS) as Array<[string, CommerceRouteContract]>;
+routeEntries.sort(([a], [b]) => a.localeCompare(b));
 
 describe("route contract metadata rules", () => {
 	for (const [route, contract] of routeEntries) {

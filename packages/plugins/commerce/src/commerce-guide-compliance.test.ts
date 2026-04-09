@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { COMMERCE_MANIFEST, withFetch, withKV } from "./commerce-plugin-factory.js";
-import { COMMERCE_ROUTE_CAPABILITIES, COMMERCE_ROUTE_CONTRACTS, commercePlugin, createPlugin } from "./index.js";
+import {
+	COMMERCE_MANIFEST_CAPABILITIES,
+	COMMERCE_ROUTE_CAPABILITIES,
+	COMMERCE_ROUTE_CONTRACTS,
+	commercePlugin,
+	createPlugin,
+} from "./index.js";
 
 const ROOT = resolve(import.meta.dirname, ".");
 const INDEX_TS_PATH = resolve(ROOT, "index.ts");
@@ -54,24 +60,8 @@ describe("EmDash guide compliance: manifest contract", () => {
 
 		const descriptorCapabilities = getCapabilities(descriptor.capabilities);
 		const pluginCapabilities = getCapabilities(pluginManifest.capabilities);
-		const knownPluginCapabilities = new Set(["storage:kv", "cron:schedule", "admin:ui"]);
-		const routeFetchNeeded = Object.values(COMMERCE_ROUTE_CAPABILITIES).some((capability) => capability?.requiresFetch);
-		const expectedCapabilities = routeFetchNeeded
-			? ["storage:kv", "cron:schedule", "admin:ui", "network:fetch"]
-			: ["storage:kv", "cron:schedule", "admin:ui"];
-		if (routeFetchNeeded) {
-			knownPluginCapabilities.add("network:fetch");
-		}
-
-		for (const capability of descriptorCapabilities) {
-			expect(knownPluginCapabilities.has(capability)).toBe(true);
-		}
-		for (const capability of pluginCapabilities) {
-			expect(knownPluginCapabilities.has(capability)).toBe(true);
-		}
-
-		expect(descriptorCapabilities).toEqual(expect.arrayContaining(expectedCapabilities));
-		expect(pluginCapabilities).toEqual(expect.arrayContaining(expectedCapabilities));
+		expect(new Set(descriptorCapabilities)).toEqual(new Set(COMMERCE_MANIFEST_CAPABILITIES));
+		expect(new Set(pluginCapabilities)).toEqual(new Set(COMMERCE_MANIFEST_CAPABILITIES));
 	});
 
 	it("uses guide-shaped network policy via network.allowedHostnames", () => {
@@ -257,11 +247,16 @@ describe("EmDash guide compliance: source-level contract", () => {
 
 		await expect(
 			withFetchHandler({
-				kv: {},
 				request: new Request("https://example.test/test-route-fetch", { method: "POST" }),
 				storage: {},
 			} as Record<string, unknown>),
 		).rejects.toMatchObject({ message: "[CommercePlugin] Fetch capability missing" });
+		await expect(
+			withFetchHandler({
+				request: new Request("https://example.test/test-route-fetch", { method: "POST" }),
+				http: { fetch: vi.fn() },
+			} as Record<string, unknown>),
+		).resolves.toBe("ok");
 	});
 
 	it("enforces KV capability only on declared KV-dependent routes", async () => {

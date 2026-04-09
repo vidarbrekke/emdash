@@ -116,7 +116,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "bundleComputeStorefrontHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "cart/get": {
       "public": true,
@@ -127,7 +127,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "cartGetHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "cart/upsert": {
       "public": true,
@@ -238,7 +238,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "getStorefrontProductHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "catalog/product/get-by-slug": {
       "public": true,
@@ -249,7 +249,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "getStorefrontProductBySlugHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "catalog/product/state": {
       "public": false,
@@ -282,7 +282,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "listStorefrontProductsHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "catalog/sku/create": {
       "public": false,
@@ -304,7 +304,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "listStorefrontProductSkusHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "catalog/sku/state": {
       "public": false,
@@ -393,7 +393,7 @@
       "needsRouteCapabilities": false,
       "methodGuarded": true,
       "routeHandlerName": "checkoutGetOrderHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "digital-assets/create": {
       "public": false,

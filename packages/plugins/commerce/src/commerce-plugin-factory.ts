@@ -11,12 +11,10 @@ import type {
 	PluginStorageConfig,
 	RouteContext,
 } from "emdash/plugin";
-import { COMMERCE_ROUTE_CAPABILITIES } from "./contracts/route-contracts.js";
-
-const REQUIRED_BASE_CAPABILITIES = ["storage:kv", "cron:schedule", "admin:ui"] as const;
-const HAS_FETCH_REQUIRED_ROUTE = Object.values(COMMERCE_ROUTE_CAPABILITIES).some((capability) => capability?.requiresFetch);
-const OPTIONAL_FETCH_CAPABILITY = HAS_FETCH_REQUIRED_ROUTE ? ["network:fetch"] as const : ([] as const);
-const REQUIRED_MANIFEST_CAPABILITIES = [...REQUIRED_BASE_CAPABILITIES, ...OPTIONAL_FETCH_CAPABILITY] as const;
+import {
+	COMMERCE_BASE_MANIFEST_CAPABILITIES,
+	COMMERCE_MANIFEST_CAPABILITIES,
+} from "./contracts/route-contracts.js";
 
 const PROTOCOL_PREFIX = /^https?:\/\//;
 
@@ -38,7 +36,7 @@ export type CommerceManifest = {
 export const COMMERCE_MANIFEST = Object.freeze({
 	id: "commerce",
 	version: "0.1.0",
-	capabilities: REQUIRED_MANIFEST_CAPABILITIES,
+	capabilities: COMMERCE_MANIFEST_CAPABILITIES,
 	network: {
 		allowedHostnames: ["api.stripe.com"],
 	},
@@ -87,11 +85,7 @@ function validateManifest(manifest: CommerceManifest): void {
 	assert(manifest.id === "commerce", 'Manifest id must be "commerce"');
 	assert(typeof manifest.version === "string" && manifest.version.length > 0, "Manifest version is required");
 
-	const required: CommerceCapability[] = [
-		"storage:kv",
-		"cron:schedule",
-		"admin:ui",
-	];
+	const required: CommerceCapability[] = [...COMMERCE_BASE_MANIFEST_CAPABILITIES];
 
 	for (const capability of required) {
 		assert(manifest.capabilities.includes(capability), `Missing required capability: ${capability}`);
@@ -160,7 +154,7 @@ export function withKV<T extends CommerceRouteEntry>(entry: T): T {
 }
 
 export function withFetch<T extends CommerceRouteEntry>(entry: T): T {
-	return wrapRouteEntry(entry, { requireKV: true, requireFetch: true }) as T;
+	return wrapRouteEntry(entry, { requireFetch: true }) as T;
 }
 
 function wrapLifecycle(

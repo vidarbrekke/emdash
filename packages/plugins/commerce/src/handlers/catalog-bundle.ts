@@ -2,7 +2,6 @@ import type { RouteContext } from "emdash";
 
 import { normalizeOrderedChildren, normalizeOrderedPosition, mutateOrderedChildren, sortOrderedRowsByPosition } from "../lib/ordered-rows.js";
 import { randomHex } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import { hydrateSkusWithInventoryStock, isStorefrontProductVisible } from "./catalog-read-model.js";
 import { computeBundleSummary } from "../lib/catalog-bundles.js";
@@ -45,7 +44,6 @@ export async function queryBundleComponentsForProduct(
 export async function handleAddBundleComponent(
 	ctx: RouteContext<BundleComponentAddInput>,
 ): Promise<BundleComponentResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const bundleComponents = asCollection<StoredBundleComponent>(ctx.storage.bundleComponents);
@@ -118,7 +116,6 @@ export async function handleAddBundleComponent(
 export async function handleRemoveBundleComponent(
 	ctx: RouteContext<BundleComponentRemoveInput>,
 ): Promise<BundleComponentUnlinkResponse> {
-	requirePost(ctx);
 	const bundleComponents = asCollection<StoredBundleComponent>(ctx.storage.bundleComponents);
 	const nowIso = getNowIso();
 
@@ -142,7 +139,6 @@ export async function handleRemoveBundleComponent(
 export async function handleReorderBundleComponent(
 	ctx: RouteContext<BundleComponentReorderInput>,
 ): Promise<BundleComponentResponse> {
-	requirePost(ctx);
 	const bundleComponents = asCollection<StoredBundleComponent>(ctx.storage.bundleComponents);
 	const nowIso = getNowIso();
 
@@ -175,7 +171,6 @@ export async function handleReorderBundleComponent(
 export async function handleBundleCompute(
 	ctx: RouteContext<BundleComputeInput>,
 ): Promise<BundleComputeResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const productSkus = asCollection<StoredProductSku>(ctx.storage.productSkus);
 	const inventoryStock = asOptionalCollection<StoredInventoryStock>(ctx.storage.inventoryStock);

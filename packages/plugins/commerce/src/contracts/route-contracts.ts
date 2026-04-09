@@ -457,6 +457,10 @@ export const COMMERCE_ROUTE_CONTRACTS = {
 	},
 } as const satisfies CommerceRouteContracts;
 
+export const COMMERCE_BASE_MANIFEST_CAPABILITIES = ["storage:kv", "cron:schedule", "admin:ui"] as const;
+
+export type CommerceManifestCapability = (typeof COMMERCE_BASE_MANIFEST_CAPABILITIES)[number] | "network:fetch";
+
 export const COMMERCE_ROUTE_CAPABILITIES: CommerceRouteCapabilityMap = Object.fromEntries(
 	Object.entries(COMMERCE_ROUTE_CONTRACTS)
 		.filter(([, contract]) => contract.requiresKV || contract.requiresFetch)
@@ -468,4 +472,13 @@ export const COMMERCE_ROUTE_CAPABILITIES: CommerceRouteCapabilityMap = Object.fr
 			},
 		]),
 ) as CommerceRouteCapabilityMap;
+
+function hasFetchCapabilityRequirement(): boolean {
+	return Object.values(COMMERCE_ROUTE_CAPABILITIES).some((capability) => capability?.requiresFetch);
+}
+
+export const COMMERCE_MANIFEST_CAPABILITIES = [
+	...COMMERCE_BASE_MANIFEST_CAPABILITIES,
+	...(hasFetchCapabilityRequirement() ? (["network:fetch"] as const) : ([] as const)),
+] as const satisfies readonly CommerceManifestCapability[];
 

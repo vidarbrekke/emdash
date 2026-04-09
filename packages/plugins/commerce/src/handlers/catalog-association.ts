@@ -1,6 +1,5 @@
 import type { RouteContext } from "emdash";
 import { randomHex } from "../lib/crypto-adapter.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import { sortedImmutable } from "../lib/sort-immutable.js";
 import type {
@@ -34,7 +33,6 @@ import { asCollection, getNowIso, putWithConflictHandling } from "./catalog-conf
 import { queryAllPages } from "./catalog-read-model.js";
 
 export async function handleCreateCategory(ctx: RouteContext<CategoryCreateInput>): Promise<CategoryResponse> {
-	requirePost(ctx);
 	const categories = asCollection<StoredCategory>(ctx.storage.categories);
 	const nowIso = getNowIso();
 
@@ -63,7 +61,6 @@ export async function handleCreateCategory(ctx: RouteContext<CategoryCreateInput
 }
 
 export async function handleListCategories(ctx: RouteContext<CategoryListInput>): Promise<CategoryListResponse> {
-	requirePost(ctx);
 	const categories = asCollection<StoredCategory>(ctx.storage.categories);
 
 	const where: Record<string, string> = {};
@@ -89,7 +86,6 @@ export async function handleListCategories(ctx: RouteContext<CategoryListInput>)
 export async function handleCreateProductCategoryLink(
 	ctx: RouteContext<ProductCategoryLinkInput>,
 ): Promise<ProductCategoryLinkResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const categories = asCollection<StoredCategory>(ctx.storage.categories);
 	const productCategoryLinks = asCollection<StoredProductCategoryLink>(ctx.storage.productCategoryLinks);
@@ -125,7 +121,6 @@ export async function handleCreateProductCategoryLink(
 export async function handleRemoveProductCategoryLink(
 	ctx: RouteContext<ProductCategoryUnlinkInput>,
 ): Promise<ProductCategoryLinkUnlinkResponse> {
-	requirePost(ctx);
 	const productCategoryLinks = asCollection<StoredProductCategoryLink>(ctx.storage.productCategoryLinks);
 	const link = await productCategoryLinks.get(ctx.input.linkId);
 	if (!link) {
@@ -137,7 +132,6 @@ export async function handleRemoveProductCategoryLink(
 }
 
 export async function handleCreateTag(ctx: RouteContext<TagCreateInput>): Promise<TagResponse> {
-	requirePost(ctx);
 	const tags = asCollection<StoredProductTag>(ctx.storage.productTags);
 	const nowIso = getNowIso();
 
@@ -157,7 +151,6 @@ export async function handleCreateTag(ctx: RouteContext<TagCreateInput>): Promis
 }
 
 export async function handleListTags(ctx: RouteContext<TagListInput>): Promise<TagListResponse> {
-	requirePost(ctx);
 	const tags = asCollection<StoredProductTag>(ctx.storage.productTags);
 	const rows = await queryAllPages((cursor) =>
 		tags.query({
@@ -171,7 +164,6 @@ export async function handleListTags(ctx: RouteContext<TagListInput>): Promise<T
 }
 
 export async function handleCreateProductTagLink(ctx: RouteContext<ProductTagLinkInput>): Promise<ProductTagLinkResponse> {
-	requirePost(ctx);
 	const products = asCollection<StoredProduct>(ctx.storage.products);
 	const tags = asCollection<StoredProductTag>(ctx.storage.productTags);
 	const productTagLinks = asCollection<StoredProductTagLink>(ctx.storage.productTagLinks);
@@ -205,7 +197,6 @@ export async function handleCreateProductTagLink(ctx: RouteContext<ProductTagLin
 }
 
 export async function handleRemoveProductTagLink(ctx: RouteContext<ProductTagUnlinkInput>): Promise<ProductTagLinkUnlinkResponse> {
-	requirePost(ctx);
 	const productTagLinks = asCollection<StoredProductTagLink>(ctx.storage.productTagLinks);
 	const link = await productTagLinks.get(ctx.input.linkId);
 	if (!link) {
