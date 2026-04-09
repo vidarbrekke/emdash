@@ -25,7 +25,6 @@ import {
 	createCommercePlugin,
 	withKV,
 	withFetch,
-	type CommerceRouteEntry,
 	requireCron,
 } from "./commerce-plugin-factory.js";
 
@@ -173,18 +172,21 @@ function publicRoute<T>(
 
 type CommerceRouteKey = keyof CommerceRouteContracts;
 
-function withRouteCapabilities<TRoute extends CommerceRouteKey>(routeKey: TRoute, route: PluginRoute): PluginRoute {
+function withRouteCapabilities<TRoute extends CommerceRouteKey, TInput>(
+	routeKey: TRoute,
+	route: PluginRoute<TInput>,
+): PluginRoute<TInput> {
 	const capabilities = COMMERCE_ROUTE_CAPABILITIES[routeKey];
 	if (!capabilities) return route;
 
-	let wrappedRoute: CommerceRouteEntry = route;
+	let wrappedRoute = route;
 	if (capabilities.requiresKV) {
 		wrappedRoute = withKV(wrappedRoute);
 	}
 	if (capabilities.requiresFetch) {
 		wrappedRoute = withFetch(wrappedRoute);
 	}
-	return wrappedRoute as PluginRoute;
+	return wrappedRoute;
 }
 
 /**

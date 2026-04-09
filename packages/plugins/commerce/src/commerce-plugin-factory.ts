@@ -45,6 +45,7 @@ export const COMMERCE_MANIFEST = Object.freeze({
 export type CommercePluginContext = PluginContext<PluginStorageConfig>;
 
 export type CommerceRouteHandler = (ctx: RouteContext<unknown>, ...args: unknown[]) => Promise<unknown>;
+type CommerceRouteLooseHandler = (ctx: unknown, ...args: unknown[]) => Promise<unknown>;
 
 export type CommerceRouteEntry = CommerceRouteHandler | PluginRoute<unknown>;
 
@@ -149,12 +150,16 @@ function wrapRouteEntry(
 	} as CommerceRouteEntry;
 }
 
-export function withKV<T extends CommerceRouteEntry>(entry: T): T {
-	return wrapRouteEntry(entry, { requireKV: true }) as T;
+export function withKV<T>(entry: PluginRoute<T>): PluginRoute<T>;
+export function withKV(entry: CommerceRouteLooseHandler): CommerceRouteLooseHandler;
+export function withKV(entry: CommerceRouteEntry): CommerceRouteEntry {
+	return wrapRouteEntry(entry, { requireKV: true }) as CommerceRouteEntry;
 }
 
-export function withFetch<T extends CommerceRouteEntry>(entry: T): T {
-	return wrapRouteEntry(entry, { requireFetch: true }) as T;
+export function withFetch<T>(entry: PluginRoute<T>): PluginRoute<T>;
+export function withFetch(entry: CommerceRouteLooseHandler): CommerceRouteLooseHandler;
+export function withFetch(entry: CommerceRouteEntry): CommerceRouteEntry {
+	return wrapRouteEntry(entry, { requireFetch: true }) as CommerceRouteEntry;
 }
 
 function wrapLifecycle(
