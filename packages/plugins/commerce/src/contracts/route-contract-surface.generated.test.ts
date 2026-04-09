@@ -34,6 +34,22 @@ describe("route contract to registered route alignment", () => {
 			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
 		}
 	});
+	it("must use exactly one route visibility wrapper per route", () => {
+		for (const route of contractRouteKeys) {
+			const entry = routeSurface.routeRecords[route];
+			expect(entry).toBeDefined();
+			const visibilityWrappers = (entry?.wrappers ?? []).filter((wrapper) =>
+				["publicRoute", "adminRoute"].includes(wrapper),
+			);
+			expect(visibilityWrappers).toHaveLength(1);
+		}
+	});
+	it("must never register with unknown handler symbols", () => {
+		for (const route of contractRouteKeys) {
+			const entry = routeSurface.routeRecords[route];
+			expect(entry?.routeHandlerName).toEqual(expect.any(String));
+		}
+	});
 	it("must apply requirePost guards for side-effecting contract routes", () => {
 		for (const [route, contract] of Object.entries(contractRouteSideEffectMap)) {
 			if (contract.sideEffectful) {

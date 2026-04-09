@@ -387,6 +387,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 	const routeRecords = {};
 	const unknownPublicRoutes = [];
 	const unsupportedRouteWrappers = {};
+	const unknownHandlerRoutes = [];
 
 	for (const entry of routeObject.properties) {
 		if (!ts.isPropertyAssignment(entry)) continue;
@@ -398,6 +399,9 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 		const routeWrappers = [...collectRouteWrappers(entry.initializer)].sort();
 		const routeHandlerNode = deriveRouteHandlerNode(entry.initializer);
 		const routeHandlerName = handlerNameFromNode(routeHandlerNode);
+		if (!routeHandlerName) {
+			unknownHandlerRoutes.push(route);
+		}
 		const handlerHasRequirePostGuard = routeHandlerName ? hasHandlerRequirePostGuard(routeHandlerName) : undefined;
 		if (routeUnsupportedWrappers.size > 0) {
 			unsupportedRouteWrappers[route] = [...routeUnsupportedWrappers].sort();
@@ -411,9 +415,15 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 			wrappers: routeWrappers,
 			hasRouteCapabilitiesWrapper: routeWrappers.includes("withRouteCapabilities"),
 			needsRouteCapabilities: contractMetadata.requiresKV || contractMetadata.requiresFetch,
-			routeHandlerName: routeHandlerName ?? "unknown",
+			routeHandlerName: routeHandlerName,
 			handlerHasRequirePostGuard,
 		};
+	}
+
+	if (unknownHandlerRoutes.length > 0) {
+		throw new Error(
+			`Unable to resolve handler function symbol for routes: ${unknownHandlerRoutes.sort().join(", ")}`,
+		);
 	}
 
 	if (Object.keys(unsupportedRouteWrappers).length > 0) {
@@ -635,6 +645,22 @@ describe("route contract to registered route alignment", () => {
 	it("must keep capability wrapper usage aligned with contracts", () => {
 		for (const [route, contract] of Object.entries(contractRouteCapabilitiesMap)) {
 			expect(routeSurface.routeRecords[route]?.hasRouteCapabilitiesWrapper).toBe(contract.hasCapabilities);
+		}
+	});
+	it("must use exactly one route visibility wrapper per route", () => {
+		for (const route of contractRouteKeys) {
+			const entry = routeSurface.routeRecords[route];
+			expect(entry).toBeDefined();
+			const visibilityWrappers = (entry?.wrappers ?? []).filter((wrapper) =>
+				["publicRoute", "adminRoute"].includes(wrapper),
+			);
+			expect(visibilityWrappers).toHaveLength(1);
+		}
+	});
+	it("must never register with unknown handler symbols", () => {
+		for (const route of contractRouteKeys) {
+			const entry = routeSurface.routeRecords[route];
+			expect(entry?.routeHandlerName).toEqual(expect.any(String));
 		}
 	});
 	it("must apply requirePost guards for side-effecting contract routes", () => {
