@@ -84,6 +84,7 @@ function isValidMetadataContribution(c: unknown): c is PageMetadataContribution 
 }
 
 import { loadBundleFromR2 } from "./api/handlers/marketplace.js";
+import { validateBundleIdentity } from "./plugins/marketplace.js";
 import { runSystemCleanup } from "./cleanup.js";
 import {
 	DEFAULT_COMMENT_MODERATOR_PLUGIN_ID,
@@ -493,14 +494,14 @@ export class EmDashRuntime {
 						await deactivateInvalidPlugin(state, "bundle not found");
 						continue;
 					}
-					if (bundle.manifest.id !== state.pluginId) {
-						await deactivateInvalidPlugin(state, "manifest id mismatch");
-						continue;
-					}
-					if (bundle.manifest.version !== version) {
+
+					const bundleIdentityError = validateBundleIdentity(bundle, state.pluginId, version);
+					if (bundleIdentityError) {
 						await deactivateInvalidPlugin(
 							state,
-							`manifest version mismatch (found ${bundle.manifest.version}, expected ${version})`,
+							bundleIdentityError.code === "MANIFEST_MISMATCH"
+								? "manifest id mismatch"
+								: `manifest version mismatch (${bundleIdentityError.message})`,
 						);
 						continue;
 					}
@@ -1106,13 +1107,13 @@ export class EmDashRuntime {
 						await deactivateInvalidState("bundle not found");
 						continue;
 					}
-					if (bundle.manifest.id !== plugin.pluginId) {
-						await deactivateInvalidState("manifest id mismatch");
-						continue;
-					}
-					if (bundle.manifest.version !== version) {
+
+					const bundleIdentityError = validateBundleIdentity(bundle, plugin.pluginId, version);
+					if (bundleIdentityError) {
 						await deactivateInvalidState(
-							`manifest version mismatch (found ${bundle.manifest.version}, expected ${version})`,
+							bundleIdentityError.code === "MANIFEST_MISMATCH"
+								? "manifest id mismatch"
+								: `manifest version mismatch (${bundleIdentityError.message})`,
 						);
 						continue;
 					}

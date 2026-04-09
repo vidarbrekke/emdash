@@ -152,6 +152,33 @@ export interface PluginBundle {
 	checksum: string;
 }
 
+export interface MarketplaceBundleIdentityError {
+	code: "MANIFEST_MISMATCH" | "MANIFEST_VERSION_MISMATCH";
+	message: string;
+}
+
+export function validateBundleIdentity(
+	bundle: PluginBundle,
+	pluginId: string,
+	version: string,
+): MarketplaceBundleIdentityError | null {
+	if (bundle.manifest.id !== pluginId) {
+		return {
+			code: "MANIFEST_MISMATCH",
+			message: `Bundle manifest ID (${bundle.manifest.id}) does not match requested plugin (${pluginId})`,
+		};
+	}
+
+	if (bundle.manifest.version !== version) {
+		return {
+			code: "MANIFEST_VERSION_MISMATCH",
+			message: `Bundle manifest version (${bundle.manifest.version}) does not match requested version (${version})`,
+		};
+	}
+
+	return null;
+}
+
 // ── Interface ──────────────────────────────────────────────────────
 
 export interface MarketplaceClient {

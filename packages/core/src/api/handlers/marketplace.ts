@@ -23,6 +23,8 @@ import {
 	type MarketplaceThemeSearchOpts,
 	type MarketplaceVersionSummary,
 	type PluginBundle,
+	validateBundleIdentity,
+	type MarketplaceBundleIdentityError,
 } from "../../plugins/marketplace.js";
 import type { SandboxRunner } from "../../plugins/sandbox/types.js";
 import { PluginStateRepository } from "../../plugins/state.js";
@@ -178,32 +180,14 @@ async function resolveVersionMetadata(
 	return versions.find((v) => v.version === version) ?? null;
 }
 
-function validateBundleIdentity(
-	bundle: PluginBundle,
-	pluginId: string,
-	version: string,
-): ApiResult<never> | null {
-	if (bundle.manifest.id !== pluginId) {
-		return {
-			success: false,
-			error: {
-				code: "MANIFEST_MISMATCH",
-				message: `Bundle manifest ID (${bundle.manifest.id}) does not match requested plugin (${pluginId})`,
-			},
-		};
-	}
-
-	if (bundle.manifest.version !== version) {
-		return {
-			success: false,
-			error: {
-				code: "MANIFEST_VERSION_MISMATCH",
-				message: `Bundle manifest version (${bundle.manifest.version}) does not match requested version (${version})`,
-			},
-		};
-	}
-
-	return null;
+function toBundleIdentityError(error: MarketplaceBundleIdentityError): ApiResult<never> {
+	return {
+		success: false,
+		error: {
+			code: error.code,
+			message: error.message,
+		},
+	};
 }
 
 /** Store a plugin bundle's files in site-local R2 storage */
@@ -473,7 +457,7 @@ export async function handleMarketplaceInstall(
 		}
 
 		const bundleIdentityError = validateBundleIdentity(bundle, pluginId, version);
-		if (bundleIdentityError) return bundleIdentityError;
+		if (bundleIdentityError) return toBundleIdentityError(bundleIdentityError);
 
 		// Store bundle in site-local R2
 		await storeBundleInR2(storage, pluginId, version, bundle);
@@ -801,7 +785,7 @@ export async function handleMarketplaceUpdate(
 		}
 
 		const bundleIdentityError = validateBundleIdentity(bundle, pluginId, newVersion);
-		if (bundleIdentityError) return bundleIdentityError;
+		if (bundleIdentityError) return toBundleIdentityError(bundleIdentityError);
 
 		// Diff capabilities and route visibility against old version
 		const oldBundle = await loadBundleFromR2(storage, pluginId, oldVersion);
