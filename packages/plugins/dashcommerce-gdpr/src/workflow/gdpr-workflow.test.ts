@@ -218,8 +218,9 @@ describe("GdprWorkflowEngine", () => {
 
 		expect(result.request.status).toBe("denied");
 		expect(result.operations).toHaveLength(1);
-		expect(result.operations[0].status).toBe("blocked");
-		expect(result.operations[0].errorCode).toBe("LEGAL_HOLD_ACTIVE");
+		const operation = result.operations[0]!;
+		expect(operation.status).toBe("blocked");
+		expect(operation.errorCode).toBe("LEGAL_HOLD_ACTIVE");
 	});
 
 	it("denies requests when no providers are registered", async () => {
@@ -330,10 +331,10 @@ describe("GdprWorkflowEngine", () => {
 		const holds = await reader.getLegalHolds({ subjectId: "subject-shared", subjectKind: "customer" });
 
 		expect(consents).toHaveLength(1);
-		expect(consents[0].purpose).toBe("analytics");
-		expect(consents[0].granted).toBe(true);
+		expect(consents[0]!.purpose).toBe("analytics");
+		expect(consents[0]!.granted).toBe(true);
 		expect(holds).toHaveLength(1);
-		expect(holds[0].reasonCode).toBe("support");
+		expect(holds[0]!.reasonCode).toBe("support");
 	});
 
 	it("uses repository-backed stores when collections are provided", async () => {
@@ -382,10 +383,10 @@ describe("GdprWorkflowEngine", () => {
 		const holds = await reader.getLegalHolds({ subjectId: "repo-subject", subjectKind: "customer" });
 
 		expect(consents).toHaveLength(1);
-		expect(consents[0].subjectId).toBe("repo-subject");
-		expect(consents[0].purpose).toBe("analytics");
+		expect(consents[0]!.subjectId).toBe("repo-subject");
+		expect(consents[0]!.purpose).toBe("analytics");
 		expect(holds).toHaveLength(1);
-		expect(holds[0].reasonCode).toBe("support");
+		expect(holds[0]!.reasonCode).toBe("support");
 	});
 
 	it("shares request, operation, and audit state through shared in-memory stores", async () => {

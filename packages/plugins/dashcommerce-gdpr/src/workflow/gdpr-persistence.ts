@@ -1,12 +1,12 @@
 import type {
-	type GdprAuditLogRecord,
-	type GdprConsentPurpose,
-	type GdprConsentRecord,
-	type GdprDataSubjectKind,
-	type GdprLegalHoldRecord,
-	type GdprExportRecord,
-	type GdprOperationRecord,
-	type GdprRequestRecord,
+	GdprAuditLogRecord,
+	GdprConsentPurpose,
+	GdprConsentRecord,
+	GdprDataSubjectKind,
+	GdprExportRecord,
+	GdprLegalHoldRecord,
+	GdprOperationRecord,
+	GdprRequestRecord,
 } from "../types.js";
 
 export interface GdprStorageCollection<T> {
@@ -87,10 +87,11 @@ export class InMemoryConsentStore implements GdprConsentStore {
 	}
 
 	public async listBySubject(subjectId: string, subjectKind: GdprDataSubjectKind): Promise<GdprConsentRecord[]> {
-		const list = [...this.entries.values()].filter(
+		return [...this.entries.values()]
+			.filter(
 			(entry) => entry.subjectId === subjectId && entry.subjectKind === subjectKind,
-		);
-		return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+			)
+			.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	}
 
 	public async set(record: GdprConsentRecord): Promise<void> {
@@ -123,7 +124,7 @@ class StorageConsentStore implements GdprConsentStore {
 			subjectId,
 			subjectKind,
 		});
-		return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+		return rows.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	}
 
 	public async set(record: GdprConsentRecord): Promise<void> {
@@ -157,7 +158,7 @@ export class InMemoryLegalHoldStore implements GdprLegalHoldStore {
 	public async listBySubject(subjectId: string, subjectKind: GdprDataSubjectKind): Promise<GdprLegalHoldRecord[]> {
 		return [...this.entries.values()]
 			.filter((entry) => entry.subjectId === subjectId && entry.subjectKind === subjectKind)
-			.sort((a, b) => compareByCreatedAtAscending(a, b));
+			.toSorted((a, b) => compareByCreatedAtAscending(a, b));
 	}
 
 	public async set(record: GdprLegalHoldRecord): Promise<void> {
@@ -186,7 +187,7 @@ class StorageLegalHoldStore implements GdprLegalHoldStore {
 			subjectId,
 			subjectKind,
 		});
-		return rows.sort(compareByCreatedAtAscending);
+		return rows.toSorted(compareByCreatedAtAscending);
 	}
 
 	public async set(record: GdprLegalHoldRecord): Promise<void> {
@@ -207,7 +208,11 @@ class StorageLegalHoldStore implements GdprLegalHoldStore {
 		if (!this.collection.query) {
 			throw new Error("Legal hold persistence collection requires query support.");
 		}
-		const result = await asPromise(this.collection.query({ where }));
+		const result = await asPromise(
+			this.collection.query({
+				where: { subjectId: where.subjectId, subjectKind: where.subjectKind },
+			}),
+		);
 		return result.items.map((row) => row.data);
 	}
 }
@@ -232,7 +237,7 @@ export class InMemoryRequestStore implements GdprRequestStore {
 	}
 
 	public async list(): Promise<GdprRequestRecord[]> {
-		return [...this.entries.values()].sort(compareByCreatedAtAscending);
+		return [...this.entries.values()].toSorted(compareByCreatedAtAscending);
 	}
 }
 
@@ -261,7 +266,7 @@ class StorageRequestStore implements GdprRequestStore {
 
 	public async list(): Promise<GdprRequestRecord[]> {
 		const rows = await this.query({});
-		return rows.sort(compareByCreatedAtAscending);
+		return rows.toSorted(compareByCreatedAtAscending);
 	}
 
 	private async query(where: Record<string, string>): Promise<GdprRequestRecord[]> {
@@ -294,10 +299,9 @@ export class InMemoryOperationStore implements GdprOperationStore {
 
 	public async listByRequestId(requestId: string): Promise<GdprOperationRecord[]> {
 		const ids = this.byRequest.get(requestId) ?? new Set<string>();
-		return [...ids]
-			.map((id) => this.entries.get(id))
+		return Array.from(ids, (id) => this.entries.get(id))
 			.filter((operation): operation is GdprOperationRecord => operation !== undefined)
-			.sort(compareByStartedAtAscending);
+			.toSorted(compareByStartedAtAscending);
 	}
 }
 
@@ -320,7 +324,7 @@ class StorageOperationStore implements GdprOperationStore {
 
 	public async listByRequestId(requestId: string): Promise<GdprOperationRecord[]> {
 		const rows = await this.query({ requestId });
-		return rows.sort(compareByStartedAtAscending);
+		return rows.toSorted(compareByStartedAtAscending);
 	}
 
 	private async query(where: Record<string, string>): Promise<GdprOperationRecord[]> {
@@ -345,10 +349,9 @@ export class InMemoryExportStore implements GdprExportStore {
 
 	public async listByRequestId(requestId: string): Promise<GdprExportRecord[]> {
 		const ids = this.byRequest.get(requestId) ?? new Set<string>();
-		return [...ids]
-			.map((id) => this.entries.get(id))
+		return Array.from(ids, (id) => this.entries.get(id))
 			.filter((record): record is GdprExportRecord => record !== undefined)
-			.sort(compareByCreatedAtAscending);
+			.toSorted(compareByCreatedAtAscending);
 	}
 }
 
@@ -366,7 +369,7 @@ class StorageExportStore implements GdprExportStore {
 
 	public async listByRequestId(requestId: string): Promise<GdprExportRecord[]> {
 		const rows = await this.query({ requestId });
-		return rows.sort(compareByCreatedAtAscending);
+		return rows.toSorted(compareByCreatedAtAscending);
 	}
 
 	private async query(where: Record<string, string>): Promise<GdprExportRecord[]> {
@@ -394,9 +397,9 @@ export class InMemoryAuditStore implements GdprAuditStore {
 			for (const rows of this.entries.values()) {
 				all.push(...rows);
 			}
-			return all.sort(compareByCreatedAtAscending);
+			return all.toSorted(compareByCreatedAtAscending);
 		}
-		return [...(this.entries.get(requestId) ?? [])].sort(compareByCreatedAtAscending);
+		return (this.entries.get(requestId) ?? []).toSorted(compareByCreatedAtAscending);
 	}
 }
 
@@ -414,7 +417,7 @@ class StorageAuditStore implements GdprAuditStore {
 
 	public async listByRequestId(requestId?: string): Promise<GdprAuditLogRecord[]> {
 		const rows = requestId ? await this.query({ requestId }) : await this.query({});
-		return rows.sort(compareByCreatedAtAscending);
+		return rows.toSorted(compareByCreatedAtAscending);
 	}
 
 	private async query(where: Record<string, string>): Promise<GdprAuditLogRecord[]> {

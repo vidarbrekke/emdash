@@ -75,7 +75,7 @@ function sortUnknown(value: unknown): unknown {
 	if (value && typeof value === "object") {
 		const source = value as Record<string, unknown>;
 		const ordered: Record<string, unknown> = {};
-		for (const key of Object.keys(source).sort()) {
+		for (const key of Object.keys(source).toSorted()) {
 			ordered[key] = sortUnknown(source[key]);
 		}
 		return ordered;

@@ -39,7 +39,7 @@ export const COMMERCE_SETTINGS_MATRIX: readonly CommerceSettingMatrixEntry[] = [
 		name: "stripePublishableKey",
 		kvKey: COMMERCE_SETTINGS_KEYS.stripePublishableKey,
 		requiredIn: ["payment-provider", "all"],
-		validate(raw) {
+		validate(raw): raw is string {
 			return (
 				typeof raw === "string" &&
 				STRIPE_PUBLISHABLE_KEY_PREFIXES.some((prefix) => raw.startsWith(prefix)) &&
@@ -53,7 +53,7 @@ export const COMMERCE_SETTINGS_MATRIX: readonly CommerceSettingMatrixEntry[] = [
 		name: "stripeSecretKey",
 		kvKey: COMMERCE_SETTINGS_KEYS.stripeSecretKey,
 		requiredIn: ["payment-provider", "all"],
-		validate(raw) {
+		validate(raw): raw is string {
 			return (
 				typeof raw === "string" &&
 				STRIPE_SECRET_KEY_PREFIXES.some((prefix) => raw.startsWith(prefix)) &&
@@ -67,7 +67,7 @@ export const COMMERCE_SETTINGS_MATRIX: readonly CommerceSettingMatrixEntry[] = [
 		name: "stripeWebhookSecret",
 		kvKey: COMMERCE_SETTINGS_KEYS.stripeWebhookSecret,
 		requiredIn: ["webhook", "all"],
-		validate(raw) {
+		validate(raw): raw is string {
 			return typeof raw === "string" && STRIPE_WEBHOOK_SECRET_PATTERN.test(raw);
 		},
 		errorMessage: "Stripe webhook secret must start with whsec_ and include a non-empty key segment",
@@ -76,7 +76,7 @@ export const COMMERCE_SETTINGS_MATRIX: readonly CommerceSettingMatrixEntry[] = [
 		name: "defaultCurrency",
 		kvKey: COMMERCE_SETTINGS_KEYS.defaultCurrency,
 		requiredIn: ["payment-provider", "all"],
-		validate(raw) {
+		validate(raw): raw is string {
 			return typeof raw === "string" && DEFAULT_CURRENCY_PATTERN.test(raw);
 		},
 		errorMessage: "defaultCurrency must be an ISO-4217 3-letter uppercase code (for example: USD)",

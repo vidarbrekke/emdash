@@ -8,7 +8,6 @@ import {
 	type GdprDataSubjectKind,
 	type GdprLegalHoldRecord,
 	type GdprOperationRecord,
-	type GdprPersonalData,
 	type GdprExportRecord,
 	type GdprPersonalDataProvider,
 	type GdprProviderCapabilities,
@@ -91,8 +90,8 @@ function safeQueryField<T extends CommerceDataRecord>(
 	if (!collection?.query) {
 		return Promise.resolve([]);
 	}
-	return collection.query({ where: { [field]: value } }).then((response) => {
-		return response.items
+	return Promise.resolve(collection.query({ where: { [field]: value } })).then((response) =>
+		response.items
 			.map((item) => {
 				if (!item || typeof item.id !== "string" || typeof item.data !== "object" || item.data === null) {
 					return null;
@@ -100,8 +99,8 @@ function safeQueryField<T extends CommerceDataRecord>(
 				return { id: item.id, data: item.data as T };
 			})
 			.filter((entry): entry is { id: string; data: T } => entry !== null)
-			.sort((left, right) => left.id.localeCompare(right.id));
-	});
+			.toSorted((left, right) => left.id.localeCompare(right.id)),
+	);
 }
 
 function safeGetById<T extends CommerceDataRecord>(
@@ -111,7 +110,7 @@ function safeGetById<T extends CommerceDataRecord>(
 	if (!collection || !id) {
 		return Promise.resolve(null);
 	}
-	return collection.get(id).then((value) => {
+	return Promise.resolve(collection.get(id)).then((value) => {
 		if (!value || typeof value !== "object") {
 			return null;
 		}
@@ -645,7 +644,7 @@ function buildConsentCheckHandler(engineAccessor: GdprEngineAccessor, moduleEnab
 			? {
 					subjectId: ctx.query.subjectId,
 					subjectKind: ctx.query.subjectKind,
-					purpose: ctx.query.purpose,
+					purpose: ctx.query.purpose as GdprConsentPurpose,
 				}
 			: null;
 		const payload = query ?? normalizeConsentCheck(await (ctx.request.json?.() ?? Promise.resolve(null)));
@@ -989,8 +988,8 @@ export function registerModule(host: CommerceHost): CommerceModuleDefinition {
 					logger.warn("[gdpr] gdpr:process-request missing requestId");
 					return;
 				}
-				const engine = getEngine();
-				const request = await engine.replayRequest(requestId);
+				const workflowEngine = getEngine();
+				const request = await workflowEngine.replayRequest(requestId);
 				if (!request) {
 					logger.warn("[gdpr] gdpr:process-request request not found", { requestId });
 					return;

@@ -4,29 +4,10 @@ import { COMMERCE_STORAGE_CONFIG } from "../storage.js";
 
 type IndexKind = string | readonly string[];
 
+type QueryCoverageCollection = keyof typeof COMMERCE_STORAGE_CONFIG;
+
 function includesIndex(
-	collection:
-		| "orders"
-		| "carts"
-		| "paymentAttempts"
-		| "productAssets"
-		| "productAssetLinks"
-		| "webhookReceipts"
-		| "idempotencyKeys"
-		| "products"
-		| "productSkus"
-	| "productAttributes"
-	| "productAttributeValues"
-	| "productSkuOptionValues"
-	| "digitalAssets"
-	| "digitalEntitlements"
-	| "categories"
-	| "productCategoryLinks"
-	| "productTags"
-	| "productTagLinks"
-	| "bundleComponents"
-	| "inventoryLedger"
-	| "inventoryStock",
+	collection: QueryCoverageCollection,
 	index: readonly string[],
 	unique = false,
 ): boolean {
@@ -43,8 +24,6 @@ function includesIndex(
 		return entry.length === index.length && entry.every((part, i) => part === index[i]);
 	});
 }
-
-type QueryCoverageCollection = keyof typeof COMMERCE_STORAGE_CONFIG;
 
 type QueryCoverageEntry = {
 	collection: QueryCoverageCollection;

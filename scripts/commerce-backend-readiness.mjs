@@ -11,15 +11,6 @@ const checks = [];
 const fail = (name, detail) => checks.push({ name, ok: false, detail });
 const pass = (name) => checks.push({ name, ok: true, detail: "" });
 
-const expectExists = (path, name) => {
-	if (existsSync(path)) {
-		pass(name);
-		return true;
-	}
-	fail(name, `Missing: ${path}`);
-	return false;
-};
-
 const expectedExtensionModules = [
 	"ai-moderation",
 	"api-test",
@@ -45,8 +36,10 @@ if (hasExternalWorkspace) {
 }
 
 if (hasExternalWorkspace) {
-	const actualModules = readdirSync(extBase, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
-	const missingModules = expectedExtensionModules.filter((m) => !actualModules.includes(m));
+	const actualModules = new Set(
+		readdirSync(extBase, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name),
+	);
+	const missingModules = expectedExtensionModules.filter((moduleName) => !actualModules.has(moduleName));
 	if (missingModules.length === 0) {
 		pass("Required moved modules are present in extension workspace");
 	} else {
@@ -119,9 +112,11 @@ for (const entry of packageDependencyTargets) {
 		continue;
 	}
 
+	const packageDependencies = pkg.dependencies ?? {};
+	const packageDevDependencies = pkg.devDependencies ?? {};
 	const deps = {
-		...(pkg.dependencies ?? {}),
-		...(pkg.devDependencies ?? {}),
+		...packageDependencies,
+		...packageDevDependencies,
 	};
 
 	for (const [name, expectedValue] of Object.entries(entry.expected)) {

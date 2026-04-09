@@ -42,7 +42,7 @@ type MemCollection<T extends object> = {
 	get(id: string): Promise<T | null>;
 	put(id: string, data: T): Promise<void>;
 	delete: (id: string) => Promise<boolean>;
-	query?: (options?: MemQueryOptions) => Promise<QueryResult<T>>;
+	query: (options?: MemQueryOptions) => Promise<QueryResult<T>>;
 	rows: Map<string, T>;
 };
 
@@ -153,7 +153,7 @@ type WebhookStorage = {
 };
 
 function checkoutContext(args: CheckoutStorageContext & { idempotencyKey: string; cartId: string; ownerToken: string }): RouteContext<CheckoutInput> {
-	return {
+		return {
 		request: new Request("https://example.local/checkout", {
 			method: "POST",
 			headers: {
@@ -184,7 +184,7 @@ function checkoutContext(args: CheckoutStorageContext & { idempotencyKey: string
 			ip: "127.0.0.1",
 		},
 		kv: args.kv,
-	} as RouteContext<CheckoutInput>;
+		} as unknown as RouteContext<CheckoutInput>;
 }
 
 async function buildWebhookContext(args: {
@@ -205,7 +205,7 @@ async function buildWebhookContext(args: {
 		},
 		body: args.body,
 	});
-	return {
+		return {
 		request: req,
 		input: args.input,
 		storage: args.storage as Record<string, unknown>,
@@ -213,7 +213,7 @@ async function buildWebhookContext(args: {
 			ip: "127.0.0.1",
 		},
 		kv: args.kv,
-	} as RouteContext<StripeWebhookInput>;
+		} as unknown as RouteContext<StripeWebhookInput>;
 }
 
 type CheckoutWorkflow = {
@@ -380,8 +380,10 @@ describe("checkout-webhook concurrency hardening", () => {
 		const concurrent = await Promise.all([first, second]);
 		for (const response of concurrent) {
 			expect(response.ok).toBe(true);
-			expect(response.orderId).toBe(flow.checkout.orderId);
 			expect(response.replay).toBe(false);
+			if (response.replay === false) {
+				expect(response.orderId).toBe(flow.checkout.orderId);
+			}
 		}
 
 		const replay = await stripeWebhookHandler(

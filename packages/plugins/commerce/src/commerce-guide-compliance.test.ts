@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { COMMERCE_MANIFEST, withFetch, withKV } from "./commerce-plugin-factory.js";
-import { COMMERCE_ROUTE_CAPABILITIES, commercePlugin, createPlugin } from "./index.js";
+import { COMMERCE_ROUTE_CAPABILITIES, COMMERCE_ROUTE_CONTRACTS, commercePlugin, createPlugin } from "./index.js";
 
 const ROOT = resolve(import.meta.dirname, ".");
 const INDEX_TS_PATH = resolve(ROOT, "index.ts");
@@ -125,6 +125,52 @@ describe("EmDash guide compliance: manifest contract", () => {
 });
 
 describe("EmDash guide compliance: source-level contract", () => {
+	it("keeps route contracts and runtime routes in lockstep", () => {
+		const plugin = createPlugin() as { routes: Record<string, unknown> };
+		const routeKeys = Object.keys(plugin.routes);
+		const contractRouteKeys = Object.keys(COMMERCE_ROUTE_CONTRACTS);
+
+		expect(routeKeys).toHaveLength(contractRouteKeys.length);
+		for (const routeKey of contractRouteKeys) {
+			expect(routeKeys).toContain(routeKey);
+		}
+		for (const routeKey of routeKeys) {
+			expect(contractRouteKeys).toContain(routeKey);
+		}
+	});
+
+	it("validates post-only + visibility from route contracts", () => {
+		const plugin = createPlugin() as {
+			routes: Record<
+				string,
+				{
+					public?: true;
+					handler?: unknown;
+					input?: unknown;
+				}
+			>;
+		};
+
+		for (const [routeKey, contract] of Object.entries(COMMERCE_ROUTE_CONTRACTS)) {
+			const route = plugin.routes[routeKey];
+			expect(route).toBeDefined();
+		const typedRoute = route as NonNullable<typeof plugin.routes[string]>;
+			expect(contract.method).toBe("POST");
+		expect(typedRoute.input).toBe((contract as { inputSchema?: unknown }).inputSchema);
+			if (contract.public) {
+			expect(typedRoute).toMatchObject({ public: true });
+			} else {
+			expect(typedRoute.public).toBeUndefined();
+			}
+		expect(typeof typedRoute.handler).toBe("function");
+		}
+	});
+
+	it("documents replay strategy for money and webhook endpoints", () => {
+		expect(COMMERCE_ROUTE_CONTRACTS.checkout?.replay).toBe("idempotency_key");
+		expect(COMMERCE_ROUTE_CONTRACTS["webhooks/stripe"]?.replay).toBe("webhook_event");
+	});
+
 	it("imports compliance factory helpers via documented paths", () => {
 		const source = readIndexSource();
 
@@ -202,20 +248,40 @@ describe("EmDash guide compliance: source-level contract", () => {
 	});
 
 	it("derives runtime KV checks from explicit route capability metadata", () => {
-		const routeKeysWithFetch = Object.entries(COMMERCE_ROUTE_CAPABILITIES)
-			.filter(([, options]) => options.requiresFetch)
-			.map(([routeKey]) => routeKey);
-		expect(routeKeysWithFetch).toHaveLength(0);
+		const routeKeysWithFetch = new Set(
+			Object.entries(COMMERCE_ROUTE_CAPABILITIES)
+				.filter(([, options]) => options.requiresFetch)
+				.map(([routeKey]) => routeKey),
+		);
 
 		const plugin = createPlugin() as {
 			routes: Record<string, { handler?: unknown }>;
 		};
 
-		const kvRouteKeys = getKvRouteKeys().sort();
-		const pluginRouteKeys = Object.keys(plugin.routes ?? {}).sort();
-		expect(kvRouteKeys).toEqual(["cart/upsert", "checkout", "webhooks/stripe"].sort());
+		const expectedKvRouteKeys = new Set(
+			Object.entries(COMMERCE_ROUTE_CONTRACTS)
+				.filter(([, contract]) => contract.requiresKV)
+				.map(([routeKey]) => routeKey),
+		);
+		const expectedFetchRouteKeys = new Set(
+			Object.entries(COMMERCE_ROUTE_CONTRACTS)
+				.filter(([, contract]) => contract.requiresFetch)
+				.map(([routeKey]) => routeKey),
+		);
+		const expectedCapabilityRouteKeys = new Set(
+			Object.entries(COMMERCE_ROUTE_CONTRACTS)
+				.filter(([, contract]) => contract.requiresKV || contract.requiresFetch)
+				.map(([routeKey]) => routeKey),
+		);
+		const capabilityRouteKeys = new Set(Object.keys(COMMERCE_ROUTE_CAPABILITIES));
+
+		const kvRouteKeys = new Set(getKvRouteKeys());
+		const pluginRouteKeys = new Set(Object.keys(plugin.routes ?? {}));
+		expect(routeKeysWithFetch).toEqual(expectedFetchRouteKeys);
+		expect(kvRouteKeys).toEqual(expectedKvRouteKeys);
+		expect(capabilityRouteKeys).toEqual(expectedCapabilityRouteKeys);
 		for (const routeKey of kvRouteKeys) {
-			expect(pluginRouteKeys).toContain(routeKey);
+			expect(pluginRouteKeys.has(routeKey)).toBe(true);
 		}
 	});
 });

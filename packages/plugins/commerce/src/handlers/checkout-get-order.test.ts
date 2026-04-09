@@ -100,8 +100,7 @@ describe("checkoutGetOrderHandler", () => {
 			storage: { orders: mem },
 		} as unknown as RouteContext<CheckoutGetOrderInput>);
 
-		const keys = Object.keys(out.order).toSorted();
-		expect(keys).toEqual(CHECKOUT_GET_ORDER_RESPONSE_KEYS.toSorted());
+		expect(new Set(Object.keys(out.order))).toEqual(new Set(CHECKOUT_GET_ORDER_RESPONSE_KEYS));
 		expect("finalizeTokenHash" in out.order).toBe(false);
 	});
 

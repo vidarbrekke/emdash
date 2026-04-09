@@ -1707,11 +1707,9 @@ describe("catalog product handlers", () => {
 			),
 		);
 
-		expect(Object.keys(out).toSorted()).toEqual(["items"]);
-		expect(Object.keys(out.items[0]!).toSorted()).toEqual(CATALOG_STOREFRONT_LIST_ITEM_KEYS.toSorted());
-		expect(Object.keys(out.items[0]!.product).toSorted()).toEqual(
-			CATALOG_STOREFRONT_LIST_ITEM_PRODUCT_KEYS.toSorted(),
-		);
+		expect(new Set(Object.keys(out))).toEqual(new Set(["items"]));
+		expect(new Set(Object.keys(out.items[0]!))).toEqual(new Set(CATALOG_STOREFRONT_LIST_ITEM_KEYS));
+		expect(new Set(Object.keys(out.items[0]!.product))).toEqual(new Set(CATALOG_STOREFRONT_LIST_ITEM_PRODUCT_KEYS));
 		expect("longDescription" in out.items[0]!.product).toBe(false);
 	});
 
@@ -1955,10 +1953,8 @@ describe("catalog product handlers", () => {
 		});
 
 		const adminDetail = await getProductHandler(catalogCtx({ productId: "prod_admin" }, products, skus));
-		expect(Object.keys(adminDetail).toSorted()).toEqual(CATALOG_ADMIN_PRODUCT_KEYS.toSorted());
-		expect(Object.keys(adminDetail.product).toSorted()).toEqual(
-			CATALOG_ADMIN_PRODUCT_PRODUCT_KEYS.toSorted(),
-		);
+		expect(new Set(Object.keys(adminDetail))).toEqual(new Set(CATALOG_ADMIN_PRODUCT_KEYS));
+		expect(new Set(Object.keys(adminDetail.product))).toEqual(new Set(CATALOG_ADMIN_PRODUCT_PRODUCT_KEYS));
 		expect(adminDetail.product.longDescription).toBe("administrative metadata should stay admin-only");
 		expect(adminDetail.skus?.[0]).toMatchObject({
 			inventoryQuantity: 7,

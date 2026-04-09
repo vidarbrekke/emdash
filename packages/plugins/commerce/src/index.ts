@@ -24,6 +24,7 @@ import {
 	COMMERCE_MANIFEST,
 	createCommercePlugin,
 	withKV,
+	withFetch,
 	requireCron,
 } from "./commerce-plugin-factory.js";
 
@@ -121,6 +122,7 @@ import {
 } from "./schemas.js";
 import { createRecommendationsRoute } from "./services/commerce-extension-seams.js";
 import { COMMERCE_STORAGE_CONFIG, type CommerceStorage } from "./storage.js";
+import { COMMERCE_ROUTE_CAPABILITIES } from "./contracts/route-contracts.js";
 
 /**
  * The EmDash `definePlugin` route handler type requires handlers typed against
@@ -154,34 +156,18 @@ function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteCont
 	};
 }
 
-type RouteCapabilityMetadata = {
-	requiresKV?: boolean;
-	requiresFetch?: boolean;
-};
-
-export const COMMERCE_ROUTE_CAPABILITIES = {
-	"cart/upsert": {
-		requiresKV: true,
-	},
-	checkout: {
-		requiresKV: true,
-	},
-	"webhooks/stripe": {
-		requiresKV: true,
-	},
-} as const satisfies Record<string, RouteCapabilityMetadata>;
-
 function withRouteCapabilities<T>(routeKey: string, route: PluginRoute<T>): PluginRoute<T> {
-	const capabilities = COMMERCE_ROUTE_CAPABILITIES[routeKey];
+	const capabilities = COMMERCE_ROUTE_CAPABILITIES[routeKey as keyof typeof COMMERCE_ROUTE_CAPABILITIES];
 	if (!capabilities) return route;
 
-	if (capabilities.requiresFetch) {
-		return withFetch(route);
-	}
+	let wrappedRoute = route as PluginRoute<T>;
 	if (capabilities.requiresKV) {
-		return withKV(route);
+		wrappedRoute = withKV(wrappedRoute as never) as PluginRoute<T>;
 	}
-	return route;
+	if (capabilities.requiresFetch) {
+		wrappedRoute = withFetch(wrappedRoute as never) as PluginRoute<T>;
+	}
+	return wrappedRoute;
 }
 
 /**
@@ -328,6 +314,13 @@ export default createPlugin;
 export type * from "./types.js";
 export type { CommerceStorage } from "./storage.js";
 export { COMMERCE_STORAGE_CONFIG } from "./storage.js";
+export { COMMERCE_ROUTE_CAPABILITIES, COMMERCE_ROUTE_CONTRACTS } from "./contracts/route-contracts.js";
+export type {
+	CommerceRouteContract,
+	CommerceRouteContracts,
+	CommerceRouteMethod,
+	CommerceRouteReplayStrategy,
+} from "./contracts/route-contracts.js";
 export { COMMERCE_SETTINGS_KEYS } from "./settings-keys.js";
 export {
 	COMMERCE_EXTENSION_HOOKS,

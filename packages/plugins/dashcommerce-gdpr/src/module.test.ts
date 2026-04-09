@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createCoreProvider, registerModule, type CommerceHost, type RouteInput } from "./module.js";
 import type { GdprStorageCollection } from "./workflow/gdpr-persistence.js";
 
+const HASH_64_RE = /^[a-f0-9]{64}$/;
+
 class FakeStorageCollection<T extends { id: string } & Record<string, unknown>> implements GdprStorageCollection<T> {
 	private rows = new Map<string, T>();
 	private index: Array<{ id: string; data: T }> = [];
@@ -1164,10 +1166,10 @@ describe("core provider data export", () => {
 
 		expect(eraseResult.status).toBe("success");
 		expect(eraseResult.processed).toBe(3);
-		expect(eraseResult.requestIdempotencyKey).toMatch(/^[a-f0-9]{64}$/);
+		expect(eraseResult.requestIdempotencyKey).toMatch(HASH_64_RE);
 		expect(anonymizeResult.status).toBe("success");
 		expect(anonymizeResult.processed).toBe(3);
-		expect(anonymizeResult.requestIdempotencyKey).toMatch(/^[a-f0-9]{64}$/);
+		expect(anonymizeResult.requestIdempotencyKey).toMatch(HASH_64_RE);
 		expect(rectifyResult.status).toBe("success");
 		expect(rectifyResult.processed).toBe(3);
 		expect(rectifyEmptyResult.status).toBe("skipped");
