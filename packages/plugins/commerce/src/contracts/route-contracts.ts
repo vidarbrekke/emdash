@@ -32,6 +32,7 @@ import {
 	tagListInputSchema,
 	productTagLinkInputSchema,
 	productTagUnlinkInputSchema,
+	commerceAdminInteractionSchema,
 	recommendationsInputSchema,
 	stripeWebhookInputSchema,
 } from "../schemas.js";
@@ -74,6 +75,7 @@ export type CommerceRouteContracts = {
 	"catalog/sku/list": CommerceRouteContract;
 	"checkout": CommerceRouteContract;
 	"checkout/get-order": CommerceRouteContract;
+	"admin": CommerceRouteContract;
 	"recommendations": CommerceRouteContract;
 	"webhooks/stripe": CommerceRouteContract;
 	"admin/catalog/product/get": CommerceRouteContract;
@@ -254,6 +256,14 @@ export const COMMERCE_ROUTE_CONTRACTS = {
 				},
 			],
 		},
+	},
+	"admin": {
+		public: false,
+		method: "POST",
+		requiresKV: false,
+		requiresFetch: false,
+		replay: "none",
+		inputSchema: commerceAdminInteractionSchema,
 	},
 	"admin/catalog/product/get": {
 		public: false,

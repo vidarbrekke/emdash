@@ -1,5 +1,5 @@
 /**
- * Checkout: cart → `payment_pending` order + `pending` payment attempt (Stripe session in a later slice).
+ * Checkout: cart → `initiated` order + `pending` payment attempt (Stripe session in a later slice).
  * When the cart has `ownerTokenHash`, `ownerToken` must match (same possession proof as `cart/get`).
  */
 
@@ -104,7 +104,7 @@ function assertAtomicMoneyPathSupport(args: CheckoutAtomicSupportArgs): void {
 /**
  * Cart checkout guards two race windows:
  * 1) persistent, short-lived cart-scoped lock (`checkout-cart-lock`) to serialize concurrent requests
- * 2) residual open `payment_pending` order scan as a durability fallback when lock writes fail or stale locks are reclaimed.
+ * 2) residual open payment-phase order scan as a durability fallback when lock writes fail or stale locks are reclaimed.
  *
  * The lock is TTL-based to avoid stranded mutexes during worker crashes and to limit recovery delay.
  */
@@ -453,12 +453,26 @@ export async function checkoutHandler(
 		}
 
 		// Guard against duplicate checkouts when no lock is available (or after
-		// stale locks are reclaimed): if any payment_pending order already exists
+		// stale locks are reclaimed): if any in-progress order already exists
 		// for this cart, treat this as a conflict.
-		const openCheckout = await orders.query({
-			where: { cartId: ctx.input.cartId, paymentPhase: "payment_pending" },
+		const openCheckoutInitiated = await orders.query({
+			where: { cartId: ctx.input.cartId, paymentPhase: "initiated" },
 			limit: 1,
 		});
+		const openCheckoutProcessing = await orders.query({
+			where: { cartId: ctx.input.cartId, paymentPhase: "processing" },
+			limit: 1,
+		});
+		const openCheckoutAuthorized = await orders.query({
+			where: { cartId: ctx.input.cartId, paymentPhase: "authorized" },
+			limit: 1,
+		});
+		const openCheckout =
+			openCheckoutInitiated.items.length > 0
+				? openCheckoutInitiated
+				: openCheckoutProcessing.items.length > 0
+					? openCheckoutProcessing
+					: openCheckoutAuthorized;
 		if (openCheckout.items.length > 0) {
 			throwCommerceApiError({
 				code: "ORDER_STATE_CONFLICT",
@@ -516,7 +530,7 @@ export async function checkoutHandler(
 
 		const order: StoredOrder = {
 			cartId: ctx.input.cartId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: cart.currency,
 			lineItems: orderLineItemsWithSnapshots,
 			totalMinor,
@@ -540,7 +554,7 @@ export async function checkoutHandler(
 			paymentAttemptId,
 			providerId: resolvedPaymentProviderId,
 			cartId: ctx.input.cartId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			finalizeToken,
 			totalMinor,
 			currency: cart.currency,
@@ -561,7 +575,7 @@ export async function checkoutHandler(
 
 		responseBody = {
 			orderId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			paymentAttemptId,
 			totalMinor,
 			currency: cart.currency,

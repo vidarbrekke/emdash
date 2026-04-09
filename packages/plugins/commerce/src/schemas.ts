@@ -449,3 +449,29 @@ export const digitalEntitlementRemoveInputSchema = z.object({
 	entitlementId: bounded(128),
 }).strict();
 export type DigitalEntitlementRemoveInput = z.infer<typeof digitalEntitlementRemoveInputSchema>;
+
+export const commerceAdminInteractionPageLoadSchema = z.object({
+	type: z.literal("page_load"),
+	page: z.string().trim().min(1),
+});
+
+export const commerceAdminInteractionBlockActionSchema = z.object({
+	type: z.literal("block_action"),
+	action_id: z.string().trim().min(1),
+	block_id: z.string().trim().max(128).optional(),
+	value: z.unknown().optional(),
+});
+
+export const commerceAdminInteractionFormSubmitSchema = z.object({
+	type: z.literal("form_submit"),
+	action_id: z.string().trim().min(1),
+	block_id: z.string().trim().max(128).optional(),
+	values: z.record(z.string(), z.unknown()),
+});
+
+export const commerceAdminInteractionSchema = z.discriminatedUnion("type", [
+	commerceAdminInteractionPageLoadSchema,
+	commerceAdminInteractionBlockActionSchema,
+	commerceAdminInteractionFormSubmitSchema,
+]);
+export type CommerceAdminInteraction = z.infer<typeof commerceAdminInteractionSchema>;

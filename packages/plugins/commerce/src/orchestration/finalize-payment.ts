@@ -237,7 +237,7 @@ async function buildFinalizationDecision(
  * A receipt in `pending` status means finalization has started but may not be
  * complete. Specifically:
  *   - inventory may or may not have been applied
- *   - order phase may or may not have been set to `paid`
+ *   - order phase may or may not have been set to `finalized`
  *   - payment attempt may or may not have been marked `succeeded`
  *
  * `pending` is the "retry me" signal — not a terminal state. The next call to
@@ -718,10 +718,13 @@ async function markPaymentAttemptSucceeded(
  *
  * | Receipt     | Order phase       | Interpretation                        |
  * |-------------|-------------------|---------------------------------------|
- * | (none)      | payment_pending   | Nothing written; safe to start fresh  |
- * | pending     | payment_pending   | Partial progress; resume from here    |
- * | pending     | paid              | Last write (receipt→processed) failed |
- * | processed   | paid              | Replay; all side effects complete     |
+ * | (none)      | initiated         | Nothing written; safe to start fresh  |
+ * | (none)      | processing        | Resume in place or treat as stale       |
+ * | pending     | initiated         | Partial progress; resume from here     |
+ * | pending     | processing        | Partial progress; resume from here     |
+ * | pending     | authorized        | Partial progress; resume from here     |
+ * | pending     | finalized         | Last write (receipt→processed) failed |
+ * | processed   | finalized         | Replay; all side effects complete     |
  * | error       | any               | Terminal; do not auto-retry           |
  * | duplicate   | any               | Replay; redundant delivery            |
  *
@@ -882,9 +885,13 @@ export async function finalizePaymentFromWebhook(
 		};
 	}
 
-	const shouldApplyInventory = freshOrder.paymentPhase !== "paid";
-	if (shouldApplyInventory) {
-		if (freshOrder.paymentPhase !== "payment_pending" && freshOrder.paymentPhase !== "authorized") {
+		const shouldApplyInventory = freshOrder.paymentPhase !== "finalized" && freshOrder.paymentPhase !== "failed";
+		if (shouldApplyInventory) {
+			if (
+				freshOrder.paymentPhase !== "initiated" &&
+				freshOrder.paymentPhase !== "authorized" &&
+				freshOrder.paymentPhase !== "processing"
+			) {
 			ports.log?.warn("commerce.finalize.order_not_finalizable", {
 				...logContext,
 				paymentPhase: freshOrder.paymentPhase,
@@ -922,7 +929,33 @@ export async function finalizePaymentFromWebhook(
 			};
 		}
 
-		try {
+			const processingOrder: StoredOrder = {
+				...freshOrder,
+				paymentPhase: "processing",
+				updatedAt: now(),
+			};
+			try {
+				{
+					const claimReplay = await runWithActiveClaim();
+					if (claimReplay) return claimReplay;
+				}
+				await ports.orders.put(input.orderId, processingOrder);
+			} catch (err) {
+				ports.log?.warn("commerce.finalize.order_settlement_attempt_failed", {
+					...logContext,
+					orderId: input.orderId,
+					details: err instanceof Error ? err.message : String(err),
+				});
+				return {
+					kind: "api_error",
+					error: {
+						code: "ORDER_STATE_CONFLICT",
+						message: "Failed to transition order to processing",
+					},
+				};
+			}
+
+			try {
 			{
 				const claimReplay = await runWithActiveClaim();
 				if (claimReplay) return claimReplay;
@@ -955,6 +988,16 @@ export async function finalizePaymentFromWebhook(
 						if (claimReplay) return claimReplay;
 					}
 					const inventoryErrorNow = now();
+					const failedOrder: StoredOrder = {
+						...freshOrder,
+						paymentPhase: "failed",
+						updatedAt: inventoryErrorNow,
+					};
+					try {
+						await ports.orders.put(input.orderId, failedOrder);
+					} catch {
+						return { kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED };
+					}
 					const persistedInventoryError = await persistReceiptStatus(
 						ports,
 						receiptId,
@@ -991,7 +1034,7 @@ export async function finalizePaymentFromWebhook(
 		}
 	}
 
-	if (freshOrder.paymentPhase !== "paid") {
+	if (freshOrder.paymentPhase !== "finalized" && freshOrder.paymentPhase !== "failed") {
 		ports.log?.info("commerce.finalize.order_settlement_attempt", {
 			...logContext,
 			orderId: input.orderId,
@@ -1000,7 +1043,7 @@ export async function finalizePaymentFromWebhook(
 		const paidNow = now();
 		const paidOrder: StoredOrder = {
 			...freshOrder,
-			paymentPhase: "paid",
+			paymentPhase: "finalized",
 			updatedAt: paidNow,
 		};
 		try {
@@ -1110,7 +1153,7 @@ export async function queryFinalizationStatus(
 	const status: FinalizationStatus = {
 		receiptStatus: receipt?.status ?? "missing",
 		isInventoryApplied: ledgerPage.items.length > 0,
-		isOrderPaid: order?.paymentPhase === "paid",
+		isOrderPaid: order?.paymentPhase === "finalized",
 		isPaymentAttemptSucceeded: attemptPage.items.length > 0,
 		isReceiptProcessed: receipt?.status === "processed",
 		receiptErrorCode: receipt?.errorCode,

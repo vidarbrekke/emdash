@@ -1,6 +1,7 @@
 {
-  "routeCount": 38,
+  "routeCount": 39,
   "routeKeys": [
+    "admin",
     "admin/catalog/product/get",
     "admin/catalog/products",
     "admin/catalog/sku/list",
@@ -41,6 +42,16 @@
     "webhooks/stripe"
   ],
   "routeRecords": {
+    "admin": {
+      "method": "POST",
+      "replay": "none",
+      "requiresKV": false,
+      "requiresFetch": false,
+      "sideEffectful": false,
+      "requiresIdempotencyKey": false,
+      "mutationCollections": [],
+      "hasFixtures": false
+    },
     "admin/catalog/product/get": {
       "method": "POST",
       "replay": "none",
@@ -436,6 +447,7 @@
   },
   "replayStrategies": {
     "none": [
+      "admin",
       "admin/catalog/product/get",
       "admin/catalog/products",
       "admin/catalog/sku/list",

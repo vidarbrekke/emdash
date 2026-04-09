@@ -118,9 +118,11 @@ import {
 	tagListInputSchema,
 	productTagLinkInputSchema,
 	productTagUnlinkInputSchema,
+	commerceAdminInteractionSchema,
 	recommendationsInputSchema,
 	stripeWebhookInputSchema,
 } from "./schemas.js";
+import { commerceAdminRouteHandler } from "./handlers/admin.js";
 import { createRecommendationsRoute } from "./services/commerce-extension-seams.js";
 import { COMMERCE_STORAGE_CONFIG, type CommerceStorage } from "./storage.js";
 import { COMMERCE_ROUTE_CAPABILITIES, type CommerceRouteContracts } from "./contracts/route-contracts.js";
@@ -264,6 +266,12 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 					default: "USD",
 				},
 			},
+			pages: [
+				{ path: "/products", label: "Products" },
+				{ path: "/orders", label: "Orders" },
+				{ path: "/inventory", label: "Inventory" },
+				{ path: "/extensions", label: "Extensions" },
+			],
 		},
 
 		routes: {
@@ -284,6 +292,8 @@ export function createPlugin(options: CommercePluginOptions = {}): ResolvedPlugi
 				"webhooks/stripe",
 				publicRoute(stripeWebhookInputSchema, stripeWebhookHandler),
 			),
+
+			"admin": adminRoute(commerceAdminInteractionSchema, commerceAdminRouteHandler),
 
 			// Admin/auth-required catalog and commerce-admin mutation routes.
 			"admin/catalog/product/get": adminRoute(productGetInputSchema, getProductHandler),

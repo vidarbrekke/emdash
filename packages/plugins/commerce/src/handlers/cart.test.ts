@@ -1,6 +1,6 @@
 /**
  * Tests for cart/upsert and cart/get handlers, plus the end-to-end
- * chain: cart/upsert → checkout → payment_pending order.
+ * chain: cart/upsert → checkout → initiated order.
  */
 
 import type { RouteContext } from "emdash";
@@ -553,11 +553,11 @@ describe("cartGetHandler", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration chain: cart/upsert → checkout → payment_pending
+// Integration chain: cart/upsert → checkout → initiated
 // ---------------------------------------------------------------------------
 
 describe("cart → checkout integration chain", () => {
-	it("creates a payment_pending order from a cart upserted via the handler", async () => {
+	it("creates an initiated order from a cart upserted via the handler", async () => {
 		const cartId = "chain-cart-1";
 		const idempotencyKey = "chain-idemp-key-strong-1";
 		const now = "2026-04-03T12:00:00.000Z";
@@ -601,7 +601,7 @@ describe("cart → checkout integration chain", () => {
 			),
 		);
 
-		expect(checkoutResult.paymentPhase).toBe("payment_pending");
+		expect(checkoutResult.paymentPhase).toBe("initiated");
 		expect(checkoutResult.currency).toBe("USD");
 		expect(checkoutResult.totalMinor).toBe(1000);
 		expect(typeof checkoutResult.orderId).toBe("string");

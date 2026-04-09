@@ -1,111 +1,102 @@
 # HANDOVER
 
 ## 1) Purpose and current state
-`@emdash-cms/plugin-dashing-commerce` is the EmDash commerce plugin for catalog APIs, cart operations, checkout orchestration, and payment finalization. It provides the API and data integrity layer for storefront and admin experiences.
+`@emdash-cms/plugin-dashing-commerce` is the commerce plugin that owns catalog, cart, checkout orchestration, and payment-finalization behavior for EmDash storefront/admin flows. The current branch is now transitioning from admin/UI phase groundwork into the full platform layer.
 
-This branch is now positioned for the next phase: **admin and UI enhancements**. Backend functionality is the source of truth for pricing, inventory, checkout, and entitlement transitions; frontend work should consume backend contracts only and avoid duplicating or mutating business behavior.
+The immediate technical problem is to continue the implementation plan without regressing contract-first architecture: backend remains authoritative, frontend remains thin, and all extension lifecycle/activation changes must be schema- and capability-validated before running.
 
 ## 2) Completed work and outcomes
-Backend hardening and external-review readiness are substantially complete for the current phase. Route registration is explicit and policy-driven in `packages/plugins/commerce/src/index.ts`, with contract metadata and route wrappers enforcing capability surfaces.
+Checkout and payment finalization were aligned to the new state machine (`initiated`, `processing`, `finalized`, `failed`) by updating handler behavior and kernel decision logic. Duplicate checkout prevention now scans `initiated`, `processing`, and `authorized` in-progress order rows; `paymentPhase` naming in checkout/finalize paths is updated to remove legacy `payment_pending` and `paid` references.
 
-A package-level middleware proof now shows non-public plugin routes are rejected without auth context: `packages/core/tests/unit/plugins/plugin-route-auth.test.ts`.
+Route registration and capability wiring remain explicit in the commerce package index and core plugin route wrappers. `packages/core/tests/unit/plugins/plugin-route-auth.test.ts` confirms non-public plugin routes are blocked without auth context.
 
-Checkout and webhook paths now use shared, explicit optimistic-lock token helpers in `packages/plugins/commerce/src/lib/optimistic-lock.ts`, with updates in `packages/plugins/commerce/src/handlers/checkout.ts` and `packages/plugins/commerce/src/orchestration/finalize-payment.ts` to use explicit version tokens rather than timestamp-only CAS assumptions.
+Contract, testing, and reproducibility assets are updated: route-contract fixtures were regenerated, checkout response contracts were updated for the new phase model, and `scripts/build-commerce-external-review-zip.sh` remains configured for reviewer-ready snapshots.
 
-The external review ZIP build process was updated (`scripts/build-commerce-external-review-zip.sh`) so root monorepo context files used for reproducibility are included. The most recent generated archive is `commerce-plugin-external-review-20260409-160045.zip`.
-
-Recent commits on this branch:
-- `40e6b2b` refactor: centralize optimistic-lock token helpers
-- `ac7127d` fix: enforce POST for storefront, cart, recommendation, and webhook handler entrypoints
-- `60f1bb4` fix: unblock create-emdash and commerce typechecks by normalizing prompt types and lock row shape
-
-Validation status on this branch:
-- `pnpm --filter ./packages/plugins/commerce test` ✅ (39 files, 595 tests)
-- `pnpm --filter ./packages/plugins/commerce typecheck` ✅
-- `pnpm --filter ./packages/create-emdash typecheck` ✅
-- `pnpm check` ⚠️ fails in `packages/core` for existing, unrelated type errors
+Current test status:
+- `pnpm test` (workspace-wide) completed successfully; key package suites reported passing.
+- `packages/core` and `packages/cloudflare` tests pass in that run.
 
 ## 3) Failures, open issues, and lessons learned
-`pnpm check` currently reports pre-existing `packages/core` type errors in multiple areas, including API manifest typing, OpenAPI path typing, and Kysely generic inference in migration helpers. These are not caused by the recent commerce/create-emdash changes and should be treated as outside-scope unless your phase explicitly includes core stabilization.
+`pnpm check` still reports unrelated, pre-existing `packages/core` type issues in areas outside this feature scope (manifest/OpenAPI/Kysely typing surface). Treat these as contextual noise unless your work intentionally expands core stabilization.
 
-In commerce tests, helper data fixtures had to be updated to match lock token typing (`lockVersion` on idempotency lock rows). Test data that bypasses this shape will produce type failures before runtime.
+Commerce fixture/data shape gotchas are active: idempotency lock rows now carry `lockVersion`, and fixture sets that skip this field cause test/type failures.
 
-Prompt responses from `@clack/prompts` are cancelable and should be narrowed before use. Using unsafely typed prompt returns in business paths caused earlier type regressions.
+A few tests intentionally write to stderr for capability enforcement and unsafe input logging; this is diagnostic output, not test failure.
 
-Rule learned from this phase: keep frontend delivery bounded to the contract boundary, and keep lock/version semantics centralized to reduce drift between storage paths.
+Phase gap to close next:
+- implement the Marketplace flow (`permissions → pricing → confirm`) and extension validation-on-activation path from the delta platform plan.
 
 ## 4) Files changed, key insights, and gotchas
-Key file changes relevant to continuity:
-- `packages/plugins/commerce/src/handlers/cart.ts`
-- `packages/plugins/commerce/src/handlers/catalog.ts`
-- `packages/plugins/commerce/src/handlers/recommendations.ts`
-- `packages/plugins/commerce/src/handlers/webhook-handler.ts`
-- `packages/plugins/commerce/src/handlers/cart.test.ts`
+Primary changed areas for continuity:
 - `packages/plugins/commerce/src/handlers/checkout.ts`
-- `packages/plugins/commerce/src/lib/optimistic-lock.ts`
-- `packages/plugins/commerce/src/lib/optimistic-lock.test.ts`
+- `packages/plugins/commerce/src/handlers/checkout-state.ts`
+- `packages/plugins/commerce/src/handlers/checkout-state.test.ts`
+- `packages/plugins/commerce/src/handlers/checkout-get-order.test.ts`
+- `packages/plugins/commerce/src/handlers/checkout.test.ts`
+- `packages/plugins/commerce/src/handlers/cart.test.ts`
+- `packages/plugins/commerce/src/kernel/finalize-decision.ts`
+- `packages/plugins/commerce/src/kernel/finalize-decision.test.ts`
 - `packages/plugins/commerce/src/orchestration/finalize-payment.ts`
 - `packages/plugins/commerce/src/orchestration/finalize-payment.test.ts`
-- `packages/core/src/astro/routes/api/plugins/route-handler.ts`
-- `packages/core/tests/unit/plugins/plugin-route-auth.test.ts`
+- `packages/plugins/commerce/src/orchestration/finalize-payment-status.ts`
+- `packages/plugins/commerce/src/contracts/route-contracts.ts`
+- `packages/plugins/commerce/src/contracts/route-contract-surface.generated.json`
+- `packages/plugins/commerce/src/contracts/route-compliance.generated.json`
 - `packages/plugins/commerce/src/types.ts`
-- `packages/create-emdash/src/index.ts`
-- `packages/create-emdash/tsconfig.json`
-- `scripts/build-commerce-external-review-zip.sh`
+- `packages/plugins/commerce/src/index.ts`
+- `packages/plugins/commerce/src/schemas.ts`
+- `packages/plugins/commerce/src/handlers/admin.ts` (new route handler file)
+- `packages/core/src/astro/routes/api/plugins/route-handler.ts`
 
 Key insights:
-- Keep lock CAS fields explicit (`lockVersion`) on short-lived lock records.
-- Use route method guards (`POST` enforcement) as contract boundary control, not UI assumptions.
-- Keep admin and storefront logic contracted through shared handlers and hooks.
+- Keep lock/version semantics centralized to prevent divergent persistence logic.
+- Preserve frontend thinness: hooks and UI should never own pricing/inventory/checkout decisions.
+- Treat in-progress payment rows as conflict states in checkout and avoid creating parallel orders for the same cart.
 
 Gotchas:
-- `StoredIdempotencyKey` now supports `lockVersion` for lock rows; keep all lock-row test fixtures aligned.
-- Frontend code should call APIs only and not reimplement pricing/inventory/checkout behavior.
-- Archive file lists are only valid if they match the checked-in build script at build time.
+- Search/replace old phase literals (`payment_pending`, `paid`) is mostly complete, but any new code paths must follow the new enum set.
+- Test fixtures should preserve `lockVersion` where lock rows are modeled.
+- Generated contract files should be regenerated if route signatures change.
 
 ## 5) Key files and directories
-### Hand-off and policy documents
-- `dashingcommerce_handoff/00_HANDOVER.md`
-- `dashingcommerce_handoff/ARCHITECTURE.md`
-- `dashingcommerce_handoff/FRONTEND_GUIDELINES.md`
-- `dashingcommerce_handoff/ADMIN_UI_SPEC.md`
-- `dashingcommerce_handoff/VALIDATION_CHECKLIST.md`
-- `dashingcommerce_handoff/IMPLEMENTATION_PLAN.md`
-- `dashingcommerce_handoff/EXTENSION_RUNTIME.md`
-- `dashingcommerce_handoff/EXTENSION_SDK_SPEC.md`
-- `dashingcommerce_handoff/MARKETPLACE_SPEC.md`
-- `dashingcommerce_handoff/MONETIZATION_MODEL.md`
-
-### Commerce implementation and tests
-- `packages/plugins/commerce/src/index.ts`
-- `packages/plugins/commerce/src/contracts/`
+- `dc_full_platform_handoff/IMPLEMENTATION_PLAN.md`
+- `dc_full_platform_handoff/ARCHITECTURE.md`
+- `dc_full_platform_handoff/FRONTEND_RULES.md`
+- `dc_full_platform_handoff/MARKETPLACE.md`
+- `dc_full_platform_handoff/EXTENSIONS.md`
+- `dc_full_platform_handoff/EXTENSION_SDK.md`
+- `dc_full_platform_handoff/MARKETPLACE_BACKEND.md`
+- `dc_full_platform_handoff/BILLING_AND_LICENSING.md`
+- `packages/plugins/commerce/src/` (active implementation area)
+- `packages/plugins/commerce/src/contracts/` (API surface and compliance artifacts)
 - `packages/plugins/commerce/src/handlers/`
-- `packages/plugins/commerce/src/lib/`
 - `packages/plugins/commerce/src/orchestration/`
-- `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
-
-### Auth boundary and core integration
+- `packages/plugins/commerce/src/kernel/`
 - `packages/core/src/astro/routes/api/plugins/route-handler.ts`
-- `packages/core/tests/unit/plugins/plugin-route-auth.test.ts`
-
-### Reproducibility assets
 - `scripts/build-commerce-external-review-zip.sh`
 - `docs/compliance.md`
-- `docs/compliance-source-of-truth.md`
-- `packages/plugins/commerce/COMMERCE_DOCS_INDEX.md`
-- `packages/plugins/commerce/COMMERCE_EXTENSION_SURFACE.md`
-- `package.json`
-- `pnpm-workspace.yaml`
-- `pnpm-lock.yaml`
 
-Recommended first commands for continuation:
+## Continuation prompt (verbatim)
+You are now building the platform layer (not just UI).
+
+Follow the documents in order. Do not skip ahead.
+
+Critical rules:
+	•	Frontend must remain thin
+	•	Backend is the source of truth
+	•	No extension runs without validation and license
+
+Apply the implementation plan phase-by-phase.
+
+If anything is unclear, stop and ask before proceeding.
+
+Key files: @dc_full_platform_handoff
+
+Recommended first commands:
 - `git rev-parse --short HEAD`
 - `git status --short`
+- `pnpm test`
 - `pnpm --filter ./packages/plugins/commerce test`
 - `pnpm --filter ./packages/plugins/commerce typecheck`
 - `pnpm --filter ./packages/create-emdash typecheck`
 - `bash scripts/build-commerce-external-review-zip.sh`
-
-Critical instruction to carry forward:
-
-> Follow these documents strictly. Do not introduce business logic into the frontend. Do not bypass backend contracts. If anything conflicts, stop and ask.

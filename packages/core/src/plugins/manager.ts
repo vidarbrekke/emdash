@@ -61,6 +61,11 @@ export interface PluginManagerOptions {
 		filename: string,
 		contentType: string,
 	) => Promise<{ uploadUrl: string; mediaId: string }>;
+	/**
+	 * Optional synchronous/asynchronous validation callback for activation.
+	 * Throwing from this callback prevents the plugin from being activated.
+	 */
+	validateOnActivate?: (plugin: ResolvedPlugin) => Promise<void> | void;
 }
 
 /**
@@ -73,6 +78,7 @@ export class PluginManager {
 	private hookPipeline: HookPipeline | null = null;
 	private routeRegistry: PluginRouteRegistry | null = null;
 	private factoryOptions: PluginContextFactoryOptions;
+	private validateOnActivate?: (plugin: ResolvedPlugin) => Promise<void> | void;
 	private initialized = false;
 
 	constructor(private options: PluginManagerOptions) {
@@ -81,6 +87,7 @@ export class PluginManager {
 			storage: options.storage,
 			getUploadUrl: options.getUploadUrl,
 		};
+		this.validateOnActivate = options.validateOnActivate;
 	}
 
 	// =========================================================================
@@ -185,6 +192,10 @@ export class PluginManager {
 		if (entry.state === "registered") {
 			// Auto-install if not installed
 			await this.install(pluginId);
+		}
+
+		if (this.validateOnActivate) {
+			await this.validateOnActivate(entry.plugin);
 		}
 
 		this.ensureInitialized();

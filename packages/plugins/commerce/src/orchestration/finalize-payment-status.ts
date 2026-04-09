@@ -5,7 +5,7 @@ export type FinalizationStatus = {
 	receiptStatus: "missing" | "pending" | "processed" | "error" | "duplicate";
 	/** At least one inventory ledger row exists for this order. */
 	isInventoryApplied: boolean;
-	/** Order paymentPhase is "paid". */
+	/** Order paymentPhase is "finalized". */
 	isOrderPaid: boolean;
 	/** At least one payment attempt for this order+provider is "succeeded". */
 	isPaymentAttemptSucceeded: boolean;

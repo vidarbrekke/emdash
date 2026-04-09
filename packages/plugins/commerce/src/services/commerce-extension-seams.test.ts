@@ -107,7 +107,7 @@ describe("createRecommendationsRoute", () => {
 describe("queryFinalizationState", () => {
 	const order: StoredOrder = {
 		cartId: "cart_1",
-		paymentPhase: "paid",
+		paymentPhase: "finalized",
 		currency: "USD",
 		lineItems: [],
 		finalizeTokenHash: "placeholder-finalize-token-hash",

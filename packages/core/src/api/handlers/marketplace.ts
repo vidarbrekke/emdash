@@ -11,6 +11,8 @@ import type { Database } from "../../database/types.js";
 import { validatePluginIdentifier } from "../../database/validate.js";
 import { pluginManifestSchema } from "../../plugins/manifest-schema.js";
 import { normalizeManifestRoute } from "../../plugins/manifest-schema.js";
+import { OptionsRepository } from "../../database/repositories/options.js";
+import { generatePrefixedToken, hashPrefixedToken } from "../../auth/api-tokens.js";
 import {
 	createMarketplaceClient,
 	MarketplaceError,
@@ -70,6 +72,28 @@ export interface MarketplaceUninstallResult {
 	pluginId: string;
 	dataDeleted: boolean;
 }
+
+export interface MarketplacePricingResult {
+	pluginId: string;
+	version: string;
+	capabilities: string[];
+	installToken: string;
+}
+
+export interface MarketplaceInstallConfirmInput {
+	installToken: string;
+}
+
+export interface MarketplaceInstallPendingState {
+	pluginId: string;
+	version: string;
+	requestedAt: string;
+	expiresAt: string;
+}
+
+const INSTALL_TOKEN_PREFIX = "ec_mp_";
+const INSTALL_INTENT_KEY_PREFIX = "marketplace_install_intent";
+const INSTALL_INTENT_TTL_MS = 10 * 60 * 1000;
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -278,6 +302,53 @@ async function deleteBundleFromR2(
 	}
 }
 
+function buildInstallIntentKey(tokenHash: string): string {
+	return `${INSTALL_INTENT_KEY_PREFIX}:${tokenHash}`;
+}
+
+async function createInstallIntent(
+	db: Kysely<Database>,
+	pluginId: string,
+	version: string,
+): Promise<string> {
+	const optionsRepo = new OptionsRepository(db);
+	const { raw, hash } = generatePrefixedToken(INSTALL_TOKEN_PREFIX);
+	const now = new Date();
+	const state: MarketplaceInstallPendingState = {
+		pluginId,
+		version,
+		requestedAt: now.toISOString(),
+		expiresAt: new Date(now.getTime() + INSTALL_INTENT_TTL_MS).toISOString(),
+	};
+	await optionsRepo.set(buildInstallIntentKey(hash), state);
+	return raw;
+}
+
+async function consumeInstallIntent(
+	db: Kysely<Database>,
+	pluginId: string,
+	installToken: string,
+): Promise<(MarketplaceInstallPendingState & { tokenHash: string; key: string }) | null> {
+	const tokenHash = hashPrefixedToken(installToken);
+	const key = buildInstallIntentKey(tokenHash);
+	const optionsRepo = new OptionsRepository(db);
+	const state = await optionsRepo.get<MarketplaceInstallPendingState>(key);
+	if (!state || state.pluginId !== pluginId) return null;
+
+	const expiresAt = Date.parse(state.expiresAt);
+	if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+		await optionsRepo.delete(key);
+		return null;
+	}
+
+	return { ...state, tokenHash, key };
+}
+
+async function clearInstallIntent(db: Kysely<Database>, key: string): Promise<void> {
+	const optionsRepo = new OptionsRepository(db);
+	await optionsRepo.delete(key);
+}
+
 // ── Install ────────────────────────────────────────────────────────
 
 export async function handleMarketplaceInstall(
@@ -476,6 +547,161 @@ export async function handleMarketplaceInstall(
 			},
 		};
 	}
+}
+
+export async function handleMarketplacePricing(
+	db: Kysely<Database>,
+	marketplaceUrl: string | undefined,
+	pluginId: string,
+	opts?: {
+		version?: string;
+		configuredPluginIds?: Set<string>;
+	},
+): Promise<ApiResult<MarketplacePricingResult>> {
+	const client = getClient(marketplaceUrl);
+	if (!client) {
+		return {
+			success: false,
+			error: {
+				code: "MARKETPLACE_NOT_CONFIGURED",
+				message: "Marketplace is not configured",
+			},
+		};
+	}
+
+	try {
+		const stateRepo = new PluginStateRepository(db);
+		const existing = await stateRepo.get(pluginId);
+		if (existing && existing.source === "marketplace") {
+			return {
+				success: false,
+				error: {
+					code: "ALREADY_INSTALLED",
+					message: `Plugin ${pluginId} is already installed`,
+				},
+			};
+		}
+
+		if (opts?.configuredPluginIds?.has(pluginId)) {
+			return {
+				success: false,
+				error: {
+					code: "PLUGIN_ID_CONFLICT",
+					message: `Cannot install marketplace plugin "${pluginId}" — a configured plugin with the same ID already exists`,
+				},
+			};
+		}
+
+		const pluginDetail = await client.getPlugin(pluginId);
+		const version = opts?.version ?? pluginDetail.latestVersion?.version;
+		if (!version) {
+			return {
+				success: false,
+				error: {
+					code: "NO_VERSION",
+					message: `No published versions found for plugin ${pluginId}`,
+				},
+			};
+		}
+
+		const versionMetadata = await resolveVersionMetadata(client, pluginId, pluginDetail, version);
+		if (!versionMetadata) {
+			return {
+				success: false,
+				error: {
+					code: "NO_VERSION",
+					message: `Version ${version} was not found for plugin ${pluginId}`,
+				},
+			};
+		}
+
+		if (versionMetadata.auditVerdict === "fail" || versionMetadata.auditVerdict === "warn") {
+			return {
+				success: false,
+				error: {
+					code: "AUDIT_FAILED",
+					message:
+						versionMetadata.auditVerdict === "fail"
+							? "Plugin failed security audit and cannot be installed"
+							: "Plugin audit was inconclusive and cannot be installed until reviewed",
+				},
+			};
+		}
+
+		const installToken = await createInstallIntent(db, pluginId, version);
+		return {
+			success: true,
+			data: {
+				pluginId,
+				version,
+				capabilities: versionMetadata.capabilities,
+				installToken,
+			},
+		};
+	} catch (err) {
+		if (err instanceof MarketplaceUnavailableError) {
+			return {
+				success: false,
+				error: { code: "MARKETPLACE_UNAVAILABLE", message: "Marketplace is currently unavailable" },
+			};
+		}
+		if (err instanceof MarketplaceError) {
+			return {
+				success: false,
+				error: { code: err.code ?? "MARKETPLACE_ERROR", message: err.message },
+			};
+		}
+		console.error("Failed to create marketplace plugin install pricing:", err);
+		return {
+			success: false,
+			error: {
+				code: "PRICING_FAILED",
+				message: "Failed to prepare plugin install",
+			},
+		};
+	}
+}
+
+export async function handleMarketplaceInstallConfirm(
+	db: Kysely<Database>,
+	storage: Storage | null,
+	sandboxRunner: SandboxRunner | null,
+	marketplaceUrl: string | undefined,
+	pluginId: string,
+	opts: MarketplaceInstallConfirmInput & { configuredPluginIds?: Set<string> },
+): Promise<ApiResult<MarketplaceInstallResult>> {
+	if (!opts?.installToken) {
+		return {
+			success: false,
+			error: {
+				code: "INVALID_REQUEST",
+				message: "installToken is required",
+			},
+		};
+	}
+
+	const intent = await consumeInstallIntent(db, pluginId, opts.installToken);
+	if (!intent) {
+		return {
+			success: false,
+			error: {
+				code: "INVALID_TOKEN",
+				message: "Install token is invalid or expired",
+			},
+		};
+	}
+
+	const result = await handleMarketplaceInstall(
+		db,
+		storage,
+		sandboxRunner,
+		marketplaceUrl,
+		pluginId,
+		{ version: intent.version, configuredPluginIds: opts.configuredPluginIds },
+	);
+	if (!result.success) return result;
+	await clearInstallIntent(db, intent.key);
+	return result;
 }
 
 // ── Update ─────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ type QueryCollection<T> = {
 function makeCollections() {
 	const baseOrder: StoredOrder = {
 		cartId: "cart_1",
-		paymentPhase: "paid",
+		paymentPhase: "finalized",
 		currency: "USD",
 		lineItems: [],
 		finalizeTokenHash: "placeholder-finalize-token-hash",

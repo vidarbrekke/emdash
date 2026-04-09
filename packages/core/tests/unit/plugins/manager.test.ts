@@ -203,6 +203,49 @@ describe("PluginManager", () => {
 
 			expect(results).toEqual([]);
 		});
+
+		it("runs activation validation callback before activation", async () => {
+			const managerWithValidation = new PluginManager({
+				db,
+				validateOnActivate: async (plugin) => {
+					if (plugin.id !== "my-plugin") {
+						throw new Error("Unexpected plugin");
+					}
+				},
+			});
+			managerWithValidation.register(createTestDefinition({ id: "my-plugin" }));
+
+			await managerWithValidation.activate("my-plugin");
+
+			expect(managerWithValidation.getPluginState("my-plugin")).toBe("active");
+		});
+
+		it("blocks activation when validation callback rejects", async () => {
+			const managerWithValidation = new PluginManager({
+				db,
+				validateOnActivate: async (plugin) => {
+					if (Object.values(plugin.routes).some((route) => route.public === true)) {
+						throw new Error("Public routes must be reviewed before activation");
+					}
+				},
+			});
+			managerWithValidation.register(
+				createTestDefinition({
+					id: "my-plugin",
+					routes: {
+						status: {
+							public: true,
+							handler: vi.fn(),
+						},
+					},
+				}),
+			);
+
+			await expect(managerWithValidation.activate("my-plugin")).rejects.toThrow(
+				/Public routes must be reviewed before activation/,
+			);
+			expect(managerWithValidation.getPluginState("my-plugin")).toBe("installed");
+		});
 	});
 
 	describe("deactivate", () => {

@@ -273,7 +273,7 @@ const now = "2026-04-02T12:00:00.000Z";
 function baseOrder(overrides: Partial<StoredOrder> = {}): StoredOrder {
 	return {
 		cartId: "cart_1",
-		paymentPhase: "payment_pending",
+		paymentPhase: "initiated",
 		currency: "USD",
 		lineItems: [
 			{
@@ -343,7 +343,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(receipt?.status).toBe("processed");
 
 		const order = await ports.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("paid");
+		expect(order?.paymentPhase).toBe("finalized");
 
 		const stock = await ports.inventoryStock.get(stockId);
 		expect(stock?.quantity).toBe(8);
@@ -807,7 +807,7 @@ describe("finalizePaymentFromWebhook", () => {
 		const ledger = await ports.inventoryLedger.query({ limit: 10 });
 		expect(ledger.items).toHaveLength(0);
 		const order = await ports.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const receipt = await ports.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
 		expect(receipt?.status).toBe("error");
 	});
@@ -884,7 +884,7 @@ describe("finalizePaymentFromWebhook", () => {
 		}
 
 		const paidOrder = await basePorts.orders.get(orderId);
-		expect(paidOrder?.paymentPhase).toBe("payment_pending");
+		expect(paidOrder?.paymentPhase).toBe("initiated");
 		const receipt = await basePorts.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
 		expect(receipt?.status).toBe("pending");
 	});
@@ -938,7 +938,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(first).toMatchObject({ kind: "api_error", error: { code: "ORDER_STATE_CONFLICT" } });
 
 		const paidOrder = await ports.orders.get(orderId);
-		expect(paidOrder?.paymentPhase).toBe("paid");
+		expect(paidOrder?.paymentPhase).toBe("finalized");
 
 		const pendingAttempt = await ports.paymentAttempts.query({
 			where: { orderId: orderId, providerId: "stripe", status: "pending" },
@@ -1061,7 +1061,7 @@ describe("finalizePaymentFromWebhook", () => {
 	it("order already paid without receipt row still replays", async () => {
 		const orderId = "order_1";
 		const state = {
-			orders: new Map([[orderId, baseOrder({ paymentPhase: "paid" })]]),
+			orders: new Map([[orderId, baseOrder({ paymentPhase: "finalized" })]]),
 			webhookReceipts: new Map<string, StoredWebhookReceipt>(),
 			paymentAttempts: new Map<string, StoredPaymentAttempt>(),
 			inventoryLedger: new Map<string, StoredInventoryLedgerEntry>(),
@@ -1090,7 +1090,7 @@ describe("finalizePaymentFromWebhook", () => {
 				[
 					orderId,
 					baseOrder({
-						paymentPhase: "paid",
+						paymentPhase: "finalized",
 						lineItems: [
 							{
 								productId: "p1",
@@ -1142,7 +1142,7 @@ describe("finalizePaymentFromWebhook", () => {
 
 		expect(res).toEqual({ kind: "completed", orderId });
 		const paidOrder = await ports.orders.get(orderId);
-		expect(paidOrder?.paymentPhase).toBe("paid");
+		expect(paidOrder?.paymentPhase).toBe("finalized");
 		const receipt = await ports.webhookReceipts.get(rid);
 		expect(receipt?.status).toBe("processed");
 		const attempt = await ports.paymentAttempts.get("pa_paid");
@@ -1306,7 +1306,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(ledger.items).toHaveLength(1);
 	});
 
-	it("marks pending receipt as error when order leaves finalizable phase between reads", async () => {
+	it("retries while preserving partial work when order transitions to processing between reads", async () => {
 		const orderId = "order_state_conflict";
 		const ext = "evt_state_conflict";
 		const rid = webhookReceiptDocId("stripe", ext);
@@ -1345,14 +1345,10 @@ describe("finalizePaymentFromWebhook", () => {
 			finalizeToken: FINALIZE_RAW,
 			nowIso: now,
 		});
-		expect(res).toMatchObject({
-			kind: "api_error",
-			error: { code: "ORDER_STATE_CONFLICT" },
-		});
+		expect(res).toEqual({ kind: "completed", orderId });
 
 		const receipt = await basePorts.webhookReceipts.get(rid);
-		expect(receipt?.status).toBe("error");
-		expect(receipt?.errorCode).toBe("ORDER_STATE_CONFLICT");
+		expect(receipt?.status).toBe("processed");
 	});
 
 	it("marks pending receipt as error when order disappears between reads", async () => {
@@ -1454,7 +1450,7 @@ describe("finalizePaymentFromWebhook", () => {
 			resumeState: "error",
 		});
 		const order = await ports.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const rid = webhookReceiptDocId("stripe", ext);
 		const rec = await ports.webhookReceipts.get(rid);
 		expect(rec?.status).toBe("error");
@@ -1929,7 +1925,7 @@ describe("finalizePaymentFromWebhook", () => {
 				[
 					orderId,
 					baseOrder({
-						paymentPhase: "paid",
+						paymentPhase: "finalized",
 					}),
 				],
 			]),
@@ -2260,7 +2256,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await ports.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const receipt = await ports.webhookReceipts.get(webhookReceiptDocId("stripe", extId));
 		expect(receipt?.claimState).toBe("claimed");
 	});
@@ -2392,7 +2388,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const pa = await basePorts.paymentAttempts.get("pa_strict_bad_claim_expires_at");
 		expect(pa?.status).toBe("pending");
 		const stock = await basePorts.inventoryStock.get(stockDocId);
@@ -2472,7 +2468,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.CLAIM_RETRY_FAILED });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const pa = await basePorts.paymentAttempts.get("pa_claim_expired_while_inflight");
 		expect(pa?.status).toBe("pending");
 		const stock = await basePorts.inventoryStock.get(stockDocId);
@@ -2545,7 +2541,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("payment_pending");
+		expect(order?.paymentPhase).toBe("initiated");
 		const pa = await basePorts.paymentAttempts.get("pa_claim_stolen_before_finalize_writes");
 		expect(pa?.status).toBe("pending");
 		const ledger = await basePorts.inventoryLedger.query({ limit: 10 });
@@ -2611,7 +2607,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("paid");
+		expect(order?.paymentPhase).toBe("finalized");
 		const pa = await basePorts.paymentAttempts.get("pa_claim_stolen_during_order_write");
 		expect(pa?.status).toBe("pending");
 		const stock = await basePorts.inventoryStock.get(stockDocId);
@@ -2679,7 +2675,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.IN_FLIGHT });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("paid");
+		expect(order?.paymentPhase).toBe("finalized");
 		const pa = await basePorts.paymentAttempts.get("pa_claim_stolen_during_attempt_write");
 		expect(pa?.status).toBe("succeeded");
 		const stock = await basePorts.inventoryStock.get(stockDocId);
@@ -2759,7 +2755,7 @@ describe("finalizePaymentFromWebhook", () => {
 		expect(res).toEqual({ kind: "replay", reason: WEBHOOK_RECEIPT_REASONS.PROCESSED });
 
 		const order = await basePorts.orders.get(orderId);
-		expect(order?.paymentPhase).toBe("paid");
+		expect(order?.paymentPhase).toBe("finalized");
 		const pa = await basePorts.paymentAttempts.get("pa_claim_processed_during_order_write");
 		expect(pa?.status).toBe("pending");
 		const stock = await basePorts.inventoryStock.get(stockDocId);

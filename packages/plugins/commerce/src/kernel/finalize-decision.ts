@@ -18,9 +18,10 @@
 
 export type OrderPaymentPhase =
 	| "draft"
-	| "payment_pending"
+	| "initiated"
 	| "authorized"
-	| "paid"
+	| "finalized"
+	| "failed"
 	| "payment_conflict"
 	| "processing"
 	| "fulfilled"
@@ -73,7 +74,11 @@ export type FinalizeDecision =
 			code: FinalizeNoopCode;
 	  };
 
-const FINALIZABLE: ReadonlySet<OrderPaymentPhase> = new Set(["payment_pending", "authorized"]);
+const FINALIZABLE_WITHOUT_PENDING_RECEIPT: ReadonlySet<OrderPaymentPhase> = new Set(["initiated", "authorized"]);
+
+function isPendingReceiptResumable(orderStatus: OrderPaymentPhase): boolean {
+	return orderStatus === "initiated" || orderStatus === "authorized" || orderStatus === "processing";
+}
 
 export function decidePaymentFinalize(input: {
 	orderStatus: OrderPaymentPhase;
@@ -84,11 +89,7 @@ export function decidePaymentFinalize(input: {
 
 	if (receipt.exists) {
 		if (receipt.status === "pending") {
-			if (
-				orderStatus === "payment_pending" ||
-				orderStatus === "authorized" ||
-				orderStatus === "paid"
-			) {
+			if (isPendingReceiptResumable(orderStatus) || orderStatus === "finalized") {
 				return { action: "proceed", correlationId };
 			}
 
@@ -126,7 +127,7 @@ export function decidePaymentFinalize(input: {
 		};
 	}
 
-	if (orderStatus === "paid") {
+	if (orderStatus === "finalized") {
 		return {
 			action: "noop",
 			reason: "order_already_paid",
@@ -135,7 +136,7 @@ export function decidePaymentFinalize(input: {
 		};
 	}
 
-	if (!FINALIZABLE.has(orderStatus)) {
+	if (!FINALIZABLE_WITHOUT_PENDING_RECEIPT.has(orderStatus)) {
 		return {
 			action: "noop",
 			reason: "order_not_finalizable",

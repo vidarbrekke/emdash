@@ -443,7 +443,7 @@ describe("checkout idempotency persistence recovery", () => {
 		const firstResult = await checkoutHandler(failingCtx);
 		expect(firstResult).toMatchObject({
 			currency: "USD",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 		});
 
 		expect(orders.rows.size).toBe(1);
@@ -468,7 +468,7 @@ describe("checkout idempotency persistence recovery", () => {
 			orderId: firstOrderId,
 			paymentAttemptId: firstAttemptId,
 			currency: "USD",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 		});
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
@@ -526,7 +526,7 @@ describe("checkout idempotency persistence recovery", () => {
 			httpStatus: 200,
 			responseBody: {
 				orderId: "stale_order_1",
-				paymentPhase: "payment_pending",
+				paymentPhase: "initiated",
 				paymentAttemptId: "stale_attempt_1",
 				currency: "USD",
 				totalMinor: 650,
@@ -697,7 +697,7 @@ describe("checkout idempotency persistence recovery", () => {
 		});
 
 		const out = await checkoutHandler(ctx);
-		expect(out.paymentPhase).toBe("payment_pending");
+		expect(out.paymentPhase).toBe("initiated");
 		expect(out.totalMinor).toBe(100);
 	});
 
@@ -844,7 +844,7 @@ describe("checkout route guardrails", () => {
 		expect(consumeKvRateLimit).toHaveBeenCalledTimes(1);
 	});
 
-	it("prevents creating a second payment_pending checkout for the same cart with a different idempotency key", async () => {
+	it("prevents creating a second initiated checkout for the same cart with a different idempotency key", async () => {
 		const cartId = "cart_open_checkout";
 		const now = "2026-04-02T12:00:00.000Z";
 		const ownerToken = "owner-token-open-checkout";
@@ -888,7 +888,7 @@ describe("checkout route guardrails", () => {
 				ownerToken,
 			}),
 		);
-		expect(first.paymentPhase).toBe("payment_pending");
+		expect(first.paymentPhase).toBe("initiated");
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
 
@@ -1043,7 +1043,7 @@ describe("checkout route guardrails", () => {
 			}),
 		);
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			totalMinor: 100,
 		});
@@ -1117,7 +1117,7 @@ describe("checkout route guardrails", () => {
 		);
 
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			totalMinor: 100,
 			currency: "USD",
 		});
@@ -1195,7 +1195,7 @@ describe("checkout route guardrails", () => {
 			}),
 		);
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			totalMinor: 100,
 		});
@@ -1528,7 +1528,7 @@ describe("checkout route guardrails", () => {
 		);
 
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			totalMinor: 100,
 			currency: "USD",
 		});
@@ -1608,7 +1608,7 @@ describe("checkout route guardrails", () => {
 		);
 
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			totalMinor: 100,
 			currency: "USD",
 		});
@@ -1682,7 +1682,7 @@ describe("checkout route guardrails", () => {
 		);
 
 		expect(result).toMatchObject({
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			totalMinor: 100,
 			currency: "USD",
 		});
@@ -1714,7 +1714,7 @@ describe("checkout route guardrails", () => {
 		const idempotencyDocId = `idemp:${keyHash}`;
 		const cacheResponse = {
 			orderId,
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId,
 			totalMinor: 1500,
 			currency: "USD",
@@ -1737,7 +1737,7 @@ describe("checkout route guardrails", () => {
 		const orders = new MemColl<StoredOrder>();
 		await orders.put(orderId, {
 			cartId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: [
 				{
@@ -1793,7 +1793,7 @@ describe("checkout route guardrails", () => {
 		expect(result).toMatchObject({
 			orderId,
 			paymentAttemptId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			totalMinor: 1500,
 			currency: "USD",
 		});
@@ -2695,7 +2695,7 @@ describe("consumer checkout response contract", () => {
 
 		expect(first.orderId).toMatch(CHECKOUT_ORDER_ID_PREFIX_RE);
 		expect(first.paymentAttemptId).toMatch(CHECKOUT_ATTEMPT_ID_PREFIX_RE);
-		expect(first.paymentPhase).toBe("payment_pending");
+		expect(first.paymentPhase).toBe("initiated");
 		expect(first.totalMinor).toBe(120);
 		expect(first.currency).toBe("USD");
 		expect(typeof first.finalizeToken).toBe("string");

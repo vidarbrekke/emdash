@@ -8,7 +8,7 @@ describe("decidePaymentFinalize", () => {
 	it("proceeds when order awaits payment and no processed receipt", () => {
 		expect(
 			decidePaymentFinalize({
-				orderStatus: "payment_pending",
+				orderStatus: "initiated",
 				receipt: { exists: false },
 				correlationId: cid,
 			}),
@@ -25,9 +25,23 @@ describe("decidePaymentFinalize", () => {
 		).toEqual({ action: "proceed", correlationId: cid });
 	});
 
+	it("conflicts when order is processing and no receipt exists", () => {
+		const d = decidePaymentFinalize({
+			orderStatus: "processing",
+			receipt: { exists: false },
+			correlationId: cid,
+		});
+		expect(d).toMatchObject({
+			action: "noop",
+			reason: "order_not_finalizable",
+			httpStatus: 409,
+			code: "ORDER_STATE_CONFLICT",
+		});
+	});
+
 	it("noop when order already paid and webhook receipt already processed (replay)", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "paid",
+			orderStatus: "finalized",
 			receipt: { exists: true, status: "processed" },
 			correlationId: cid,
 		});
@@ -41,7 +55,7 @@ describe("decidePaymentFinalize", () => {
 
 	it("noop when webhook was already processed", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "payment_pending",
+			orderStatus: "initiated",
 			receipt: { exists: true, status: "processed" },
 			correlationId: cid,
 		});
@@ -55,7 +69,7 @@ describe("decidePaymentFinalize", () => {
 
 	it("noop when webhook is duplicate", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "payment_pending",
+			orderStatus: "initiated",
 			receipt: { exists: true, status: "duplicate" },
 			correlationId: cid,
 		});
@@ -69,7 +83,7 @@ describe("decidePaymentFinalize", () => {
 
 	it("resumes finalization when webhook row is pending and order is already paid", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "paid",
+			orderStatus: "finalized",
 			receipt: { exists: true, status: "pending" },
 			correlationId: cid,
 		});
@@ -78,7 +92,7 @@ describe("decidePaymentFinalize", () => {
 
 	it("continues when webhook row is pending and payment is still in progress", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "payment_pending",
+			orderStatus: "initiated",
 			receipt: { exists: true, status: "pending" },
 			correlationId: cid,
 		});
@@ -94,9 +108,18 @@ describe("decidePaymentFinalize", () => {
 		expect(d).toEqual({ action: "proceed", correlationId: cid });
 	});
 
+	it("continues when webhook row is pending while order is processing", () => {
+		const d = decidePaymentFinalize({
+			orderStatus: "processing",
+			receipt: { exists: true, status: "pending" },
+			correlationId: cid,
+		});
+		expect(d).toEqual({ action: "proceed", correlationId: cid });
+	});
+
 	it("conflict when webhook is error", () => {
 		const d = decidePaymentFinalize({
-			orderStatus: "payment_pending",
+			orderStatus: "initiated",
 			receipt: { exists: true, status: "error" },
 			correlationId: cid,
 		});

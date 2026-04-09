@@ -52,6 +52,17 @@ describe("dashing-commerce plugin route surface", () => {
 		expect(routes["admin/catalog/sku/list"]).toBeDefined();
 	});
 
+	it("declares commerce admin pages for Products, Orders, Inventory, and Extensions", () => {
+		const pages = createPlugin().admin?.pages;
+
+		expect(pages).toEqual([
+			{ path: "/products", label: "Products" },
+			{ path: "/orders", label: "Orders" },
+			{ path: "/inventory", label: "Inventory" },
+			{ path: "/extensions", label: "Extensions" },
+		]);
+	});
+
 	it("admin catalog routes use admin read handlers and remain non-public", () => {
 		const routes = createPlugin().routes;
 
@@ -181,7 +192,12 @@ describe("dashing-commerce plugin route surface", () => {
 			expect(routes[key]).toMatchObject({ public: true });
 		}
 
-		const expectedAdminReadRoutes = ["admin/catalog/product/get", "admin/catalog/products", "admin/catalog/sku/list"] as const;
+		const expectedAdminReadRoutes = [
+			"admin",
+			"admin/catalog/product/get",
+			"admin/catalog/products",
+			"admin/catalog/sku/list",
+		] as const;
 		for (const key of expectedAdminReadRoutes) {
 			expect(routes[key]?.public).toBeUndefined();
 		}
@@ -218,6 +234,7 @@ describe("dashing-commerce plugin route surface", () => {
 	it("covers the full expected plugin route surface for this phase", () => {
 		const routes = createPlugin().routes;
 		const expectedRoutes = new Set([
+			"admin",
 			"cart/upsert",
 			"cart/get",
 			"bundle/compute",
@@ -304,6 +321,7 @@ describe("dashing-commerce plugin route surface", () => {
 				"webhooks/stripe",
 			] as const,
 			admin: [
+				"admin",
 				"admin/catalog/product/get",
 				"product-assets/register",
 				"catalog/asset/link",

@@ -460,17 +460,59 @@ export class EmDashRuntime {
 		try {
 			const stateRepo = new PluginStateRepository(this.db);
 			const marketplaceStates = await stateRepo.getMarketplacePlugins();
+			const deactivateInvalidPlugin = async (
+				state: {
+					pluginId: string;
+					version: string;
+					marketplaceVersion?: string | null;
+					displayName?: string | null;
+					description?: string | null;
+					status: "active" | "inactive";
+				},
+				reason: string,
+			): Promise<void> => {
+				console.warn(
+					`EmDash: Disabling marketplace plugin ${state.pluginId} during sync due to invalid runtime state — ${reason}`,
+				);
+				await stateRepo.upsert(state.pluginId, state.version, "inactive", {
+					source: "marketplace",
+					marketplaceVersion: state.marketplaceVersion ?? state.version,
+					displayName: state.displayName ?? undefined,
+					description: state.description ?? undefined,
+				});
+				this.pluginStates.set(state.pluginId, "inactive");
+				this.enabledPlugins.delete(state.pluginId);
+			};
 
 			const desired = new Map<string, string>();
 			for (const state of marketplaceStates) {
-				this.pluginStates.set(state.pluginId, state.status);
+				const version = state.marketplaceVersion ?? state.version;
 				if (state.status === "active") {
+					const bundle = await loadBundleFromR2(this.storage, state.pluginId, version);
+					if (!bundle) {
+						await deactivateInvalidPlugin(state, "bundle not found");
+						continue;
+					}
+					if (bundle.manifest.id !== state.pluginId) {
+						await deactivateInvalidPlugin(state, "manifest id mismatch");
+						continue;
+					}
+					if (bundle.manifest.version !== version) {
+						await deactivateInvalidPlugin(
+							state,
+							`manifest version mismatch (found ${bundle.manifest.version}, expected ${version})`,
+						);
+						continue;
+					}
+
+					this.pluginStates.set(state.pluginId, "active");
 					this.enabledPlugins.add(state.pluginId);
-				} else {
-					this.enabledPlugins.delete(state.pluginId);
+					desired.set(state.pluginId, version);
+					continue;
 				}
-				if (state.status !== "active") continue;
-				desired.set(state.pluginId, state.marketplaceVersion ?? state.version);
+
+				this.pluginStates.set(state.pluginId, state.status);
+				this.enabledPlugins.delete(state.pluginId);
 			}
 
 			// Remove uninstalled or no-longer-active marketplace plugins from memory.
@@ -680,7 +722,7 @@ export class EmDashRuntime {
 
 		// Cold-start: load marketplace-installed plugins from site R2
 		if (deps.config.marketplace && storage) {
-			await EmDashRuntime.loadMarketplacePlugins(db, storage, deps, sandboxedPlugins);
+		await EmDashRuntime.loadMarketplacePlugins(db, storage, deps, sandboxedPlugins, pluginStates);
 		}
 
 		// Initialize media providers
@@ -1023,6 +1065,7 @@ export class EmDashRuntime {
 		storage: Storage,
 		deps: RuntimeDependencies,
 		cache: Map<string, SandboxedPlugin>,
+		pluginStates: Map<string, string>,
 	): Promise<void> {
 		// Ensure sandbox runner exists
 		if (!sandboxRunner && deps.createSandboxRunner) {
@@ -1041,9 +1084,18 @@ export class EmDashRuntime {
 
 				const version = plugin.marketplaceVersion ?? plugin.version;
 				const pluginKey = `${plugin.pluginId}:${version}`;
-
-				// Skip if already loaded (shouldn't happen, but guard)
-				if (cache.has(pluginKey)) continue;
+				const deactivateInvalidState = async (reason: string): Promise<void> => {
+					console.warn(
+						`EmDash: Disabling marketplace plugin ${plugin.pluginId}@${version} due to invalid runtime state — ${reason}`,
+					);
+					pluginStates.set(plugin.pluginId, "inactive");
+					await stateRepo.upsert(plugin.pluginId, plugin.version, "inactive", {
+						source: "marketplace",
+						marketplaceVersion: plugin.marketplaceVersion ?? plugin.version,
+						displayName: plugin.displayName ?? undefined,
+						description: plugin.description ?? undefined,
+					});
+				};
 
 				try {
 					const bundle = await loadBundleFromR2(storage, plugin.pluginId, version);
@@ -1051,6 +1103,39 @@ export class EmDashRuntime {
 						console.warn(
 							`EmDash: Marketplace plugin ${plugin.pluginId}@${version} not found in R2`,
 						);
+						await deactivateInvalidState("bundle not found");
+						continue;
+					}
+					if (bundle.manifest.id !== plugin.pluginId) {
+						await deactivateInvalidState("manifest id mismatch");
+						continue;
+					}
+					if (bundle.manifest.version !== version) {
+						await deactivateInvalidState(
+							`manifest version mismatch (found ${bundle.manifest.version}, expected ${version})`,
+						);
+						continue;
+					}
+
+					// Skip if already loaded (shouldn't happen, but guard).
+					if (cache.has(pluginKey)) {
+						marketplacePluginKeys.add(pluginKey);
+						marketplaceManifestCache.set(plugin.pluginId, {
+							id: bundle.manifest.id,
+							version: bundle.manifest.version,
+							admin: bundle.manifest.admin,
+						});
+
+						if (bundle.manifest.routes.length > 0) {
+							const routeMeta = new Map<string, RouteMeta>();
+							for (const entry of bundle.manifest.routes) {
+								const normalized = normalizeManifestRoute(entry);
+								routeMeta.set(normalized.name, { public: normalized.public === true });
+							}
+							sandboxedRouteMetaCache.set(plugin.pluginId, routeMeta);
+						} else {
+							sandboxedRouteMetaCache.delete(plugin.pluginId);
+						}
 						continue;
 					}
 

@@ -39,7 +39,7 @@ describe("checkoutGetOrderHandler", () => {
 	const token = "a".repeat(32);
 	const orderBase: StoredOrder = {
 		cartId: "cart_1",
-		paymentPhase: "payment_pending",
+		paymentPhase: "initiated",
 		currency: "USD",
 		finalizeTokenHash: "placeholder-finalize-token-hash",
 		lineItems: [

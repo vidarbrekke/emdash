@@ -17,6 +17,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
 	handleMarketplaceInstall,
+	handleMarketplacePricing,
+	handleMarketplaceInstallConfirm,
 	handleMarketplaceUpdate,
 	handleMarketplaceUninstall,
 	handleMarketplaceUpdateCheck,
@@ -435,6 +437,175 @@ describe("Marketplace handlers", () => {
 		});
 	});
 
+	// ── Install flow (pricing + confirm) ──────────────────────────
+
+	describe("handleMarketplaceInstall pricing/confirm", () => {
+		it("returns install token from pricing step", async () => {
+			const detail = mockPluginDetail("test-seo", "1.0.0");
+			detail.latestVersion!.checksum = "";
+			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
+
+			const result = await handleMarketplacePricing(db, MARKETPLACE_URL, "test-seo", {});
+
+			expect(result.success).toBe(true);
+			expect(result.data?.pluginId).toBe("test-seo");
+			expect(result.data?.version).toBe("1.0.0");
+			expect(result.data?.capabilities).toEqual(["hooks"]);
+			expect(typeof result.data?.installToken).toBe("string");
+			expect(result.data?.installToken?.startsWith("ec_mp_")).toBe(true);
+		});
+
+		it("installs plugin after confirming with a valid token", async () => {
+			const detail = mockPluginDetail("test-seo", "1.0.0");
+			detail.latestVersion!.checksum = "";
+
+			const manifest = mockManifest("test-seo", "1.0.0");
+			const bundleBytes = await createMockBundle(manifest);
+			fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+				const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+				if (requestUrl.includes("/versions/1.0.0/bundle")) {
+					return new Response(bundleBytes, { status: 200 });
+				}
+				if (requestUrl.includes("/versions")) {
+					return new Response(
+						JSON.stringify({
+							items: [
+								{
+									...(detail.latestVersion as {
+										version: string;
+										minEmDashVersion: string | null;
+										bundleSize: number;
+										checksum: string;
+										changelog: string | null;
+										capabilities: string[];
+										status: string;
+										auditVerdict: string | null;
+										imageAuditVerdict: string | null;
+										publishedAt: string;
+									}),
+								},
+							],
+						}),
+						{ status: 200 },
+					);
+				}
+				if (requestUrl.endsWith(`/api/v1/plugins/test-seo/installs`)) {
+					return new Response("OK", { status: 200 });
+				}
+				return new Response(JSON.stringify(detail), { status: 200 });
+			});
+
+			const pricing = await handleMarketplacePricing(db, MARKETPLACE_URL, "test-seo", {});
+			if (!pricing.success) {
+				throw new Error("expected pricing to succeed");
+			}
+
+			const result = await handleMarketplaceInstallConfirm(
+				db,
+				storage,
+				sandboxRunner,
+				MARKETPLACE_URL,
+				"test-seo",
+				{ installToken: pricing.data.installToken },
+			);
+
+			expect(result.success).toBe(true);
+			expect(result.data?.pluginId).toBe("test-seo");
+			expect(result.data?.version).toBe("1.0.0");
+
+			const repo = new PluginStateRepository(db);
+			const state = await repo.get("test-seo");
+			expect(state?.source).toBe("marketplace");
+			expect(state?.marketplaceVersion).toBe("1.0.0");
+			expect(state?.status).toBe("active");
+		});
+
+		it("rejects confirm with invalid or expired token", async () => {
+			const result = await handleMarketplaceInstallConfirm(
+				db,
+				storage,
+				sandboxRunner,
+				MARKETPLACE_URL,
+				"test-seo",
+				{ installToken: "ec_mp_invalid_token" },
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.code).toBe("INVALID_TOKEN");
+		});
+
+		it("invalidates install token after successful confirm", async () => {
+			const detail = mockPluginDetail("test-seo", "1.0.0");
+			detail.latestVersion!.checksum = "";
+			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
+
+			const pricing = await handleMarketplacePricing(db, MARKETPLACE_URL, "test-seo", {});
+			if (!pricing.success) {
+				throw new Error("expected pricing to succeed");
+			}
+
+			const manifest = mockManifest("test-seo", "1.0.0");
+			const bundleBytes = await createMockBundle(manifest);
+			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
+			fetchSpy.mockResolvedValueOnce(new Response(bundleBytes, { status: 200 }));
+			fetchSpy.mockResolvedValueOnce(new Response("OK", { status: 200 }));
+
+			const firstConfirm = await handleMarketplaceInstallConfirm(
+				db,
+				storage,
+				sandboxRunner,
+				MARKETPLACE_URL,
+				"test-seo",
+				{ installToken: pricing.data.installToken },
+			);
+			expect(firstConfirm.success).toBe(true);
+
+			const replayConfirm = await handleMarketplaceInstallConfirm(
+				db,
+				storage,
+				sandboxRunner,
+				MARKETPLACE_URL,
+				"test-seo",
+				{ installToken: pricing.data.installToken },
+			);
+
+			expect(replayConfirm.success).toBe(false);
+			expect(replayConfirm.error?.code).toBe("INVALID_TOKEN");
+		});
+
+		it("rejects confirm when downloaded bundle manifest does not match plugin", async () => {
+			const pricingDetail = mockPluginDetail("test-seo", "1.0.0");
+			pricingDetail.latestVersion!.checksum = "";
+			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(pricingDetail), { status: 200 }));
+
+			const pricing = await handleMarketplacePricing(db, MARKETPLACE_URL, "test-seo", {});
+			if (!pricing.success) {
+				throw new Error("expected pricing to succeed");
+			}
+
+			const mismatchManifest = mockManifest("wrong-id", "1.0.0");
+			const bundleBytes = await createMockBundle(mismatchManifest);
+			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(pricingDetail), { status: 200 }));
+			fetchSpy.mockResolvedValueOnce(new Response(bundleBytes, { status: 200 }));
+
+			const result = await handleMarketplaceInstallConfirm(
+				db,
+				storage,
+				sandboxRunner,
+				MARKETPLACE_URL,
+				"test-seo",
+				{ installToken: pricing.data.installToken },
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.code).toBe("MANIFEST_MISMATCH");
+
+			const repo = new PluginStateRepository(db);
+			const state = await repo.get("test-seo");
+			expect(state).toBeNull();
+		});
+	});
+
 	// ── Update ─────────────────────────────────────────────────────
 
 	describe("handleMarketplaceUpdate", () => {
@@ -499,7 +670,6 @@ describe("Marketplace handlers", () => {
 
 			const detail = mockPluginDetail("test-seo", "2.0.0");
 			detail.latestVersion!.checksum = "expected-checksum";
-			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
 			fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }));
 
 			const bundleBytes = await createMockBundle(mockManifest("test-seo", "2.0.0"));

@@ -48,7 +48,7 @@ function checkoutPendingFixture(overrides: Partial<CheckoutPendingState> = {}): 
 		paymentAttemptId: "attempt-1",
 		providerId: "stripe",
 		cartId: "cart-1",
-		paymentPhase: "payment_pending",
+		paymentPhase: "initiated",
 		finalizeToken: "pending-token-123",
 		totalMinor: 1500,
 		currency: "USD",
@@ -85,7 +85,7 @@ describe("decideCheckoutReplayState", () => {
 	it("returns cached_completed for finalized idempotency payload", () => {
 		const cachedResponse = {
 			orderId: "order-1",
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId: "attempt-1",
 			totalMinor: 1500,
 			currency: "USD",
@@ -104,7 +104,7 @@ describe("decideCheckoutReplayState", () => {
 			kind: "cached_completed",
 			response: {
 				orderId: "order-1",
-				paymentPhase: "payment_pending",
+				paymentPhase: "initiated",
 				paymentAttemptId: "attempt-1",
 				totalMinor: 1500,
 				currency: "USD",
@@ -121,7 +121,7 @@ describe("decideCheckoutReplayState", () => {
 			httpStatus: 200,
 			responseBody: {
 				orderId: "order-1",
-				paymentPhase: "payment_pending",
+				paymentPhase: "initiated",
 				paymentAttemptId: "attempt-1",
 				totalMinor: 1500,
 				currency: "USD",
@@ -177,7 +177,7 @@ describe("restorePendingCheckout", () => {
 
 		expect(response).toMatchObject({
 			orderId: pending.orderId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			paymentAttemptId: pending.paymentAttemptId,
 			totalMinor: pending.totalMinor,
 			currency: pending.currency,
@@ -208,7 +208,7 @@ describe("restorePendingCheckout", () => {
 		expect(completedRow?.responseBody).toMatchObject({
 			orderId: pending.orderId,
 			paymentAttemptId: pending.paymentAttemptId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 		});
 	});
@@ -224,7 +224,7 @@ describe("restorePendingCheckout", () => {
 		};
 		const existingOrder: StoredOrder = {
 			cartId: pending.cartId,
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: pending.lineItems,
 			totalMinor: 1500,
@@ -273,7 +273,7 @@ describe("restorePendingCheckout", () => {
 		};
 		const existingOrder: StoredOrder = {
 			cartId: "other-cart",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: pending.lineItems,
 			totalMinor: pending.totalMinor,
@@ -359,7 +359,7 @@ describe("validateCachedCheckoutCompleted", () => {
 	it("returns false when order or attempt is missing", async () => {
 		const cached = {
 			orderId: "o1",
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId: "a1",
 			totalMinor: 100,
 			currency: "USD",
@@ -373,7 +373,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		const token = "tok_______________________________";
 		const order: StoredOrder = {
 			cartId: "c1",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: [],
 			totalMinor: 100,
@@ -390,7 +390,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		};
 		const cached = {
 			orderId: "o1",
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId: "a1",
 			totalMinor: 100,
 			currency: "USD",
@@ -403,7 +403,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		const token = "tok_______________________________";
 		const order: StoredOrder = {
 			cartId: "c1",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: [],
 			totalMinor: 100,
@@ -420,7 +420,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		};
 		const cached = {
 			orderId: "o1",
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId: "a1",
 			totalMinor: 100,
 			currency: "USD",
@@ -435,7 +435,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		const keyHash = "keyh";
 		const order: StoredOrder = {
 			cartId: "c1",
-			paymentPhase: "payment_pending",
+			paymentPhase: "initiated",
 			currency: "USD",
 			lineItems: [],
 			totalMinor: 100,
@@ -452,7 +452,7 @@ describe("validateCachedCheckoutCompleted", () => {
 		};
 		const cached = {
 			orderId: "o1",
-			paymentPhase: "payment_pending" as const,
+			paymentPhase: "initiated" as const,
 			paymentAttemptId: "a1",
 			totalMinor: 100,
 			currency: "USD",

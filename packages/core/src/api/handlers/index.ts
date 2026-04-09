@@ -148,6 +148,8 @@ export {
 // Marketplace handlers
 export {
 	handleMarketplaceInstall,
+	handleMarketplacePricing,
+	handleMarketplaceInstallConfirm,
 	handleMarketplaceUpdate,
 	handleMarketplaceUninstall,
 	handleMarketplaceUpdateCheck,

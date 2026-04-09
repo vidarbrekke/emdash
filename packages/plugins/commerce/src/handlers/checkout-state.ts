@@ -20,7 +20,7 @@ export type CheckoutPendingState = {
 	paymentAttemptId: string;
 	providerId?: string;
 	cartId: string;
-	paymentPhase: "payment_pending";
+	paymentPhase: "initiated";
 	finalizeToken: string;
 	totalMinor: number;
 	currency: string;
@@ -30,7 +30,7 @@ export type CheckoutPendingState = {
 
 export type CheckoutResponse = {
 	orderId: string;
-	paymentPhase: "payment_pending";
+	paymentPhase: "initiated";
 	paymentAttemptId: string;
 	totalMinor: number;
 	currency: string;
@@ -68,7 +68,7 @@ export function isCheckoutCompletedResponse(value: unknown): value is CheckoutRe
 		candidate.kind !== CHECKOUT_PENDING_KIND &&
 		candidate.orderId != null &&
 		typeof candidate.orderId === "string" &&
-		candidate.paymentPhase === "payment_pending" &&
+		candidate.paymentPhase === "initiated" &&
 		candidate.paymentAttemptId != null &&
 		typeof candidate.paymentAttemptId === "string" &&
 		typeof candidate.totalMinor === "number" &&
@@ -89,7 +89,7 @@ export function isCheckoutPendingState(value: unknown): value is CheckoutPending
 		typeof candidate.orderId === "string" &&
 		typeof candidate.paymentAttemptId === "string" &&
 		typeof candidate.cartId === "string" &&
-		candidate.paymentPhase === "payment_pending" &&
+		candidate.paymentPhase === "initiated" &&
 		typeof candidate.finalizeToken === "string" &&
 		typeof candidate.totalMinor === "number" &&
 		typeof candidate.currency === "string" &&
@@ -111,7 +111,7 @@ export function decideCheckoutReplayState(response: StoredIdempotencyKey | null)
 function checkoutResponseFromPendingState(state: CheckoutPendingState): CheckoutResponse {
 	return {
 		orderId: state.orderId,
-		paymentPhase: "payment_pending",
+		paymentPhase: "initiated",
 		paymentAttemptId: state.paymentAttemptId,
 		totalMinor: state.totalMinor,
 		currency: state.currency,
