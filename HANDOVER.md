@@ -145,3 +145,74 @@ Do not proceed to implementation work until gaps are narrowed and this output al
 - **Auth assertion exists**: at least one package-level test demonstrates rejection of non-public/admin route invocation without auth context.
 - **No claim drift**: no handoff or compliance document points to non-archived/unbundled files.
 
+## 7) Exact implementation map for next developer (copy/paste starting points)
+
+### A) Make artifact self-contained
+
+1. `scripts/build-commerce-external-review-zip.sh`
+   - Add `HISTORY/SOURCE` docs and script paths used by package checks:
+     - Root governance/spec files (see list in section 3(A)).
+     - `scripts/generate-commerce-route-compliance-snapshot.mjs`
+     - `packages/plugins/commerce/package.json` (for reproducible check path visibility).
+   - Keep `docs/archive/2026-04-commerce-hardening/*.md` included while excluding stale archive duplicates.
+   - After edits, run the zip verify command in section 6.
+
+2. `packages/plugins/commerce/package.json`
+   - Confirm these lines are preserved in shipped `package.json`:
+     - `verify:route-compliance-snapshot`
+     - `generate:route-compliance-snapshot`
+   - If this ZIP drops the root `scripts/` tree, either:
+     - bundle it (preferred), or
+     - move these scripts into package-local scripts and update paths.
+
+3. `docs/compliance.md` + `docs/compliance-source-of-truth.md`
+   - Remove/replace references to files missing from zip if you choose not to include them.
+   - Ensure every “authoritative” file chain points to a file guaranteed in artifact.
+
+### B) Tighten CAS/version protocol (checkout lock)
+
+1. `packages/plugins/commerce/src/handlers/checkout.ts`
+   - Locate lock acquisition/release helpers (search: `compareAndSwap(`, `checkout-lock:`, `createdAt: now`, `updatedAt`).
+   - Replace implicit versioning with explicit field (e.g. `lockVersion`/`lockEpoch`) on lock rows.
+   - Ensure lock rows include:
+     - lock id
+     - lock version
+     - lock expiry/owner metadata
+     - fingerprint (as existing request-scoped lock key)
+
+2. `packages/plugins/commerce/src/handlers/checkout.test.ts`
+   - Add regression tests around concurrent lock claim/release using the explicit version field.
+   - Confirm stale/forged lock rows are rejected by version mismatch.
+
+3. `packages/plugins/commerce/src/orchestration/finalize-payment.ts` (already explicit in webhook flow)
+   - Keep explicit claim fields (`claimVersion`, `claimExpiresAt`) and make parity with checkout lock design explicit in comments.
+
+### C) Prove auth boundary (package-level)
+
+1. `packages/plugins/commerce/src/index.ts`
+   - Confirm route publicness intent via `publicRoute(...)` / `adminRoute(...)` remains the only registration surface.
+   - Add comments clarifying trust boundary (if still relying on platform auth guard).
+
+2. `packages/plugins/commerce/src/commerce-guide-compliance.test.ts`
+   - Add/extend route boundary tests to assert:
+     - public routes are exposed as expected
+     - non-public/admin routes fail when auth context is intentionally absent
+   - If hard in unit scope, add a dedicated package integration test that documents the platform guarantee.
+
+### D) Remove documentation drift
+
+1. `COMMERCE_DOCS_INDEX.md`
+2. `COMMERCE_EXTENSION_SURFACE.md`
+3. `docs/compliance.md`
+4. `HANDOVER.md`
+   - Normalize all “completed” status and checklist claims to exactly what shipped artifacts and checks currently prove.
+   - Ensure “historical” references are explicitly labeled as “out of archive scope” unless included in the zip.
+
+### E) Useful grep anchors before first code edit
+
+Run once and keep output for handoff notes:
+- `rg -n "withKV\\(|withFetch\\(|withRouteCapabilities\\(" packages/plugins/commerce/src`
+- `rg -n "verify:route-compliance-snapshot|generate:route-compliance-snapshot" packages/plugins/commerce/package.json scripts/build-commerce-external-review-zip.sh`
+- `rg -n "compareAndSwap\\(|createdAt: now|updatedAt: now|lockId|checkout-lock" packages/plugins/commerce/src/handlers/checkout.ts packages/plugins/commerce/src/handlers/checkout.test.ts`
+- `rg -n "adminRoute\\(|publicRoute\\(|requirePost\\(" packages/plugins/commerce/src/index.ts`
+
