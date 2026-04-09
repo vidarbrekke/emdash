@@ -123,12 +123,12 @@ function deriveRoutePublicness(node, unsupportedWrappers = new Set()) {
 	return undefined;
 }
 
-function hasRequirePostCall(node) {
+function hasCall(node, calleeName) {
 	let found = false;
 	const visit = (candidate) => {
 		if (found) return;
 		if (!candidate) return;
-		if (ts.isCallExpression(candidate) && getCalleeName(candidate.expression) === "requirePost") {
+		if (ts.isCallExpression(candidate) && getCalleeName(candidate.expression) === calleeName) {
 			found = true;
 			return;
 		}
@@ -136,6 +136,46 @@ function hasRequirePostCall(node) {
 	};
 	visit(node);
 	return found;
+}
+
+function hasRequirePostCall(node) {
+	return hasCall(node, "requirePost");
+}
+
+function assertVisibilityWrappersRequirePost() {
+	const requiredWrappers = new Map([
+		["publicRoute", "withRouteMethodGuard"],
+		["adminRoute", "withRouteMethodGuard"],
+	]);
+	const missingWrappers = [];
+	let routeMethodGuardDeclaration = null;
+
+	for (const statement of pluginIndexSource.statements) {
+		if (!ts.isFunctionDeclaration(statement)) continue;
+		const wrapperName = statement.name?.text;
+		if (!wrapperName) continue;
+		if (wrapperName === "withRouteMethodGuard") {
+			routeMethodGuardDeclaration = statement;
+			continue;
+		}
+		const expectedCallee = requiredWrappers.get(wrapperName);
+		if (!expectedCallee) continue;
+		if (!hasCall(statement, expectedCallee)) {
+			missingWrappers.push(wrapperName);
+		}
+	}
+
+	if (!routeMethodGuardDeclaration || !hasRequirePostCall(routeMethodGuardDeclaration)) {
+		throw new Error("Missing requirePost enforcement in withRouteMethodGuard()");
+	}
+
+	if (missingWrappers.length > 0) {
+		throw new Error(
+			`Route wrappers that should invoke withRouteMethodGuard are missing enforcement: ${
+				missingWrappers.sort().join(", ")
+			}`,
+		);
+	}
 }
 
 function hasHandlerRequirePostGuard(handlerName) {
@@ -399,6 +439,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 		const routeWrappers = [...collectRouteWrappers(entry.initializer)].sort();
 		const routeHandlerNode = deriveRouteHandlerNode(entry.initializer);
 		const routeHandlerName = handlerNameFromNode(routeHandlerNode);
+		const methodGuarded = routeWrappers.some((wrapper) => ["publicRoute", "adminRoute"].includes(wrapper));
 		if (!routeHandlerName) {
 			unknownHandlerRoutes.push(route);
 		}
@@ -415,6 +456,7 @@ function snapshotRouteSurfaceRoutes(routeContractRecords = {}) {
 			wrappers: routeWrappers,
 			hasRouteCapabilitiesWrapper: routeWrappers.includes("withRouteCapabilities"),
 			needsRouteCapabilities: contractMetadata.requiresKV || contractMetadata.requiresFetch,
+			methodGuarded,
 			routeHandlerName: routeHandlerName,
 			handlerHasRequirePostGuard,
 		};
@@ -626,8 +668,8 @@ const contractRoutePublicMap = Object.fromEntries(
 const contractRouteCapabilitiesMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
 );
-const contractRouteSideEffectMap = Object.fromEntries(
-	routeEntries.map(([route, contract]) => [route, { sideEffectful: contract.sideEffectful }]),
+const contractRouteMethodMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { method: contract.method }]),
 );
 
 describe("route contract to registered route alignment", () => {
@@ -663,10 +705,10 @@ describe("route contract to registered route alignment", () => {
 			expect(entry?.routeHandlerName).toEqual(expect.any(String));
 		}
 	});
-	it("must apply requirePost guards for side-effecting contract routes", () => {
-		for (const [route, contract] of Object.entries(contractRouteSideEffectMap)) {
-			if (contract.sideEffectful) {
-				expect(routeSurface.routeRecords[route]?.handlerHasRequirePostGuard).toBe(true);
+	it("must enforce POST method via visibility wrappers", () => {
+		for (const [route, contract] of Object.entries(contractRouteMethodMap)) {
+			if (contract.method === "POST") {
+				expect(routeSurface.routeRecords[route]?.methodGuarded).toBe(true);
 			}
 		}
 	});
@@ -679,6 +721,7 @@ describe("route contract to registered route alignment", () => {
 
 
 
+assertVisibilityWrappersRequirePost();
 const payload = snapshotRoutes();
 const surfacePayload = snapshotRouteSurfaceRoutes(payload.routeRecords);
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");

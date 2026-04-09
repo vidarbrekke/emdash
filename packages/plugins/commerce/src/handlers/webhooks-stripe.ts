@@ -13,7 +13,6 @@ import { throwCommerceApiError } from "../route-errors.js";
 import type { StripeWebhookEventInput, StripeWebhookInput } from "../schemas.js";
 import { resolveWebhookCommerceSettings } from "../settings-validation.js";
 import { handlePaymentWebhook, type CommerceWebhookAdapter } from "./webhook-handler.js";
-import { requirePost } from "../lib/require-post.js";
 
 const MAX_WEBHOOK_BODY_BYTES = COMMERCE_LIMITS.maxWebhookBodyBytes;
 const STRIPE_SIGNATURE_HEADER = "Stripe-Signature";
@@ -215,7 +214,6 @@ const stripeWebhookAdapter: CommerceWebhookAdapter<StripeWebhookInput> = {
 };
 
 export async function stripeWebhookHandler(ctx: RouteContext<StripeWebhookInput>) {
-	requirePost(ctx);
 	return handlePaymentWebhook(ctx, stripeWebhookAdapter);
 }
 

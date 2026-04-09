@@ -34,6 +34,7 @@ import {
 	COMMERCE_RECOMMENDATION_HOOKS,
 	type CommerceRecommendationResolver,
 } from "./catalog-extensibility.js";
+import { requirePost } from "./lib/require-post.js";
 import { cartGetHandler, cartUpsertHandler } from "./handlers/cart.js";
 import {
 	addBundleComponentHandler,
@@ -137,23 +138,33 @@ function asRouteHandler(fn: AnyHandler): never {
 	return fn as never;
 }
 
+function withRouteMethodGuard<T>(route: PluginRoute<T>): PluginRoute {
+	return {
+		...route,
+		handler: asRouteHandler(async (ctx: RouteContext<T>) => {
+			requirePost(ctx);
+			return route.handler(ctx);
+		}),
+	};
+}
+
 /**
  * Route helper constructors to keep public/private registration explicit and avoid
  * accidental exposure of mutation endpoints.
  */
 function adminRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
-	return {
+	return withRouteMethodGuard({
 		input,
 		handler: asRouteHandler(handler as AnyHandler),
-	};
+	});
 }
 
 function publicRoute<T>(input: PluginRoute<T>["input"], handler: (ctx: RouteContext<T>) => Promise<unknown>): PluginRoute {
-	return {
+	return withRouteMethodGuard({
 		public: true,
 		input,
 		handler: asRouteHandler(handler as AnyHandler),
-	};
+	});
 }
 
 function withRouteCapabilities<T>(routeKey: string, route: PluginRoute<T>): PluginRoute<T> {

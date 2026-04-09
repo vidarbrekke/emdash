@@ -13,8 +13,8 @@ const contractRoutePublicMap = Object.fromEntries(
 const contractRouteCapabilitiesMap = Object.fromEntries(
 	routeEntries.map(([route, contract]) => [route, { hasCapabilities: contract.requiresKV || contract.requiresFetch }]),
 );
-const contractRouteSideEffectMap = Object.fromEntries(
-	routeEntries.map(([route, contract]) => [route, { sideEffectful: contract.sideEffectful }]),
+const contractRouteMethodMap = Object.fromEntries(
+	routeEntries.map(([route, contract]) => [route, { method: contract.method }]),
 );
 
 describe("route contract to registered route alignment", () => {
@@ -50,10 +50,10 @@ describe("route contract to registered route alignment", () => {
 			expect(entry?.routeHandlerName).toEqual(expect.any(String));
 		}
 	});
-	it("must apply requirePost guards for side-effecting contract routes", () => {
-		for (const [route, contract] of Object.entries(contractRouteSideEffectMap)) {
-			if (contract.sideEffectful) {
-				expect(routeSurface.routeRecords[route]?.handlerHasRequirePostGuard).toBe(true);
+	it("must enforce POST method via visibility wrappers", () => {
+		for (const [route, contract] of Object.entries(contractRouteMethodMap)) {
+			if (contract.method === "POST") {
+				expect(routeSurface.routeRecords[route]?.methodGuarded).toBe(true);
 			}
 		}
 	});

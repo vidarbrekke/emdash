@@ -48,6 +48,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "getProductHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -58,6 +59,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listProductsHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -68,6 +70,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listProductSkusHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -78,6 +81,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "addBundleComponentHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -88,6 +92,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "removeBundleComponentHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -98,6 +103,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "reorderBundleComponentHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -108,6 +114,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "bundleComputeStorefrontHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -118,6 +125,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "cartGetHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -129,8 +137,9 @@
       ],
       "hasRouteCapabilitiesWrapper": true,
       "needsRouteCapabilities": true,
+      "methodGuarded": true,
       "routeHandlerName": "cartUpsertHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "catalog/asset/link": {
       "public": false,
@@ -139,6 +148,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "linkCatalogAssetHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -149,6 +159,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "reorderCatalogAssetHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -159,6 +170,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "unlinkCatalogAssetHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -169,6 +181,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createCategoryHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -179,6 +192,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createProductCategoryLinkHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -189,6 +203,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listCategoriesHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -199,6 +214,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "removeProductCategoryLinkHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -209,6 +225,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createProductHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -219,6 +236,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "getStorefrontProductHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -229,6 +247,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "getStorefrontProductBySlugHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -239,6 +258,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "setProductStateHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -249,6 +269,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "updateProductHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -259,6 +280,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listStorefrontProductsHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -269,6 +291,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createProductSkuHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -279,6 +302,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listStorefrontProductSkusHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -289,6 +313,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "setSkuStatusHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -299,6 +324,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "updateProductSkuHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -309,6 +335,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createTagHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -319,6 +346,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createProductTagLinkHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -329,6 +357,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "listTagsHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -339,6 +368,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "removeProductTagLinkHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -350,8 +380,9 @@
       ],
       "hasRouteCapabilitiesWrapper": true,
       "needsRouteCapabilities": true,
+      "methodGuarded": true,
       "routeHandlerName": "checkoutHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     },
     "checkout/get-order": {
       "public": true,
@@ -360,6 +391,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "checkoutGetOrderHandler",
       "handlerHasRequirePostGuard": true
     },
@@ -370,6 +402,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createDigitalAssetHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -380,6 +413,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "createDigitalEntitlementHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -390,6 +424,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "removeDigitalEntitlementHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -400,6 +435,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "registerProductAssetHandler",
       "handlerHasRequirePostGuard": false
     },
@@ -410,6 +446,7 @@
       ],
       "hasRouteCapabilitiesWrapper": false,
       "needsRouteCapabilities": false,
+      "methodGuarded": true,
       "routeHandlerName": "recommendationsRouteHandler"
     },
     "webhooks/stripe": {
@@ -420,8 +457,9 @@
       ],
       "hasRouteCapabilitiesWrapper": true,
       "needsRouteCapabilities": true,
+      "methodGuarded": true,
       "routeHandlerName": "stripeWebhookHandler",
-      "handlerHasRequirePostGuard": true
+      "handlerHasRequirePostGuard": false
     }
   },
   "unknownPublicRoutes": []

@@ -18,7 +18,6 @@ import { isIdempotencyRecordFresh } from "../lib/idempotency-ttl.js";
 import { mergeLineItemsBySku } from "../lib/merge-line-items.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
 import { buildRateLimitActorKey } from "../lib/rate-limit-identity.js";
-import { requirePost } from "../lib/require-post.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type { CheckoutInput } from "../schemas.js";
 import type {
@@ -282,7 +281,6 @@ export async function checkoutHandler(
 	ctx: RouteContext<CheckoutInput>,
 	paymentProviderId?: string,
 ) {
-	requirePost(ctx);
 	const resolvedPaymentProviderId = resolvePaymentProviderId(paymentProviderId);
 
 	const nowMs = Date.now();
