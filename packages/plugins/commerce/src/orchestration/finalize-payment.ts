@@ -18,6 +18,7 @@ import {
 	type WebhookReceiptView,
 } from "../kernel/finalize-decision.js";
 import { equalSha256HexDigestAsync, sha256HexAsync } from "../lib/crypto-adapter.js";
+import { parseTimestampVersionToken } from "../lib/optimistic-lock.js";
 import type {
 	StoredInventoryLedgerEntry,
 	StoredInventoryStock,
@@ -331,16 +332,28 @@ function canTakeClaim(existing: StoredWebhookReceipt, nowIso: string): { canTake
 	}
 }
 
-function parseClaimLeaseVersion(version: string): number | null {
-	const parsed = Date.parse(version);
-	return Number.isFinite(parsed) ? parsed : null;
-}
-
 function getValidClaimVersion(receipt: StoredWebhookReceipt): string | null {
 	const version = receipt.claimVersion;
 	if (typeof version !== "string") return null;
-	if (parseClaimLeaseVersion(version) === null) return null;
+	if (parseTimestampVersionToken(version) === null) return null;
 	return version;
+}
+
+function getComparableClaimVersion(
+	receipt: StoredWebhookReceipt,
+	allowLegacyUnclaimedFallback = false,
+): string | null {
+	const explicitVersion = getValidClaimVersion(receipt);
+	if (explicitVersion) {
+		return explicitVersion;
+	}
+	if (!allowLegacyUnclaimedFallback) {
+		return null;
+	}
+	if (receipt.claimState === "claimed") {
+		return null;
+	}
+	return parseTimestampVersionToken(receipt.updatedAt);
 }
 
 function withClaimedMetadata(
@@ -430,7 +443,7 @@ async function claimWebhookReceipt({
 		};
 	}
 
-	const existingClaimVersion = getValidClaimVersion(existing);
+	const existingClaimVersion = getComparableClaimVersion(existing, true);
 	if (!existingClaimVersion) {
 		return {
 			kind: "replay",

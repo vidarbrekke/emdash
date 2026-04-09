@@ -18,6 +18,11 @@ import { isIdempotencyRecordFresh } from "../lib/idempotency-ttl.js";
 import { mergeLineItemsBySku } from "../lib/merge-line-items.js";
 import { consumeKvRateLimit } from "../lib/rate-limit-kv.js";
 import { buildRateLimitActorKey } from "../lib/rate-limit-identity.js";
+import {
+	bumpMonotonicNumericVersion,
+	parseMonotonicNumericVersion,
+	INITIAL_OPTIMISTIC_LOCK_VERSION,
+} from "../lib/optimistic-lock.js";
 import { throwCommerceApiError, throwBadRequest } from "../route-errors.js";
 import type { CheckoutInput } from "../schemas.js";
 import type {
@@ -79,41 +84,12 @@ type CheckoutCartLockRecord = StoredIdempotencyKey & {
 const CHECKOUT_CART_LOCK_ROUTE = "checkout-cart-lock";
 const CHECKOUT_CART_LOCK_KIND = "checkout_cart_lock";
 const CHECKOUT_CART_LOCK_TTL_MS = 30_000;
-const CHECKOUT_CART_LOCK_INITIAL_VERSION = "1";
 
-function parseCheckoutCartLockVersion(rawVersion: unknown): number | null {
-	if (typeof rawVersion === "number") {
-		if (!Number.isFinite(rawVersion) || !Number.isInteger(rawVersion) || rawVersion < 0) {
-			return null;
-		}
-		return rawVersion;
+function resolveCheckoutLockVersion(existing: StoredIdempotencyKey): string | null {
+	if ("lockVersion" in existing) {
+		return parseMonotonicNumericVersion((existing as { lockVersion?: unknown }).lockVersion);
 	}
-
-	if (typeof rawVersion === "string") {
-		const parsed = Number(rawVersion);
-		if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
-			return null;
-		}
-		return parsed;
-	}
-
-	return null;
-}
-
-function checkoutCartLockVersion(rawVersion: unknown): string | null {
-	const parsed = parseCheckoutCartLockVersion(rawVersion);
-	if (parsed === null) {
-		return null;
-	}
-	return String(parsed);
-}
-
-function bumpCheckoutCartLockVersion(rawVersion: string): string {
-	const parsed = parseCheckoutCartLockVersion(rawVersion);
-	if (parsed === null) {
-		return CHECKOUT_CART_LOCK_INITIAL_VERSION;
-	}
-	return String(parsed + 1);
+	return existing.createdAt;
 }
 
 function assertAtomicMoneyPathSupport(args: CheckoutAtomicSupportArgs): void {
@@ -151,7 +127,7 @@ async function buildCheckoutCartLockRecord(args: {
 			route: CHECKOUT_CART_LOCK_ROUTE,
 			keyHash: lockKeyHash,
 			httpStatus: 409,
-			lockVersion: CHECKOUT_CART_LOCK_INITIAL_VERSION,
+			lockVersion: INITIAL_OPTIMISTIC_LOCK_VERSION,
 			responseBody: {
 				kind: CHECKOUT_CART_LOCK_KIND,
 				cartId: args.cartId,
@@ -227,13 +203,13 @@ async function claimCheckoutCartLock(args: {
 				return lockId;
 			}
 
-			const existingVersion = checkoutCartLockVersion((existing as { lockVersion?: unknown }).lockVersion);
+			const existingVersion = resolveCheckoutLockVersion(existing);
 			if (!existingVersion) {
 				throwCheckoutCartLockConflict({ cartId: args.cartId });
 			}
 			const staleReplaced = {
 				...staged,
-				lockVersion: bumpCheckoutCartLockVersion(existingVersion),
+				lockVersion: bumpMonotonicNumericVersion(existingVersion),
 			};
 			const stolen = await args.locks.compareAndSwap(lockId, existingVersion, staleReplaced);
 			if (!stolen) {
@@ -275,13 +251,13 @@ async function releaseCheckoutCartLock(args: {
 	const parsed = parseCheckoutCartLock(existing.responseBody);
 	if (!parsed || parsed.requestId !== args.requestId) return;
 
-	const existingVersion = checkoutCartLockVersion((existing as { lockVersion?: unknown }).lockVersion);
+	const existingVersion = resolveCheckoutLockVersion(existing);
 	if (!existingVersion) {
 		return;
 	}
 	const releasedLockRecord: CheckoutCartLockRecord = {
 		...existing,
-		lockVersion: bumpCheckoutCartLockVersion(existingVersion),
+		lockVersion: bumpMonotonicNumericVersion(existingVersion),
 		responseBody: {
 			kind: CHECKOUT_CART_LOCK_KIND,
 			cartId: parsed.cartId,
@@ -337,6 +313,9 @@ export async function checkoutHandler(
 	paymentProviderId?: string,
 ) {
 	const resolvedPaymentProviderId = resolvePaymentProviderId(paymentProviderId);
+	if (ctx.request.method !== "POST") {
+		throwCommerceApiError({ code: "METHOD_NOT_ALLOWED", message: "Only POST is allowed for checkout" });
+	}
 
 	const nowMs = Date.now();
 	const nowIso = new Date(nowMs).toISOString();

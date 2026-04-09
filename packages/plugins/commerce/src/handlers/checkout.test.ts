@@ -1123,14 +1123,14 @@ describe("checkout route guardrails", () => {
 		});
 		expect(idempotencyKeys.putIfAbsentCalled).toBe(true);
 		expect(idempotencyKeys.compareAndSwapCalled).toBe(true);
-		expect(idempotencyKeys.compareAndSwapVersions).toEqual(["1", "2"]);
+		expect(idempotencyKeys.compareAndSwapVersions).toEqual([now, "1"]);
 		expect(orders.rows.size).toBe(1);
 		expect(paymentAttempts.rows.size).toBe(1);
 
 		expectReleasedCheckoutLock(await idempotencyKeys.get(lockId));
 	});
 
-	it("rejects stale checkout lock rows missing explicit lock version", async () => {
+	it("supports stale checkout lock rows with missing lock version", async () => {
 		const cartId = "cart_atomic_checkout_lock_missing_version";
 		const now = new Date().toISOString();
 		const ownerToken = "owner-token-atomic-checkout-missing-version";
@@ -1181,24 +1181,27 @@ describe("checkout route guardrails", () => {
 		);
 		const kv = new MemKv();
 
-		await expect(
-			checkoutHandler(
-				contextFor({
-					idempotencyKeys,
-					orders,
-					paymentAttempts,
-					carts: new MemColl(new Map([[cartId, cart]])),
-					inventoryStock,
-					kv,
-					idempotencyKey,
-					cartId,
-					ownerToken,
-				}),
-			),
-		).rejects.toMatchObject({ code: "order_state_conflict" });
-		expect(orders.rows.size).toBe(0);
-		expect(paymentAttempts.rows.size).toBe(0);
-		expect(idempotencyKeys.compareAndSwapCalled).toBe(false);
+		const result = await checkoutHandler(
+			contextFor({
+				idempotencyKeys,
+				orders,
+				paymentAttempts,
+				carts: new MemColl(new Map([[cartId, cart]])),
+				inventoryStock,
+				kv,
+				idempotencyKey,
+				cartId,
+				ownerToken,
+			}),
+		);
+		expect(result).toMatchObject({
+			paymentPhase: "payment_pending",
+			currency: "USD",
+			totalMinor: 100,
+		});
+		expect(orders.rows.size).toBe(1);
+		expect(paymentAttempts.rows.size).toBe(1);
+		expect(idempotencyKeys.compareAndSwapCalled).toBe(true);
 	});
 
 	it("rejects stale checkout lock rows with malformed version tokens", async () => {

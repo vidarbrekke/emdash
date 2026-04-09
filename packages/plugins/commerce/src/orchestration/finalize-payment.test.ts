@@ -225,10 +225,17 @@ function memCollWithPutIfAbsent<T extends object>(
 		compareAndSwap: async (id: string, expectedVersion: string, data: T): Promise<boolean> => {
 			const existing = collection.rows.get(id);
 			if (!existing) return false;
-			const version = (existing as Record<string, unknown>).claimVersion;
-			if (typeof version !== "string" || version !== expectedVersion) return false;
-			collection.rows.set(id, structuredClone(data));
-			return true;
+			const explicitVersion = (existing as Record<string, unknown>).claimVersion;
+			if (typeof explicitVersion === "string" && explicitVersion === expectedVersion) {
+				collection.rows.set(id, structuredClone(data));
+				return true;
+			}
+			const legacyVersion = (existing as Record<string, unknown>).updatedAt;
+			if (typeof legacyVersion === "string" && legacyVersion === expectedVersion) {
+				collection.rows.set(id, structuredClone(data));
+				return true;
+			}
+			return false;
 		},
 	} as MemCollWithClaiming<T>;
 }
@@ -2850,6 +2857,10 @@ describe("finalizePaymentFromWebhook", () => {
 						correlationId: "cid",
 						createdAt: now,
 						updatedAt: now,
+						claimState: "claimed",
+						claimOwner: "owner",
+						claimToken: "token",
+						claimExpiresAt: new Date(Date.parse(now) - 1_000).toISOString(),
 					},
 				],
 			]),
@@ -2888,7 +2899,8 @@ describe("finalizePaymentFromWebhook", () => {
 		const receipt = await ports.webhookReceipts.get(rid);
 		expect(receipt).toMatchObject({
 			status: "pending",
-			claimState: undefined,
+			claimState: "claimed",
+			claimOwner: "owner",
 		});
 	});
 
